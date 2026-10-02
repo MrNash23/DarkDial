@@ -29,6 +29,31 @@ Device  ⇄  USB-MIDI  ⇄  Desktop service  ⇄  LrSocket (localhost)  ⇄  Lig
 The protocol is specified in [docs/PROTOCOL.md](docs/PROTOCOL.md), the overall
 design in [docs/Developer-Plan.md](docs/Developer-Plan.md) (German).
 
+## Development
+
+Everything can be built and tested without the device and without Lightroom:
+
+```sh
+tools/check.sh          # all automated checks
+```
+
+| Task | Command |
+| --- | --- |
+| Run the app | `cd app && flutter run -d macos` |
+| Try it without hardware | switch on "Simulator" in the app's info section; the preview is the device (scroll = turn, click = press) |
+| Try it without Lightroom | `cd app/packages/darkdial_core && dart run darkdial_core:fake_lr` |
+| Install the plugin for development | `tools/install_plugin.sh`, then restart Lightroom |
+| Talk to the plugin directly | `tools/lr_cli.py status` |
+| Build / flash the firmware | `tools/build_firmware.sh [port]` |
+| See the device screens | `firmware/host/build.sh`, images in `firmware/host/snapshots/` |
+| Regenerate tables, icons, fonts | `tools/gen_params.py`, `tools/gen_icons.py`, `tools/gen_fonts.sh` |
+
+Needed: Flutter 3.44+, arduino-cli with the esp32 core 3.x and the libraries
+lvgl 9.6 and LovyanGFX, Python 3 (`tools/.venv` with Pillow for the icons),
+LuaJIT for the plugin tests.
+
+The first session with real hardware follows [docs/BRINGUP.md](docs/BRINGUP.md).
+
 ## Platforms
 
 macOS 13 or newer first. Windows is planned and follows after the macOS MVP.
@@ -41,6 +66,8 @@ Firmware, plugin and app are licensed under the
 **The name "Darkdial" and the Darkdial logo are not covered by the GPL.**
 You are welcome to fork and use the code under the terms of the license, but
 forks may not be distributed under the name Darkdial or with this logo.
+
+The firmware fonts are generated from Montserrat (SIL Open Font License 1.1).
 
 Darkdial is not affiliated with or endorsed by Adobe. Adobe and Lightroom are
 trademarks of Adobe Inc.
