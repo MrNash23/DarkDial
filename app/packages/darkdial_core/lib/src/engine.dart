@@ -111,6 +111,9 @@ class Engine {
   final Map<String, ValueRange> _ranges = {};
   final Map<String, int> _lastSetSeq = {};
   final Map<String, DateTime> _unanswered = {};
+
+  /// What each slot of the device currently shows, to skip repeats.
+  final Map<int, String> _shown = {};
   int _seq = 0;
 
   String _module = '';
@@ -187,6 +190,7 @@ class Engine {
     if (session == null) return false;
     final ok = await session.sendConfig(_deviceSlots, _config.language);
     if (ok) {
+      _shown.clear(); // a new configuration resets the values on the device
       _sendStatus();
       for (var i = 0; i < _active.length; i++) {
         _sendValue(i);
@@ -314,6 +318,10 @@ class Engine {
     final session = _session;
     if (session == null) return;
     final slot = _slotState(index);
+    // The answer to a set usually repeats what was already sent optimistically.
+    final signature = '${slot.position}|${slot.value != null}|${slot.text}';
+    if (_shown[index] == signature) return;
+    _shown[index] = signature;
     session.send(Value(slot: index, position: slot.position, valid: slot.value != null, text: slot.text));
   }
 

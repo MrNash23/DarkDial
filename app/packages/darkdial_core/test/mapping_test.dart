@@ -102,6 +102,7 @@ void main() {
     test('raw temperature steps grow with the value', () {
       expect(applyDetents(temperature, raw, 3000, 1), 3030);
       expect(applyDetents(temperature, raw, 20000, 1), 20200);
+      expect(applyDetents(temperature, raw, 5500, 1), 5560, reason: 'no jump to a 60 K grid');
       expect(applyDetents(temperature, jpeg, 0, 1), 1);
     });
   });

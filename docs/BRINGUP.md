@@ -11,6 +11,7 @@ with the real board has to prove.
 | --- | --- |
 | State machine, protocol, configuration storage format | `firmware/host/build.sh`, 174 checks |
 | C++ core against the Dart engine, over the real wire format | `dart test` in `app/packages/darkdial_core` (`firmware_test.dart`) |
+| App over real CoreMIDI: detection, SysEx configuration, rotation | app against `tools/virtual_device.swift` (a virtual MIDI device backed by the C++ core) |
 | LVGL screens | rendered headless into `firmware/host/snapshots/` |
 | Firmware compiles for the ESP32-S3 | `tools/build_firmware.sh`, 1.74 MB of 3 MB |
 

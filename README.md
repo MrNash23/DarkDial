@@ -41,6 +41,7 @@ tools/check.sh          # all automated checks
 | --- | --- |
 | Run the app | `cd app && flutter run -d macos` |
 | Try it without hardware | switch on "Simulator" in the app's info section; the preview is the device (scroll = turn, click = press) |
+| Try the real MIDI path without hardware | `swift tools/virtual_device.swift` creates a macOS MIDI device "Darkdial" backed by the firmware core |
 | Try it without Lightroom | `cd app/packages/darkdial_core && dart run darkdial_core:fake_lr` |
 | Install the plugin for development | `tools/install_plugin.sh`, then restart Lightroom |
 | Talk to the plugin directly | `tools/lr_cli.py status` |

@@ -70,7 +70,7 @@ double stepSize(ParamDef param, ValueRange range, double value, {double? stepOve
 }
 
 /// New value after turning [detents] from [value]; snaps to the step grid so
-/// values stay round.
+/// values stay round. Kelvin steps vary with the value, so they snap to 10 K.
 double applyDetents(
   ParamDef param,
   ValueRange range,
@@ -80,6 +80,7 @@ double applyDetents(
 }) {
   final step = stepSize(param, range, value, stepOverride: stepOverride);
   final raw = value + detents * step;
-  final snapped = (raw / step).round() * step;
+  final grid = isKelvin(param, range) ? 10.0 : step;
+  final snapped = (raw / grid).round() * grid;
   return range.clamp(snapped);
 }
