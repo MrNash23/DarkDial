@@ -46,6 +46,7 @@ inline Bytes value(uint8_t slot, uint16_t position, bool valid, const std::strin
 }
 
 inline Bytes status(uint8_t flags, uint8_t notice = 0) { return frame(0x46, {flags, notice}); }
+inline Bytes slotGoto(uint8_t slot) { return frame(0x4C, {slot}); }
 
 inline void appendU32(Bytes &p, uint32_t v) {
   p.push_back(static_cast<uint8_t>(v >> 24));

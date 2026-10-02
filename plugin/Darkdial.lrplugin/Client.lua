@@ -24,7 +24,7 @@ local LrTasks             = import 'LrTasks'
 
 local Json = require 'Json'
 
-local PROTOCOL_VERSION = '1.1'
+local PROTOCOL_VERSION = '1.2'
 local SEND_PORT        = 54770 -- plugin -> service
 local RECEIVE_PORT     = 54771 -- service -> plugin
 local POLL_INTERVAL    = 0.25  -- seconds, module and photo changes
@@ -95,21 +95,37 @@ local function reportRange(param, force)
   end
 end
 
+--- Reports the value if it changed. Returns true if it differs from a value
+--- reported before, i.e. somebody changed it.
 local function reportValue(param, force, seq)
   local value = getValue(param)
-  if not value then return end
-  if force or seq or lastValue[param] ~= value then
+  if not value then return false end
+  local previous = lastValue[param]
+  if force or seq or previous ~= value then
     lastValue[param] = value
     send { t = 'value', p = param, v = value, s = seq }
   end
+  return previous ~= nil and previous ~= value
 end
 
 --- Reports ranges and values of all watched parameters that changed.
-local function reportChanges(force)
+--- `quiet`: the values changed for a reason other than the user moving a
+--- slider (photo or module change), so nothing is reported as touched.
+local function reportChanges(force, quiet)
   if not canEdit() then return end
+  -- Another photo brings other values; the status poll has not seen it yet.
+  quiet = quiet or force or targetPhotoId() ~= state.photoId
+  local changed, count = nil, 0
   for _, param in ipairs(watched) do
     reportRange(param, force)
-    reportValue(param, force)
+    if reportValue(param, force) then
+      changed, count = param, count + 1
+    end
+  end
+  -- Exactly one slider moved in Lightroom: that is the one the user is
+  -- working on, and the device can follow. Presets and the like move several.
+  if count == 1 and not quiet then
+    send { t = 'touched', p = changed }
   end
 end
 
@@ -373,7 +389,7 @@ LrTasks.startAsyncTask(function()
           LrTasks.sleep(0.2) -- controller still holds the previous photo right after a switch
         end
         -- Also catches the last change of a drag that the rate limit skipped.
-        reportChanges(false)
+        reportChanges(false, changed)
       end
       LrTasks.sleep(POLL_INTERVAL)
     end

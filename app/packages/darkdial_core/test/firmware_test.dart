@@ -320,6 +320,16 @@ void main() {
     await until(() async => (await firmware.state()).text == '-2.00', 'mouse change on the device');
     expect((await firmware.state()).position, lessThan(positionCentre));
 
+    // The mouse moves another slider: the device jumps there in edit mode.
+    plugin.userSets('Contrast', 15);
+    await until(() async => (await firmware.state()).label == 'Kontrast', 'device follows Lightroom');
+    await until(() => engine.state.editing && engine.state.slots[engine.state.activeSlot].settings.param.lr == 'Contrast',
+        'engine follows');
+    expect((await firmware.state()).editing, isTrue);
+    firmware.advance(200);
+    firmware.rotate(1);
+    await until(() => plugin.values['Contrast'] == 16, 'knob continues on Contrast');
+
     // Leaving edit mode and a new configuration with an umlaut and a colour.
     firmware.click();
     await until(() => !engine.state.editing, 'selection mode');

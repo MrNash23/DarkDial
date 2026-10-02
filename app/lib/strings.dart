@@ -35,6 +35,10 @@ class Strings {
   String get standard => _t('Standard', 'Default');
   String get resetSlot => _t('Zurücksetzen', 'Reset');
   String get languageLabel => _t('Sprache der Kurzwörter', 'Language of short words');
+  String get followLightroom => _t(
+        'Gerät springt zu dem Regler, der in Lightroom bewegt wird',
+        'Device jumps to the slider that is moved in Lightroom',
+      );
   String get sendToDevice => _t('Aufs Gerät übertragen', 'Send to device');
   String get sent => _t('Übertragen', 'Sent');
   String get sendFailed => _t('Übertragung fehlgeschlagen', 'Transfer failed');

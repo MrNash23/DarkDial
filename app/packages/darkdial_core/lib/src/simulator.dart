@@ -296,6 +296,14 @@ class DeviceModel {
         _timerBaseSeconds = message.elapsedSeconds;
         _timerBaseAt = DateTime.now();
         onChanged();
+      case SlotGoto(:final slot):
+        if (menuOpen || slot >= slots.length) return;
+        if (mode == DeviceMode.edit && index == slot) return;
+        if (mode == DeviceMode.edit) emit(SlotLeave(index));
+        index = slot;
+        mode = DeviceMode.edit;
+        emit(SlotSelect(index));
+        onChanged();
       case TimerResult():
         // The action is done: the menu closes and the result is shown briefly.
         menuOpen = false;

@@ -432,6 +432,20 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       break;
     }
 
+    case MessageType::SlotGoto:
+      // The slider of this slot was just moved in Lightroom: follow it, in
+      // edit mode, so the knob continues where the mouse left off.
+      if (menuOpen_ || message.index >= slotCount_) break;
+      if (mode_ == Mode::Edit && index_ == message.index) break;
+      if (mode_ == Mode::Edit) host_.send(out, buildSlotLeave(out, index_));
+      index_ = message.index;
+      mode_ = Mode::Edit;
+      tapPending_ = false;
+      lastMove_ = 0;
+      host_.send(out, buildSlotSelect(out, index_));
+      changed();
+      break;
+
     case MessageType::TimerResult:
       // The action is done: the menu closes and the result is shown briefly.
       menuOpen_ = false;

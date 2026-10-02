@@ -1,6 +1,6 @@
 # Darkdial protocol
 
-Protocol version **1.1** (1.1 adds time tracking, sections 1.7 and 2.4). Two links, both bidirectional:
+Protocol version **1.2** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom). Two links, both bidirectional:
 
 ```
 Device  ⇄  USB-MIDI  ⇄  Service (desktop app)  ⇄  LrSocket / TCP localhost  ⇄  Plugin
@@ -108,6 +108,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x48` | MenuItem | `u8 index`, `u8 icon`, `u8 flags`, `str label` | *1.1.* One line. Flags bit 0: highlighted, bit 1: show the running time with it, bit 2: leads to another page, bit 3: choosing it closes the menu on the device, bit 4: help line – the device shows its built-in text "no matching client? create it in the desktop app" instead of the label. Label ≤ 20 bytes. Sent in index order. |
 | `0x49` | MenuEnd | – | *1.1.* The page is complete and replaces the one shown. |
 | `0x4A` | TimerState | `u8 running`, `u32 jobId`, `u32 elapsedSeconds`, `str label` | *1.1.* State of the clock. `elapsedSeconds` is the time of the running entry so far; the device counts on from there. |
+| `0x4C` | SlotGoto | `u8 slot` | *1.2.* The slider of this slot was just moved in Lightroom: the device goes to the slot and into edit mode, and answers with SlotLeave (if it was editing another slot) and SlotSelect. Ignored while the menu is open. |
 | `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* The chosen action is done: the device closes the menu and shows the result briefly. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
@@ -202,6 +203,7 @@ Develop first, sends `status`, then applies the change.
 | `range` | `p`, `min`, `max` | Range for the current photo. Sent after `watch` and after a photo change (Temperature differs between raw and JPEG). |
 | `value` | `p`, `v`, `s` (only when answering `set`/`delta`) | Current value. Without `s`: the value changed inside Lightroom (mouse, keyboard, preset, photo change). |
 | `pong` | – | Answer to `ping`. |
+| `touched` | `p` | *1.2.* Exactly one watched parameter was changed in Lightroom by the user (not by a `set`, and not because another photo was selected). Sent after its `value`. |
 | `source` | `kind` (`"collection"`, `"folder"` or `""`), `name`, `id` | *1.1.* Where the photos on screen come from: the active collection or folder, otherwise the folder of the target photo. Sent after `hello` and whenever it changes. `id` is stable for the catalog (collection identifier or folder path). |
 
 ### 2.3 Rules

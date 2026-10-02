@@ -74,10 +74,13 @@ class SlotSettings {
 /// The configuration edited in the app: every known slider in display order,
 /// each enabled or not.
 class AppConfig {
-  const AppConfig({required this.language, required this.slots});
+  const AppConfig({required this.language, required this.slots, this.followLightroom = true});
 
   final Language language;
   final List<SlotSettings> slots;
+
+  /// The device jumps to the slider that was just moved in Lightroom.
+  final bool followLightroom;
 
   factory AppConfig.defaults([Language language = Language.de]) => AppConfig(
         language: language,
@@ -87,8 +90,11 @@ class AppConfig {
   /// Enabled sliders in order, capped at what the device can hold.
   List<SlotSettings> get activeSlots => slots.where((s) => s.enabled).take(maxSlots).toList();
 
-  AppConfig copyWith({Language? language, List<SlotSettings>? slots}) =>
-      AppConfig(language: language ?? this.language, slots: slots ?? this.slots);
+  AppConfig copyWith({Language? language, List<SlotSettings>? slots, bool? followLightroom}) => AppConfig(
+        language: language ?? this.language,
+        slots: slots ?? this.slots,
+        followLightroom: followLightroom ?? this.followLightroom,
+      );
 
   /// What is sent to the device for the active slots.
   List<ConfigSlot> deviceSlots() {
@@ -109,6 +115,7 @@ class AppConfig {
   Map<String, dynamic> toJson() => {
         'version': 1,
         'language': language.name,
+        'follow': followLightroom,
         'slots': [for (final s in slots) s.toJson()],
       };
 
@@ -130,6 +137,6 @@ class AppConfig {
     for (final p in kParams) {
       if (!seen.contains(p.id)) slots.add(SlotSettings(paramId: p.id));
     }
-    return AppConfig(language: language, slots: slots);
+    return AppConfig(language: language, slots: slots, followLightroom: json['follow'] != false);
   }
 }

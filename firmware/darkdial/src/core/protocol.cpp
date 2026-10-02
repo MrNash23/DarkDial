@@ -32,6 +32,7 @@ constexpr uint8_t kTypeMenuItem = 0x48;
 constexpr uint8_t kTypeMenuEnd = 0x49;
 constexpr uint8_t kTypeTimerState = 0x4A;
 constexpr uint8_t kTypeTimerResult = 0x4B;
+constexpr uint8_t kTypeSlotGoto = 0x4C;
 
 uint32_t readU32(const uint8_t *p) {
   return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
@@ -207,6 +208,11 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       out.timerElapsed = readU32(p + 5);
       if (!readString(p, size, 9, out.text, kMaxLabelBytes)) return false;
       out.type = MessageType::TimerState;
+      return true;
+    case kTypeSlotGoto:
+      if (size < 1) return false;
+      out.index = p[0];
+      out.type = MessageType::SlotGoto;
       return true;
     case kTypeTimerResult:
       if (size < 2) return false;

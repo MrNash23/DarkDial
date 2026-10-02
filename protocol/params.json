@@ -7,6 +7,7 @@
     {"key": "detail",   "de": "Details",         "en": "Detail"},
     {"key": "effects",  "de": "Effekte",         "en": "Effects"},
     {"key": "curve",    "de": "Gradationskurve", "en": "Tone Curve"},
+    {"key": "crop",     "de": "Freistellen",     "en": "Crop"},
     {"key": "hsl",      "de": "HSL",             "en": "HSL"}
   ],
   "params": [
@@ -30,7 +31,8 @@
     {"id": 18, "lr": "ParametricHighlights",   "group": "curve",    "de": "Lichter",    "en": "Highlights", "ring": "bi",  "icon": 18, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
     {"id": 19, "lr": "ParametricLights",       "group": "curve",    "de": "Hell",       "en": "Lights",     "ring": "bi",  "icon": 19, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
     {"id": 20, "lr": "ParametricDarks",        "group": "curve",    "de": "Dunkel",     "en": "Darks",      "ring": "bi",  "icon": 20, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
-    {"id": 21, "lr": "ParametricShadows",      "group": "curve",    "de": "Tiefen",     "en": "Shadows",    "ring": "bi",  "icon": 21, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false}
+    {"id": 21, "lr": "ParametricShadows",      "group": "curve",    "de": "Tiefen",     "en": "Shadows",    "ring": "bi",  "icon": 21, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
+    {"id": 22, "lr": "straightenAngle",        "group": "crop",     "de": "Winkel",     "en": "Angle",      "ring": "bi",  "icon": 35, "min": -45,  "max": 45,    "step": 0.1,  "decimals": 1, "format": "signed", "default": false}
   ],
   "hsl": {
     "_comment": "Expanded to 24 params: id = firstId + 8 * kindIndex + colorIndex, lr = kind.lr + color.lr.",

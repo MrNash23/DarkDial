@@ -129,6 +129,7 @@ void main() {
       final result = decodeMessage(encodeMessage(const TimerResult(TimerResult.error, 'Archiviert'))) as TimerResult;
       expect([result.code, result.text], [2, 'Archiviert']);
       expect((decodeMessage(encodeMessage(const SlotReset(7))) as SlotReset).slot, 7);
+      expect((decodeMessage(encodeMessage(const SlotGoto(12))) as SlotGoto).slot, 12);
     });
 
     test('unknown, foreign and truncated messages decode to null', () {

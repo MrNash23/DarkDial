@@ -61,7 +61,15 @@ class _ConfigWindowState extends State<ConfigWindow> {
                           _PreviewSection(controller: c),
                           const SizedBox(height: 16),
                           _sendRow(s),
-                          const SizedBox(height: 20),
+                          SwitchListTile(
+                            key: const Key('follow-lightroom'),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(s.followLightroom),
+                            value: c.config.followLightroom,
+                            onChanged: (value) => c.setConfig(c.config.copyWith(followLightroom: value)),
+                          ),
+                          const SizedBox(height: 12),
                           if (selected != null) _SlotEditor(key: ValueKey(selected.paramId), controller: c, slot: selected),
                         ],
                       ),
@@ -406,7 +414,7 @@ class _SlotEditorState extends State<_SlotEditor> {
           spacing: 6,
           runSpacing: 6,
           children: [
-            for (var id = 1; id <= 24; id++)
+            for (final id in [for (var i = 1; i <= 24; i++) i, 35])
               InkWell(
                 customBorder: const CircleBorder(),
                 onTap: () => c.updateSlot(slot.copyWith(icon: () => id == slot.param.icon ? null : id)),

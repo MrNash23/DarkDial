@@ -30,7 +30,9 @@ Darkdial is free and open source. It is powered by
   for sliders with a centre, from the start for the others. The number is
   always visible.
 - The display **follows Lightroom**. Move a slider with the mouse, switch to
-  another photo, apply a preset: the ring and the number update.
+  another photo, apply a preset: the ring and the number update. Move one
+  slider with the mouse and the device jumps to it, ready to continue with the
+  knob (this can be switched off).
 - **Double-tap** the display, or hold a finger on it, to reset the selected
   slider to its default.
 - Turn the knob while you are in the Library and Lightroom switches to
@@ -39,7 +41,7 @@ Darkdial is free and open source. It is powered by
 <!-- Screenshot: the device screens for a few sliders (firmware/host/snapshots) -->
 
 You choose which sliders are on the device, in which order, with which short
-name, icon, step size and sensitivity. 45 are available:
+name, icon, step size and sensitivity. 46 are available:
 
 | Group | Sliders |
 | --- | --- |
@@ -49,6 +51,7 @@ name, icon, step size and sensitivity. 45 are available:
 | Detail | Sharpening, Noise reduction |
 | Effects | Vignette, Grain |
 | Tone curve | Highlights, Lights, Darks, Shadows |
+| Crop | Straighten angle |
 | HSL | Hue, Saturation and Luminance for each of the eight colours |
 
 The first thirteen are on by default. Short names come in German and English.

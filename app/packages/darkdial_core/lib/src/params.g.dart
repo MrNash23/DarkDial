@@ -9,6 +9,7 @@ const List<ParamGroup> kParamGroups = [
   ParamGroup('detail', 'Details', 'Detail'),
   ParamGroup('effects', 'Effekte', 'Effects'),
   ParamGroup('curve', 'Gradationskurve', 'Tone Curve'),
+  ParamGroup('crop', 'Freistellen', 'Crop'),
   ParamGroup('hsl', 'HSL', 'HSL'),
 ];
 
@@ -34,6 +35,7 @@ const List<ParamDef> kParams = [
   ParamDef(id: 19, lr: 'ParametricLights', group: 'curve', de: 'Hell', en: 'Lights', bipolar: true, icon: 19, min: -100.0, max: 100.0, step: 1.0, decimals: 0, format: ValueFormat.signed, defaultActive: false, color: null, colorDe: null, colorEn: null),
   ParamDef(id: 20, lr: 'ParametricDarks', group: 'curve', de: 'Dunkel', en: 'Darks', bipolar: true, icon: 20, min: -100.0, max: 100.0, step: 1.0, decimals: 0, format: ValueFormat.signed, defaultActive: false, color: null, colorDe: null, colorEn: null),
   ParamDef(id: 21, lr: 'ParametricShadows', group: 'curve', de: 'Tiefen', en: 'Shadows', bipolar: true, icon: 21, min: -100.0, max: 100.0, step: 1.0, decimals: 0, format: ValueFormat.signed, defaultActive: false, color: null, colorDe: null, colorEn: null),
+  ParamDef(id: 22, lr: 'straightenAngle', group: 'crop', de: 'Winkel', en: 'Angle', bipolar: true, icon: 35, min: -45.0, max: 45.0, step: 0.1, decimals: 1, format: ValueFormat.signed, defaultActive: false, color: null, colorDe: null, colorEn: null),
   ParamDef(id: 32, lr: 'HueAdjustmentRed', group: 'hsl', de: 'Farbton', en: 'Hue', bipolar: true, icon: 22, min: -100.0, max: 100.0, step: 1.0, decimals: 0, format: ValueFormat.signed, defaultActive: false, color: 0xFA3A31, colorDe: 'Rot', colorEn: 'Red'),
   ParamDef(id: 33, lr: 'HueAdjustmentOrange', group: 'hsl', de: 'Farbton', en: 'Hue', bipolar: true, icon: 22, min: -100.0, max: 100.0, step: 1.0, decimals: 0, format: ValueFormat.signed, defaultActive: false, color: 0xFA9925, colorDe: 'Orange', colorEn: 'Orange'),
   ParamDef(id: 34, lr: 'HueAdjustmentYellow', group: 'hsl', de: 'Farbton', en: 'Hue', bipolar: true, icon: 22, min: -100.0, max: 100.0, step: 1.0, decimals: 0, format: ValueFormat.signed, defaultActive: false, color: 0xF8D32D, colorDe: 'Gelb', colorEn: 'Yellow'),

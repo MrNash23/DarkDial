@@ -152,6 +152,44 @@ void engineTests() {
     expect(rig.engine.state.slots[slot].value, -40);
   });
 
+  test('the device follows the slider moved in Lightroom and continues there', () async {
+    await rig.start();
+    await rig.ready();
+    final contrast = rig.slotOf('Contrast');
+    expect(rig.model.mode, DeviceMode.select);
+
+    // Mouse on Contrast: the device jumps there, in edit mode.
+    rig.plugin.userSets('Contrast', 20);
+    await until(() => rig.model.index == contrast && rig.model.mode == DeviceMode.edit, 'device follows');
+    await until(() => rig.engine.state.editing && rig.engine.state.activeSlot == contrast, 'engine follows');
+    rig.model.rotate(2);
+    await until(() => rig.plugin.values['Contrast'] == 22, 'knob continues on Contrast');
+
+    // Mouse on another slider while editing: leave one, enter the other.
+    final shadows = rig.slotOf('Shadows');
+    rig.plugin.userSets('Shadows', -10);
+    await until(() => rig.model.index == shadows && rig.engine.state.activeSlot == shadows, 'second jump');
+    expect(rig.model.mode, DeviceMode.edit);
+
+    // A slider that is not on the device changes nothing.
+    rig.plugin.userSets('Sharpness', 40);
+    await pause();
+    expect(rig.model.index, shadows);
+  });
+
+  test('following can be switched off', () async {
+    await rig.start(config: AppConfig.defaults(Language.en).copyWith(followLightroom: false));
+    await rig.ready();
+    rig.plugin.userSets('Contrast', 20);
+    await until(() => rig.engine.state.slots[rig.slotOf('Contrast')].value == 20, 'value arrives');
+    await pause();
+    expect(rig.model.index, 0);
+    expect(rig.model.mode, DeviceMode.select);
+    final restored = AppConfig.fromJson(rig.engine.config.toJson());
+    expect(restored.followLightroom, isFalse);
+    expect(AppConfig.fromJson(const {'language': 'de'}).followLightroom, isTrue, reason: 'on unless switched off');
+  });
+
   test('stale answers do not pull the ring back while turning', () async {
     await rig.start();
     await rig.ready();

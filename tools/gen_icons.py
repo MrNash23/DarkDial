@@ -126,6 +126,15 @@ def draw_status(icon_id, size):
         d.line((c - a, c, c + a, c), fill=white, width=stroke)
         d.line((c - a + n * 0.14, c - n * 0.14, c - a, c, c - a + n * 0.14, c + n * 0.14),
                fill=white, width=stroke, joint="curve")
+    elif icon_id == 35:  # straighten: a tilted frame with its horizon
+        tilted = Image.new("RGB", (n, n), (0, 0, 0))
+        t = ImageDraw.Draw(tilted)
+        t.rounded_rectangle((c - n * 0.26, c - n * 0.18, c + n * 0.26, c + n * 0.18),
+                            radius=n * 0.03, outline=white, width=stroke)
+        image = tilted.rotate(14, resample=Image.BICUBIC)
+        d = ImageDraw.Draw(image)
+        for x in range(int(c - n * 0.36), int(c + n * 0.36), int(n * 0.07)):
+            d.line((x, c, x + n * 0.035, c), fill=white, width=max(1, stroke // 2))
     return image.resize((size, size), Image.LANCZOS)
 
 

@@ -242,11 +242,25 @@ void main() {
     await settle(tester, () => model.slots.first.label == 'Contrast', 'English label on device');
     expect(find.text('On the device'.toUpperCase()), findsOneWidget);
 
+    // Following Lightroom is on by default and can be switched off.
+    expect(controller.config.followLightroom, isTrue);
+    await tester.ensureVisible(find.byKey(const Key('follow-lightroom')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('follow-lightroom')));
+    await tester.pump();
+    expect(controller.config.followLightroom, isFalse);
+    await settle(
+      tester,
+      () => File(p.join(temp.path, 'settings.json')).readAsStringSync().contains('"follow": false'),
+      'setting saved',
+    );
+
     // The choice survives a restart.
     final stored = jsonDecode(File(p.join(temp.path, 'settings.json')).readAsStringSync()) as Map<String, dynamic>;
     final restored = AppConfig.fromJson(stored['config'] as Map<String, dynamic>);
     expect(restored.language, Language.en);
     expect(restored.activeSlots.single.param.lr, 'Contrast');
+    expect(restored.followLightroom, isFalse);
 
     // Timers started from taps live in the test's fake clock; stopping the
     // engine cancels them before the framework checks for leftovers.

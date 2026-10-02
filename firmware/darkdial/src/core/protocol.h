@@ -7,7 +7,7 @@
 namespace dd {
 
 constexpr uint8_t kProtocolMajor = 1;
-constexpr uint8_t kProtocolMinor = 1;
+constexpr uint8_t kProtocolMinor = 2;
 constexpr uint8_t kMaxSlots = 48;
 constexpr uint8_t kMaxLabelBytes = 20;
 constexpr uint8_t kMaxTextBytes = 8;
@@ -68,6 +68,7 @@ enum class MessageType : uint8_t {
   MenuEnd,
   TimerState,
   TimerResult,
+  SlotGoto,
 };
 
 /// A decoded message from the service. Only the fields of `type` are set.
@@ -76,7 +77,7 @@ struct Message {
   // ConfigBegin
   uint8_t slotCount = 0;
   uint8_t language = 0;
-  // ConfigSlot; `index` is also the slot of a Value
+  // ConfigSlot; `index` is also the slot of a Value or a SlotGoto
   uint8_t index = 0;
   Slot slot;
   // ConfigEnd

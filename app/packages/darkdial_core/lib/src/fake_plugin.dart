@@ -120,7 +120,10 @@ class FakePlugin {
   /// Moves a slider with the mouse.
   void userSets(String param, double value) {
     values[param] = value;
-    if (_canEdit && watched.contains(param)) _report(param);
+    if (_canEdit && watched.contains(param)) {
+      _report(param);
+      _send({'t': 'touched', 'p': param});
+    }
   }
 
   void userSwitchesModule(String name) {

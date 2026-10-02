@@ -658,7 +658,45 @@ static void testIdle() {
   CHECK(!device.idle());
 }
 
+static void testFollowLightroom() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
+  feed(device, status(all), 0);
+
+  // From the carousel: go to the slot and into edit mode, and say so.
+  feed(device, slotGoto(4), 100);
+  CHECK(device.index() == 4 && device.mode() == dd::Mode::Edit);
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x02);
+
+  // Already there: nothing happens.
+  feed(device, slotGoto(4), 200);
+  CHECK(host.sent.size() == 1);
+
+  // From another slot in edit mode: leave that one, select the new one.
+  host.sent.clear();
+  feed(device, slotGoto(1), 300);
+  CHECK(device.index() == 1 && device.mode() == dd::Mode::Edit);
+  CHECK(host.sent.size() == 2 && host.sent[0][5] == 0x03 && host.sent[1][5] == 0x02);
+  // The knob continues on the new slot.
+  host.sent.clear();
+  device.rotate(1, 1000);
+  CHECK(host.sent.size() == 1 && host.sent[0][0] == 0xB0);
+
+  // Out of range and while the menu is open: ignored.
+  host.sent.clear();
+  feed(device, slotGoto(40), 1100);
+  CHECK(device.index() == 1 && host.sent.empty());
+  device.buttonDown(2000);
+  device.tick(2000 + dd::kLongPressMs);
+  device.buttonUp(2600);
+  host.sent.clear();
+  feed(device, slotGoto(3), 2700);
+  CHECK(device.menuOpen() && device.index() == 1 && host.sent.empty());
+}
+
 int main() {
+  testFollowLightroom();
   testIdle();
   testTouchWithKnob();
   testDoubleTap();

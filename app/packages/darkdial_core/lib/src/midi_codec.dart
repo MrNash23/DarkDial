@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolMajor = 1;
-const int protocolMinor = 1;
+const int protocolMinor = 2;
 
 const int _sysexStart = 0xF0;
 const int _sysexEnd = 0xF7;
@@ -360,6 +360,12 @@ class TimerState extends DeviceMessage {
   final String label;
 }
 
+/// The slider of this slot was just moved in Lightroom: go there, in edit mode.
+class SlotGoto extends DeviceMessage {
+  const SlotGoto(this.slot);
+  final int slot;
+}
+
 class TimerResult extends DeviceMessage {
   const TimerResult(this.code, [this.text = '']);
 
@@ -472,6 +478,7 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
           ..._str(message.label, maxLabelBytes),
         ]),
       TimerResult(:final code, :final text) => _frame(0x4B, [code, ..._str(text, maxLabelBytes)]),
+      SlotGoto(:final slot) => _frame(0x4C, [slot]),
     };
 
 /// Decodes one complete MIDI message. Returns null for anything that is not a
@@ -590,6 +597,8 @@ DeviceMessage? decodeMessage(List<int> bytes) {
     case 0x4B:
       final text = p.length < 2 ? null : str(1);
       return text == null ? null : TimerResult(p[0], text);
+    case 0x4C:
+      return p.isEmpty ? null : SlotGoto(p[0]);
   }
   return null;
 }

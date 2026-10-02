@@ -73,6 +73,17 @@ void main() {
       expect(formatValue(temperature, jpeg, 15), '+15');
     });
 
+    test('straighten angle: one decimal, a tenth of a degree per detent', () {
+      final angle = paramByLr('straightenAngle')!;
+      const range = ValueRange(-45, 45);
+      expect(formatValue(angle, range, 1.5), '+1.5');
+      expect(formatValue(angle, range, -12.34), '-12.3');
+      expect(formatValue(angle, range, 0), '0.0');
+      expect(applyDetents(angle, range, 0, 3), closeTo(0.3, 1e-9));
+      expect(ringPosition(angle, range, 0), positionCentre);
+      expect(angle.defaultActive, isFalse);
+    });
+
     test('never exceeds what a Value message carries', () {
       for (final p in kParams) {
         for (final v in [p.min, p.max, 0.0]) {
@@ -110,7 +121,7 @@ void main() {
   group('AppConfig', () {
     test('defaults enable the 13 standard sliders in table order', () {
       final config = AppConfig.defaults();
-      expect(config.slots, hasLength(45));
+      expect(config.slots, hasLength(46));
       expect(config.activeSlots, hasLength(13));
       expect(config.activeSlots.first.param.lr, 'Temperature');
       expect(config.deviceSlots()[2].label, 'Belichtung');
@@ -127,7 +138,7 @@ void main() {
       expect(restored.slots.first.label, 'Mag');
       expect(restored.slots.first.step, 2.0);
       expect(restored.slots.first.sensitivity, 0.5);
-      expect(restored.slots, hasLength(45));
+      expect(restored.slots, hasLength(46));
     });
 
     test('unknown sliders are dropped, missing ones appended disabled', () {
@@ -139,7 +150,7 @@ void main() {
           {'param': 3, 'enabled': false},
         ],
       });
-      expect(restored.slots, hasLength(45));
+      expect(restored.slots, hasLength(46));
       expect(restored.activeSlots.single.param.lr, 'Exposure');
     });
 
@@ -150,7 +161,7 @@ void main() {
         slots: [for (final s in config.slots) s.copyWith(enabled: true)],
       );
       final slots = all.deviceSlots();
-      expect(slots, hasLength(45));
+      expect(slots, hasLength(46));
       expect(slots.firstWhere((s) => s.paramId == 32).color, 0xFA3A31);
       for (final slot in slots) {
         expect(encodeMessage(slot).length, lessThanOrEqualTo(64), reason: slot.label);

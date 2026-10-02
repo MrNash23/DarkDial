@@ -142,7 +142,7 @@ local sdk = {
   },
   LrFileUtils = {
     exists = function() return false end,
-    readFile = function() return '0.2.0\n' end,
+    readFile = function() return '0.3.0\n' end,
   },
   LrFunctionContext = {
     callWithContext = function(_, fn) return fn({ addFailureHandler = function() end }) end,
@@ -217,8 +217,8 @@ receive { t = 'hello', app = 'test', proto = '1.0' }
 do
   local messages = drain()
   local hello = find(messages, 'hello')
-  equal(hello and hello.plugin, '0.2.0', 'hello carries plugin version')
-  equal(hello and hello.proto, '1.1', 'hello carries protocol version')
+  equal(hello and hello.plugin, '0.3.0', 'hello carries plugin version')
+  equal(hello and hello.proto, '1.2', 'hello carries protocol version')
   equal(hello and hello.lr, '15.2', 'hello carries Lightroom version')
   local status = find(messages, 'status')
   equal(status and status.module, 'library', 'status module')
@@ -315,11 +315,32 @@ lr.time = lr.time + 1
 lr.observer()
 do
   local messages = drain()
-  equal(#messages, 1, 'one message for one change')
+  equal(#messages, 2, 'value and touched for one change')
   equal(messages[1].p, 'Contrast', 'changed parameter reported')
   equal(messages[1].v, 42, 'changed value reported')
   equal(messages[1].s, nil, 'no sequence number for Lightroom changes')
+  -- One slider moved by hand: the device may follow it.
+  equal(messages[2].t, 'touched', 'single change is reported as touched')
+  equal(messages[2].p, 'Contrast', 'touched names the slider')
 end
+
+-- Two sliders at once (a preset, auto tone) are nobody's single move.
+receive { t = 'watch', p = { 'Exposure', 'Contrast' } }
+drain()
+lr.values.Contrast = 5
+lr.values.Exposure = 1
+lr.time = lr.time + 1
+lr.observer()
+do
+  local messages = drain()
+  equal(#messages, 2, 'two values')
+  equal(find(messages, 'touched'), nil, 'several changes are not touched')
+end
+lr.values.Contrast = 42
+lr.values.Exposure = 4.5
+lr.time = lr.time + 1
+lr.observer()
+drain()
 
 -- A change skipped by the observer rate limit is picked up by the main loop.
 lr.values.Contrast = 43
@@ -358,6 +379,7 @@ step()
 step()
 do
   local messages = drain()
+  equal(find(messages, 'touched'), nil, 'another photo is not a touched slider')
   equal(find(messages, 'status').photoId, 13, 'photo change reported')
   equal(find(messages, 'range', 'Temperature').max, 50000, 'range follows the photo')
   equal(find(messages, 'value', 'Temperature').v, 6000, 'value follows the photo')

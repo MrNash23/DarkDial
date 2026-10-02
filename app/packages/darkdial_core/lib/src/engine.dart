@@ -487,6 +487,14 @@ class Engine {
           }
         }
         _sendStatus();
+      case 'touched':
+        // One slider was moved in Lightroom: the device follows it, unless it
+        // is on that slider already.
+        if (name is! String || !_config.followLightroom) return;
+        final slot = _active.indexWhere((s) => s.param.lr == name);
+        if (slot < 0 || (_editing && slot == _activeSlot)) return;
+        _session?.send(SlotGoto(slot));
+        return;
       case 'source':
         // Where the photos on screen come from; decides the suggested job.
         final kind = message['kind'];

@@ -38,7 +38,8 @@
     "30": null,
     "31": null,
     "32": null,
-    "33": null
+    "33": null,
+    "35": null
   },
   "hslDot": {
     "_comment": "Centre and radius of the colour dot in the HSL source images (source pixels). Device and app paint the slot colour over it.",
