@@ -47,6 +47,39 @@ inline Bytes value(uint8_t slot, uint16_t position, bool valid, const std::strin
 
 inline Bytes status(uint8_t flags, uint8_t notice = 0) { return frame(0x46, {flags, notice}); }
 
+inline void appendU32(Bytes &p, uint32_t v) {
+  p.push_back(static_cast<uint8_t>(v >> 24));
+  p.push_back(static_cast<uint8_t>(v >> 16));
+  p.push_back(static_cast<uint8_t>(v >> 8));
+  p.push_back(static_cast<uint8_t>(v));
+}
+
+inline Bytes jobListBegin(uint8_t count) { return frame(0x47, {count}); }
+inline Bytes jobItem(uint8_t index, uint32_t id, bool suggested, bool running, const std::string &label) {
+  Bytes p = {index};
+  appendU32(p, id);
+  p.push_back(static_cast<uint8_t>((suggested ? 1 : 0) | (running ? 2 : 0)));
+  p.push_back(static_cast<uint8_t>(label.size()));
+  p.insert(p.end(), label.begin(), label.end());
+  return frame(0x48, p);
+}
+inline Bytes jobListEnd() { return frame(0x49, {}); }
+
+inline Bytes timerState(bool running, uint32_t jobId, uint32_t elapsed, const std::string &label) {
+  Bytes p = {static_cast<uint8_t>(running ? 1 : 0)};
+  appendU32(p, jobId);
+  appendU32(p, elapsed);
+  p.push_back(static_cast<uint8_t>(label.size()));
+  p.insert(p.end(), label.begin(), label.end());
+  return frame(0x4A, p);
+}
+
+inline Bytes timerResult(uint8_t code, const std::string &text = "") {
+  Bytes p = {code, static_cast<uint8_t>(text.size())};
+  p.insert(p.end(), text.begin(), text.end());
+  return frame(0x4B, p);
+}
+
 struct SlotSpec {
   uint8_t paramId;
   uint8_t iconId;

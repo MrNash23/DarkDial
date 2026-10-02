@@ -133,9 +133,17 @@ local function pollStatus(force)
   return false
 end
 
-local function applyValue(param, value, delta, seq)
+local function applyValue(param, value, delta, seq, reset)
   local min, max = getRange(param)
   if not min then return end
+  if reset then
+    local ok, err = pcall(LrDevelopController.resetToDefault, param)
+    if not ok then
+      log:warn('resetToDefault failed for ' .. tostring(param) .. ': ' .. tostring(err))
+    end
+    reportValue(param, false, seq)
+    return
+  end
   if delta then
     local current = getValue(param)
     if not current then return end
@@ -150,11 +158,11 @@ local function applyValue(param, value, delta, seq)
   reportValue(param, false, seq)
 end
 
---- Applies set/delta; switches to the Develop module first if necessary.
-local function change(param, value, delta, seq)
+--- Applies set/delta/reset; switches to the Develop module first if necessary.
+local function change(param, value, delta, seq, reset)
   if type(param) ~= 'string' then return end
   if inDevelop() then
-    if targetPhotoId() then applyValue(param, value, delta, seq) end
+    if targetPhotoId() then applyValue(param, value, delta, seq, reset) end
     return
   end
   if not targetPhotoId() then return end
@@ -169,7 +177,7 @@ local function change(param, value, delta, seq)
     if not inDevelop() then return end
     LrTasks.sleep(0.2) -- Lightroom needs a moment before the controller follows
     pollStatus(false)
-    applyValue(param, value, delta, seq)
+    applyValue(param, value, delta, seq, reset)
   end)
 end
 
@@ -204,6 +212,10 @@ end
 
 function handlers.delta(message)
   change(message.p, nil, message.d, message.s)
+end
+
+function handlers.reset(message)
+  change(message.p, nil, nil, message.s, true)
 end
 
 function handlers.get(message)

@@ -207,7 +207,7 @@ int readDetents() {
   return count;
 }
 
-bool readClick() {
+bool buttonPressed() {
   static bool stable = false;
   static bool last = false;
   static uint32_t changedMs = 0;
@@ -217,11 +217,8 @@ bool readClick() {
     last = pressed;
     changedMs = now;
   }
-  if (pressed != stable && now - changedMs >= kSwitchDebounceMs) {
-    stable = pressed;
-    return pressed;
-  }
-  return false;
+  if (pressed != stable && now - changedMs >= kSwitchDebounceMs) stable = pressed;
+  return stable;
 }
 
 void setLeds(uint8_t r, uint8_t g, uint8_t b) {

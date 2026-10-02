@@ -15,6 +15,8 @@ static const int kSize = 360;
 static uint16_t framebuffer[kSize * kSize];
 static uint32_t nowMs = 0;
 static std::string outDir = ".";
+// Status sent once a second while a scene runs, like the service does; -1 = none.
+static int heartbeat = -1;
 
 static uint32_t tick() { return nowMs; }
 
@@ -24,6 +26,7 @@ static void flush(lv_display_t *display, const lv_area_t *, uint8_t *) { lv_disp
 static void run(dd::Device &device, uint32_t ms) {
   for (uint32_t t = 0; t < ms; t += 10) {
     nowMs += 10;
+    if (heartbeat >= 0 && nowMs % 1000 == 0) feed(device, status(static_cast<uint8_t>(heartbeat)), nowMs);
     device.tick(nowMs);
     ui_update(device, nowMs);
     lv_timer_handler();
@@ -136,6 +139,61 @@ int main(int argc, char **argv) {
   save("12_edit_saturation_negative");
   device.click();
 
+  // Time tracking: hold, menu, running clock.
+  heartbeat = all;
+  feed(device, status(all), nowMs);
+  feed(device, timerState(false, 0, 0, ""), nowMs);
+  device.buttonDown(nowMs);
+  run(device, 500);
+  save("20_hold_ring_fills");
+  run(device, 300);
+  device.buttonUp(nowMs);
+  feed(device, jobListBegin(3), nowMs);
+  feed(device, jobItem(0, 7, true, false, "M\xC3\xBCller"), nowMs);
+  feed(device, jobItem(1, 5, false, false, "Katalog"), nowMs);
+  feed(device, jobItem(2, 9, false, false, "01.10. 14:32"), nowMs);
+  feed(device, jobListEnd(), nowMs);
+  run(device, 300);
+  save("21_menu_new_job");
+  device.rotate(1, nowMs);
+  run(device, 400);
+  save("22_menu_suggested_job");
+  device.click();
+  feed(device, timerResult(0), nowMs);
+  feed(device, timerState(true, 7, 0, "M\xC3\xBCller"), nowMs);
+  run(device, 300);
+  save("23_notice_started");
+  run(device, 1500);
+  feed(device, status(all), nowMs);
+  feed(device, timerState(true, 7, 754, "M\xC3\xBCller"), nowMs);
+  run(device, 300);
+  save("24_slot_with_running_time");
+  device.buttonDown(nowMs);
+  run(device, 800);
+  device.buttonUp(nowMs);
+  feed(device, jobListBegin(3), nowMs);
+  feed(device, jobItem(0, 7, true, true, "M\xC3\xBCller"), nowMs);
+  feed(device, jobItem(1, 5, false, false, "Katalog"), nowMs);
+  feed(device, jobItem(2, 9, false, false, "01.10. 14:32"), nowMs);
+  feed(device, jobListEnd(), nowMs);
+  feed(device, status(all), nowMs);
+  run(device, 300);
+  save("25_menu_stop");
+  device.rotate(2, nowMs);
+  run(device, 400);
+  save("26_menu_running_job");
+  feed(device, timerState(true, 7, 4 * 3600 + 7 * 60, "M\xC3\xBCller"), nowMs);
+  run(device, 300);
+  save("27_menu_running_job_hours");
+  device.rotate(-2, nowMs);
+  device.click();
+  feed(device, timerResult(1), nowMs);
+  feed(device, timerState(false, 0, 0, ""), nowMs);
+  run(device, 300);
+  save("28_notice_stopped");
+  run(device, 1500);
+  heartbeat = -1;
+
   feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop), nowMs);
   run(device, 300);
   save("13_no_photo");
@@ -151,5 +209,11 @@ int main(int argc, char **argv) {
 
   run(device, dd::kHeartbeatTimeoutMs + 500);
   save("16_heartbeat_lost");
+
+  device.buttonDown(nowMs);
+  run(device, 800);
+  device.buttonUp(nowMs);
+  run(device, 200);
+  save("29_menu_offline");
   return 0;
 }

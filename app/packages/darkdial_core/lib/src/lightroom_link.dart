@@ -4,7 +4,7 @@ import 'dart:io';
 
 const int portFromPlugin = 54770;
 const int portToPlugin = 54771;
-const String lrProtocolVersion = '1.0';
+const String lrProtocolVersion = '1.1';
 
 /// Connection to the Lightroom plugin, PROTOCOL.md section 2. Connects to the
 /// plugin's two ports and keeps trying for as long as it runs: Lightroom may

@@ -7,13 +7,17 @@
 namespace dd {
 
 constexpr uint8_t kProtocolMajor = 1;
-constexpr uint8_t kProtocolMinor = 0;
+constexpr uint8_t kProtocolMinor = 1;
 constexpr uint8_t kMaxSlots = 48;
 constexpr uint8_t kMaxLabelBytes = 20;
 constexpr uint8_t kMaxTextBytes = 8;
 constexpr size_t kMaxSysexBytes = 64;
-// Longest unpacked payload: a ConfigSlot with a full label.
-constexpr size_t kMaxPayloadBytes = 8 + kMaxLabelBytes;
+// Longest unpacked payload: a TimerState with a full label.
+constexpr size_t kMaxPayloadBytes = 10 + kMaxLabelBytes;
+// Jobs in one job list; "Stop" and "New job" are added by the device.
+constexpr uint8_t kMaxJobs = 13;
+// TimerStart with this id creates a new, unnamed job.
+constexpr uint32_t kNewJobId = 0xFFFFFFFF;
 constexpr uint16_t kPositionMax = 16383;
 constexpr uint16_t kPositionCentre = 8192;
 constexpr uint8_t kRotationController = 0x10;
@@ -41,6 +45,13 @@ struct SlotValue {
   char text[kMaxTextBytes + 1] = {0};
 };
 
+struct Job {
+  uint32_t id = 0;
+  bool suggested = false;  // matches what is open in Lightroom
+  bool running = false;
+  char label[kMaxLabelBytes + 1] = {0};
+};
+
 enum class MessageType : uint8_t {
   None,
   IdentityRequest,
@@ -50,6 +61,11 @@ enum class MessageType : uint8_t {
   ConfigEnd,
   Value,
   Status,
+  JobListBegin,
+  JobItem,
+  JobListEnd,
+  TimerState,
+  TimerResult,
 };
 
 /// A decoded message from the service. Only the fields of `type` are set.
@@ -68,6 +84,16 @@ struct Message {
   // Status
   uint8_t statusFlags = 0;
   uint8_t notice = 0;
+  // JobListBegin
+  uint8_t jobCount = 0;
+  // JobItem (with `index`)
+  Job job;
+  // TimerState: `text` is the job label. TimerResult: `text` is the error text.
+  bool timerRunning = false;
+  uint32_t timerJobId = 0;
+  uint32_t timerElapsed = 0;
+  uint8_t resultCode = 0;
+  char text[kMaxLabelBytes + 1] = {0};
   // Unpacked payload, needed for the configuration CRC.
   uint8_t payload[kMaxPayloadBytes] = {0};
   size_t payloadSize = 0;
@@ -90,6 +116,10 @@ size_t buildSlotSelect(uint8_t *out, uint8_t slot);
 size_t buildSlotLeave(uint8_t *out, uint8_t slot);
 size_t buildSlotFocus(uint8_t *out, uint8_t slot);
 size_t buildConfigAck(uint8_t *out, uint8_t result, uint16_t crc);
+size_t buildJobListRequest(uint8_t *out);
+size_t buildTimerStart(uint8_t *out, uint32_t jobId);
+size_t buildTimerStop(uint8_t *out);
+size_t buildSlotReset(uint8_t *out, uint8_t slot);
 /// Relative CC; `delta` is clamped to -63 … 63 and must not be 0.
 size_t buildRotation(uint8_t *out, int delta);
 

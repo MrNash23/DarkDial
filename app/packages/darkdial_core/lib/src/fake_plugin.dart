@@ -14,12 +14,19 @@ class FakePlugin {
       ranges[p.lr] = [p.min, p.max];
       values[p.lr] = p.lr == 'Temperature' ? 5500 : (p.min < 0 ? 0 : p.min);
     }
+    defaults.addAll(values);
   }
 
   String module;
   int? photoId;
   final String proto;
   final Map<String, double> values = {};
+
+  /// What `reset` restores.
+  final Map<String, double> defaults = {};
+
+  /// The collection or folder on screen: kind, name, id. Null = none.
+  ({String kind, String name, String id})? source;
   final Map<String, List<double>> ranges = {};
   List<String> watched = [];
 
@@ -86,6 +93,15 @@ class FakePlugin {
 
   void _status() => _send({'t': 'status', 'module': module, 'photo': photoId != null, 'photoId': photoId});
 
+  void _source() =>
+      _send({'t': 'source', 'kind': source?.kind ?? '', 'name': source?.name ?? '', 'id': source?.id ?? ''});
+
+  /// Clicks a collection or folder in the Library.
+  void userOpensSource(String kind, String name, String id) {
+    source = (kind: kind, name: name, id: id);
+    _source();
+  }
+
   void _report(String param, {int? seq}) {
     _send({'t': 'value', 'p': param, 'v': values[param], 's': seq});
   }
@@ -137,6 +153,7 @@ class FakePlugin {
       case 'hello':
         _send({'t': 'hello', 'plugin': '0.1.0', 'proto': proto, 'lr': 'fake'});
         _status();
+        _source();
       case 'ping':
         _send({'t': 'pong'});
       case 'watch':
@@ -147,11 +164,12 @@ class FakePlugin {
           _send({'t': 'range', 'p': param, 'min': ranges[param]![0], 'max': ranges[param]![1]});
           _report(param);
         }
-      case 'set' || 'delta':
+      case 'set' || 'delta' || 'reset':
         if (param is! String || !values.containsKey(param) || photoId == null) return;
         final seq = (decoded['s'] as num?)?.toInt();
         final isDelta = decoded['t'] == 'delta';
-        final amount = ((isDelta ? decoded['d'] : decoded['v']) as num).toDouble();
+        final isReset = decoded['t'] == 'reset';
+        final amount = isReset ? defaults[param]! : ((isDelta ? decoded['d'] : decoded['v']) as num).toDouble();
         void apply() {
           if (module != 'develop') {
             module = 'develop';

@@ -66,3 +66,18 @@ const List<StatusDef> kStatusDefs = [
   StatusDef('loaded', 27, 'Geladen', 'Loaded'),
   StatusDef('develop', 28, 'Entwickeln', 'Develop'),
 ];
+
+/// Icons of the time tracking menu by key.
+const Map<String, int> kTimerIcons = {
+  'stopwatch': 29,
+  'plus': 30,
+  'stop': 31,
+};
+
+/// Texts of the time tracking menu by key: [de, en].
+const Map<String, List<String>> kTimerTexts = {
+  'stop': ['Stopp', 'Stop'],
+  'newJob': ['Neuer Job', 'New job'],
+  'started': ['Gestartet', 'Started'],
+  'stopped': ['Gestoppt', 'Stopped'],
+};

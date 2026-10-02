@@ -84,9 +84,22 @@ void loop() {
 
   const int detents = board::readDetents();
   if (detents) device->rotate(detents, now);
-  if (board::readClick() || tapped) {
+  // The knob reports down and up; the core decides between click and long
+  // press. Taps on the display go through tap(), which also detects the
+  // double tap that resets a slot.
+  static bool wasPressed = false;
+  const bool pressed = board::buttonPressed();
+  if (pressed != wasPressed) {
+    wasPressed = pressed;
+    if (pressed) {
+      device->buttonDown(now);
+    } else {
+      device->buttonUp(now);
+    }
+  }
+  if (tapped) {
     tapped = false;
-    device->click();
+    device->tap(now);
   }
 
   device->tick(now);

@@ -1,5 +1,6 @@
 #include "device.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "params.h"
@@ -23,6 +24,14 @@ int Accelerator::apply(int detents, uint32_t nowMs) {
     factor = 2;
   }
   return detents * factor;
+}
+
+void formatElapsed(uint32_t seconds, char *out) {
+  if (seconds < 3600) {
+    snprintf(out, 12, "%02u:%02u", static_cast<unsigned>(seconds / 60), static_cast<unsigned>(seconds % 60));
+  } else {
+    snprintf(out, 12, "%u:%02u", static_cast<unsigned>(seconds / 3600), static_cast<unsigned>(seconds / 60 % 60));
+  }
 }
 
 Device::Device(Host &host, uint8_t fwMajor, uint8_t fwMinor, uint8_t fwPatch, const uint8_t serial[6])
@@ -92,6 +101,8 @@ uint16_t Device::configCrc() const {
 }
 
 Screen Device::screen() const {
+  if (menuOpen_) return Screen::JobMenu;
+  if (timerNotice_) return Screen::TimerNotice;
   if (!serviceConnected_) return Screen::Offline;
   if (notice_ == 1) return Screen::Switching;
   if (loadedNotice_) return Screen::Loaded;
@@ -99,8 +110,107 @@ Screen Device::screen() const {
   return Screen::Slot;
 }
 
+uint8_t Device::menuCount() const { return static_cast<uint8_t>((timerRunning_ ? 2 : 1) + jobCount_); }
+
+MenuEntry Device::menuEntry(uint8_t i) const {
+  MenuEntry entry;
+  const uint8_t fixed = timerRunning_ ? 2 : 1;
+  if (timerRunning_ && i == 0) {
+    entry.kind = MenuKind::Stop;
+  } else if (i < fixed) {
+    entry.kind = MenuKind::NewJob;
+  } else {
+    entry.kind = MenuKind::Job;
+    entry.job = &jobs_[i - fixed];
+  }
+  return entry;
+}
+
+uint32_t Device::timerSeconds(uint32_t nowMs) const {
+  if (!timerRunning_) return 0;
+  return timerBaseSeconds_ + (nowMs - timerBaseMs_) / 1000;
+}
+
+void Device::tap(uint32_t nowMs) {
+  if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) {
+    tapPending_ = false;
+    click();
+    return;
+  }
+  if (tapPending_ && nowMs - tapAtMs_ <= kDoubleTapMs) {
+    tapPending_ = false;
+    uint8_t out[kMaxSysexBytes];
+    host_.send(out, buildSlotReset(out, index_));
+    return;
+  }
+  tapPending_ = true;
+  tapAtMs_ = nowMs;
+}
+
+void Device::buttonDown(uint32_t nowMs) {
+  pressed_ = true;
+  longFired_ = false;
+  pressedAtMs_ = nowMs;
+}
+
+void Device::buttonUp(uint32_t) {
+  if (pressed_ && !longFired_) click();
+  pressed_ = false;
+}
+
+float Device::holdProgress(uint32_t nowMs) const {
+  if (!pressed_ || longFired_) return 0;
+  const uint32_t held = nowMs - pressedAtMs_;
+  return held >= kLongPressMs ? 1.0f : static_cast<float>(held) / kLongPressMs;
+}
+
+/// Opens the time tracking menu from any state, or closes it without change.
+void Device::longPress() {
+  if (menuOpen_) {
+    menuOpen_ = false;
+  } else {
+    menuOpen_ = true;
+    menuIndex_ = 0;
+    timerNotice_ = false;
+    lastMove_ = 0;
+    // The list from last time is shown at once; a fresh one replaces it.
+    uint8_t out[kMaxSysexBytes];
+    host_.send(out, buildJobListRequest(out));
+  }
+  changed();
+}
+
+/// Click in the menu: start, switch or stop, then back to where we came from.
+void Device::menuAction() {
+  if (!serviceConnected_) return;  // the service keeps the books; nothing to do without it
+  uint8_t out[kMaxSysexBytes];
+  const MenuEntry entry = menuEntry(menuIndex_);
+  switch (entry.kind) {
+    case MenuKind::Stop:
+      host_.send(out, buildTimerStop(out));
+      break;
+    case MenuKind::NewJob:
+      host_.send(out, buildTimerStart(out, kNewJobId));
+      break;
+    case MenuKind::Job:
+      host_.send(out, buildTimerStart(out, entry.job->id));
+      break;
+  }
+  menuOpen_ = false;
+  changed();
+}
+
 void Device::rotate(int detents, uint32_t nowMs) {
-  if (detents == 0 || slotCount_ == 0) return;
+  if (detents == 0) return;
+  if (menuOpen_) {
+    int next = (static_cast<int>(menuIndex_) + detents) % menuCount();
+    if (next < 0) next += menuCount();
+    menuIndex_ = static_cast<uint8_t>(next);
+    lastMove_ = detents > 0 ? 1 : -1;
+    changed();
+    return;
+  }
+  if (slotCount_ == 0) return;
   uint8_t out[kMaxSysexBytes];
   if (mode_ == Mode::Select) {
     // One slot per detent, wrapping around; no acceleration in the carousel.
@@ -116,6 +226,10 @@ void Device::rotate(int detents, uint32_t nowMs) {
 }
 
 void Device::click() {
+  if (menuOpen_) {
+    menuAction();
+    return;
+  }
   if (slotCount_ == 0) return;
   uint8_t out[kMaxSysexBytes];
   if (mode_ == Mode::Select) {
@@ -130,11 +244,33 @@ void Device::click() {
 }
 
 void Device::tick(uint32_t nowMs) {
+  if (tapPending_ && nowMs - tapAtMs_ > kDoubleTapMs) {
+    tapPending_ = false;
+    click();  // it stayed a single tap
+  }
+  if (pressed_ && !longFired_ && nowMs - pressedAtMs_ >= kLongPressMs) {
+    longFired_ = true;
+    longPress();
+  }
   if (serviceConnected_ && nowMs - lastStatusMs_ > kHeartbeatTimeoutMs) {
     serviceConnected_ = false;
     // Values are stale without the service, and nothing can be edited.
     for (uint8_t i = 0; i < slotCount_; i++) values_[i].valid = false;
     mode_ = Mode::Select;
+    // The clock lives in the service; it tells us again when it is back.
+    timerRunning_ = false;
+    if (menuOpen_) menuIndex_ = 0;
+    changed();
+  }
+  if (timerRunning_) {
+    const uint32_t seconds = timerSeconds(nowMs);
+    if (seconds != timerShownSeconds_) {
+      timerShownSeconds_ = seconds;
+      changed();
+    }
+  }
+  if (timerNotice_ && nowMs - timerNoticeAtMs_ > kTimerNoticeMs) {
+    timerNotice_ = false;
     changed();
   }
   if (loadedNotice_ && nowMs - loadedAtMs_ > kLoadedNoticeMs) {
@@ -197,6 +333,61 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       notice_ = message.notice;
       serviceConnected_ = true;
       lastStatusMs_ = nowMs;
+      changed();
+      break;
+
+    case MessageType::JobListBegin:
+      receivingJobs_ = message.jobCount <= kMaxJobs;
+      incomingJobCount_ = 0;
+      incomingJobExpected_ = message.jobCount;
+      break;
+
+    case MessageType::JobItem:
+      if (!receivingJobs_) break;
+      if (message.index != incomingJobCount_ || incomingJobCount_ >= incomingJobExpected_) {
+        receivingJobs_ = false;
+      } else {
+        incomingJobs_[incomingJobCount_++] = message.job;
+      }
+      break;
+
+    case MessageType::JobListEnd: {
+      const bool complete = receivingJobs_ && incomingJobCount_ == incomingJobExpected_;
+      receivingJobs_ = false;
+      if (!complete) break;  // keep the previous list
+      for (uint8_t i = 0; i < incomingJobCount_; i++) jobs_[i] = incomingJobs_[i];
+      jobCount_ = incomingJobCount_;
+      if (menuIndex_ >= menuCount()) menuIndex_ = 0;
+      changed();
+      break;
+    }
+
+    case MessageType::TimerState: {
+      // "Stop" appears or disappears in front of the list; stay on the same line.
+      const bool wasRunning = timerRunning_;
+      timerRunning_ = message.timerRunning;
+      timerJobId_ = message.timerJobId;
+      timerBaseSeconds_ = message.timerElapsed;
+      timerBaseMs_ = nowMs;
+      timerShownSeconds_ = message.timerElapsed;
+      memcpy(timerLabel_, message.text, sizeof(timerLabel_));
+      if (menuOpen_ && wasRunning != timerRunning_) {
+        if (timerRunning_) {
+          menuIndex_++;
+        } else if (menuIndex_ > 0) {
+          menuIndex_--;
+        }
+        if (menuIndex_ >= menuCount()) menuIndex_ = 0;
+      }
+      changed();
+      break;
+    }
+
+    case MessageType::TimerResult:
+      noticeCode_ = message.resultCode;
+      memcpy(noticeText_, message.text, sizeof(noticeText_));
+      timerNotice_ = true;
+      timerNoticeAtMs_ = nowMs;
       changed();
       break;
 

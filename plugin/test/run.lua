@@ -65,6 +65,7 @@ local lr = {
   module = 'library',
   photoId = 11,
   values = { Exposure = 0, Contrast = 10, Temperature = 5500 },
+  defaults = { Exposure = 0, Contrast = 0, Temperature = 5200 },
   ranges = { Exposure = { -5, 5 }, Contrast = { -100, 100 }, Temperature = { 2000, 50000 } },
   time = 0,
   tracking = nil,
@@ -121,6 +122,10 @@ local sdk = {
       local r = lr.ranges[param]
       if not r then error('unknown parameter') end
       return r[1], r[2]
+    end,
+    resetToDefault = function(param)
+      if lr.values[param] == nil then error('unknown parameter') end
+      lr.values[param] = lr.defaults[param]
     end,
     startTracking = function(param) lr.tracking = param end,
     stopTracking = function() lr.tracking = nil end,
@@ -243,6 +248,16 @@ receive { t = 'set', p = 'Exposure', v = 99, s = 2 }
 equal(find(drain(), 'value', 'Exposure').v, 5, 'set clamps to max')
 receive { t = 'delta', p = 'Exposure', d = -0.5, s = 3 }
 equal(find(drain(), 'value', 'Exposure').v, 4.5, 'delta adds to current value')
+
+-- Reset goes back to Lightroom's default and answers like a set.
+receive { t = 'reset', p = 'Exposure', s = 30 }
+do
+  local value = find(drain(), 'value', 'Exposure')
+  equal(value and value.v, 0, 'reset restores the default')
+  equal(value and value.s, 30, 'reset answer carries the sequence number')
+end
+receive { t = 'set', p = 'Exposure', v = 4.5, s = 31 }
+drain()
 
 -- The plugin's own set must not be reported a second time by the observer.
 lr.time = lr.time + 1

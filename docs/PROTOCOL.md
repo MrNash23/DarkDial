@@ -1,6 +1,6 @@
 # Darkdial protocol
 
-Protocol version **1.0**. Two links, both bidirectional:
+Protocol version **1.1** (1.1 adds time tracking, sections 1.7 and 2.4). Two links, both bidirectional:
 
 ```
 Device  ⇄  USB-MIDI  ⇄  Service (desktop app)  ⇄  LrSocket / TCP localhost  ⇄  Plugin
@@ -89,6 +89,10 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x03` | SlotLeave | `u8 slot` | Back in selection mode, on this slot. |
 | `0x04` | SlotFocus | `u8 slot` | Carousel moved to this slot in selection mode. |
 | `0x05` | ConfigAck | `u8 result`, `u16 crc` | Reply to ConfigEnd. Result: 0 ok, 1 CRC mismatch, 2 too many slots, 3 bad sequence. |
+| `0x06` | JobListRequest | – | *1.1.* The job menu was opened; service answers with the job list and TimerState. |
+| `0x07` | TimerStart | `u32 jobId` | *1.1.* Start the clock for this job; `0xFFFFFFFF` creates a new, unnamed job. A running clock is stopped first. |
+| `0x08` | TimerStop | – | *1.1.* Stop the running clock. |
+| `0x09` | SlotReset | `u8 slot` | *1.1.* Double tap on the display in edit mode: reset this slot to Lightroom's default. |
 
 ### 1.5 Messages service → device
 
@@ -100,6 +104,11 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x44` | ConfigEnd | `u16 crc` | CRC over all ConfigSlot payloads. Device answers ConfigAck and, on success, stores the configuration and shows "loaded". |
 | `0x45` | Value | `u8 slot`, `u16 position`, `u8 flags`, `str text` | Current value of a slot. `position` 0 … 16383 is the ring position; for bipolar slots 8192 is the centre (top). Flags bit 0: value valid. `text` is the formatted number, ≤ 8 bytes ASCII, e.g. `+1.35`, `5600K`. |
 | `0x46` | Status | `u8 flags`, `u8 notice` | Flags bit 0: Lightroom connected, bit 1: Develop module active, bit 2: photo selected. Notice: 0 none, 1 switching to Develop. Sent on every change and at least every 2 s as heartbeat. |
+| `0x47` | JobListBegin | `u8 count` | *1.1.* Starts a job list, `count` 0 … 13. |
+| `0x48` | JobItem | `u8 index`, `u32 id`, `u8 flags`, `str label` | *1.1.* One job. Flags bit 0: suggested for what is open in Lightroom, bit 1: its clock is running. Label ≤ 20 bytes. Sent in index order. |
+| `0x49` | JobListEnd | – | *1.1.* The list is complete and replaces the previous one. |
+| `0x4A` | TimerState | `u8 running`, `u32 jobId`, `u32 elapsedSeconds`, `str label` | *1.1.* State of the clock. `elapsedSeconds` is the time of the running entry so far; the device counts on from there. |
+| `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* Answer to TimerStart/TimerStop. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
 final XOR) over the concatenation of the unpacked payloads of all ConfigSlot
@@ -124,6 +133,25 @@ messages in index order.
 value changes in Lightroom, not only for the active slot, so the carousel shows
 current numbers while browsing. The device never computes values itself: after
 a rotation it waits for the Value message.
+
+### 1.7 Time tracking (1.1)
+
+The service owns jobs and times; the device has no real-time clock and only
+displays and selects.
+
+- A device announces time tracking by `minor ≥ 1` in Hello. The service sends
+  the 1.1 messages only to such devices.
+- **Menu.** On a long press the device sends JobListRequest and shows the
+  list when JobListEnd arrives. The device itself puts "Stop" (only while a
+  clock runs) and "New job" in front of the jobs. The service sends the jobs
+  already ordered: the suggestion first, then most recently used.
+- **Clock.** The service sends TimerState after every change, when a device
+  connects, and once a minute to correct drift. Between two messages the
+  device counts locally.
+- **Result.** After TimerStart or TimerStop the service sends TimerResult,
+  then TimerState. Without service the menu shows "offline" and allows no
+  action.
+- `u32` is four bytes, big-endian.
 
 ---
 
@@ -150,10 +178,11 @@ holds the message type. Parameters are identified by their Lightroom SDK name
 | `set` | `p`, `v` (number), `s` (sequence number, optional) | Set an absolute value. Plugin clamps to the range, applies it and answers `value` with the same `s`. |
 | `delta` | `p`, `d` (number), `s` (optional) | Add `d` to the current value; otherwise like `set`. |
 | `get` | `p` | Plugin answers `value`. |
+| `reset` | `p`, `s` (optional) | *1.1.* Reset the parameter to Lightroom's default (for white balance: as shot); otherwise like `set`. |
 | `track` | `p` (name, or `""` to stop) | Calls `startTracking` / `stopTracking` for smoother continuous changes. |
 | `ping` | – | Plugin answers `pong`. |
 
-If `set` or `delta` arrives outside the Develop module, the plugin switches to
+If `set`, `delta` or `reset` arrives outside the Develop module, the plugin switches to
 Develop first, sends `status`, then applies the change.
 
 ### 2.2 Plugin → service
@@ -165,6 +194,7 @@ Develop first, sends `status`, then applies the change.
 | `range` | `p`, `min`, `max` | Range for the current photo. Sent after `watch` and after a photo change (Temperature differs between raw and JPEG). |
 | `value` | `p`, `v`, `s` (only when answering `set`/`delta`) | Current value. Without `s`: the value changed inside Lightroom (mouse, keyboard, preset, photo change). |
 | `pong` | – | Answer to `ping`. |
+| `source` | `kind` (`"collection"`, `"folder"` or `""`), `name`, `id` | *1.1.* Where the photos on screen come from: the active collection or folder, otherwise the folder of the target photo. Sent after `hello` and whenever it changes. `id` is stable for the catalog (collection identifier or folder path). |
 
 ### 2.3 Rules
 
@@ -176,3 +206,8 @@ Develop first, sends `status`, then applies the change.
   `s` older than the last `set` it sent for that parameter is dropped.
 - The plugin reports a `value` without `s` only when the value differs from
   the last one it reported, so its own `set` does not echo twice.
+
+### 2.4 Time tracking (1.1)
+
+The plugin only reports `source`. Matching a source to a job, and everything
+else about time tracking, happens in the service.

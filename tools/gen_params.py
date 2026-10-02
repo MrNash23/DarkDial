@@ -41,11 +41,11 @@ def load():
                 "colorDe": color["de"],
                 "colorEn": color["en"],
             })
-    validate(params, data["status"])
+    validate(params, data["status"], data["timerTexts"])
     return data, params
 
 
-def validate(params, status):
+def validate(params, status, timer_texts):
     ids = [p["id"] for p in params]
     names = [p["lr"] for p in params]
     assert len(set(ids)) == len(ids), "duplicate parameter id"
@@ -59,6 +59,9 @@ def validate(params, status):
     for s in status:
         for lang in ("de", "en"):
             assert len(s[lang]) <= MAX_LABEL_CHARS, f"label too long: {s[lang]}"
+    for t in timer_texts:
+        for lang in ("de", "en"):
+            assert len(t[lang]) <= MAX_LABEL_CHARS, f"label too long: {t[lang]}"
 
 
 def c_str(s):
@@ -85,7 +88,9 @@ def gen_h(data, params):
         lines.append(f"  ICON_{name.upper()} = {icon},")
     for s in data["status"]:
         lines.append(f"  ICON_STATUS_{s['key'].upper()} = {s['icon']},")
-    last = max([i for i, _ in icons] + [s["icon"] for s in data["status"]])
+    for t in data["timerIcons"]:
+        lines.append(f"  ICON_TIMER_{t['key'].upper()} = {t['icon']},")
+    last = max([i for i, _ in icons] + [s["icon"] for s in data["status"]] + [t["icon"] for t in data["timerIcons"]])
     lines += [f"  ICON_COUNT = {last + 1}", "};", ""]
 
     lines += [
@@ -99,6 +104,15 @@ def gen_h(data, params):
     ]
     for s in data["status"]:
         lines.append(f"  {{{s['icon']}, {c_str(s['de'])}, {c_str(s['en'])}}},  // {s['key']}")
+    lines += ["};", ""]
+
+    lines += ["// Texts of the time tracking menu, indexed by TimerTextId.", "enum TimerTextId : uint8_t {"]
+    for t in data["timerTexts"]:
+        lines.append(f"  TEXT_{t['key'].upper()},")
+    lines += ["};", "", "struct TimerText {", "  const char *de;", "  const char *en;", "};", "",
+              "static const TimerText kTimerText[] = {"]
+    for t in data["timerTexts"]:
+        lines.append(f"  {{{c_str(t['de'])}, {c_str(t['en'])}}},  // {t['key']}")
     lines += ["};", ""]
 
     defaults = [p for p in params if p["default"]]
@@ -164,7 +178,13 @@ def gen_dart(data, params):
     lines += ["];", "", "const List<StatusDef> kStatusDefs = ["]
     for s in data["status"]:
         lines.append(f"  StatusDef({dart_str(s['key'])}, {s['icon']}, {dart_str(s['de'])}, {dart_str(s['en'])}),")
-    lines += ["];", ""]
+    lines += ["];", "", "/// Icons of the time tracking menu by key.", "const Map<String, int> kTimerIcons = {"]
+    for t in data["timerIcons"]:
+        lines.append(f"  {dart_str(t['key'])}: {t['icon']},")
+    lines += ["};", "", "/// Texts of the time tracking menu by key: [de, en].", "const Map<String, List<String>> kTimerTexts = {"]
+    for t in data["timerTexts"]:
+        lines.append(f"  {dart_str(t['key'])}: [{dart_str(t['de'])}, {dart_str(t['en'])}],")
+    lines += ["};", ""]
     return "\n".join(lines)
 
 

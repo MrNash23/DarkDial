@@ -283,7 +283,218 @@ static void testScreensAndHeartbeat() {
   CHECK(!device.value(0).valid && device.mode() == dd::Mode::Select && device.revision() != revision);
 }
 
+static void testLongPress() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), 0);
+
+  // A short press is a click, decided on release.
+  device.buttonDown(1000);
+  device.tick(1300);
+  CHECK(device.mode() == dd::Mode::Select && !device.menuOpen());
+  CHECK(device.holdProgress(1350) > 0.49f && device.holdProgress(1350) < 0.51f);
+  device.buttonUp(1400);
+  CHECK(device.mode() == dd::Mode::Edit && !device.menuOpen());
+  CHECK(device.holdProgress(1500) == 0);
+
+  // Held just below the threshold: still a click.
+  device.buttonDown(2000);
+  device.tick(2000 + dd::kLongPressMs - 1);
+  CHECK(!device.menuOpen());
+  device.buttonUp(2000 + dd::kLongPressMs - 1);
+  CHECK(device.mode() == dd::Mode::Select);
+
+  // Held past the threshold: the menu opens while still holding, from edit
+  // mode too, and the release is not a click.
+  device.click();
+  CHECK(device.mode() == dd::Mode::Edit);
+  host.sent.clear();
+  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), 5000);  // heartbeat
+  device.buttonDown(5000);
+  device.tick(5000 + dd::kLongPressMs);
+  CHECK(device.menuOpen() && device.screen() == dd::Screen::JobMenu);
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x06);
+  CHECK(device.holdProgress(5000 + dd::kLongPressMs + 50) == 0);
+  device.tick(5000 + dd::kLongPressMs + 500);  // holding on does nothing more
+  device.buttonUp(6500);
+  CHECK(device.menuOpen() && host.sent.size() == 1);
+  CHECK(device.mode() == dd::Mode::Edit);  // the state behind the menu is untouched
+
+  // A second long press closes the menu without any action.
+  device.buttonDown(7000);
+  device.tick(7000 + dd::kLongPressMs);
+  device.buttonUp(8000);
+  CHECK(!device.menuOpen() && device.screen() == dd::Screen::Slot && device.mode() == dd::Mode::Edit);
+  CHECK(host.sent.size() == 1);
+}
+
+static uint32_t startedJob(const Bytes &message) {
+  uint8_t p[8];
+  dd::unpack7(message.data() + 6, message.size() - 7, p);
+  return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+         (static_cast<uint32_t>(p[2]) << 8) | p[3];
+}
+
+static void openMenu(dd::Device &device, uint32_t &now) {
+  device.buttonDown(now);
+  now += dd::kLongPressMs;
+  device.tick(now);
+  device.buttonUp(now);
+}
+
+static void testJobMenu() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  uint32_t now = 1000;
+  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), now);
+  feed(device, timerState(false, 0, 0, ""), now);
+
+  openMenu(device, now);
+  CHECK(device.menuCount() == 1 && device.menuEntry(0).kind == dd::MenuKind::NewJob);
+
+  // The list arrives: suggestion first, as the service ordered it.
+  feed(device, jobListBegin(2), now);
+  feed(device, jobItem(0, 70000, true, false, "M\xC3\xBCller"), now);
+  feed(device, jobItem(1, 3, false, false, "01.10. 14:32"), now);
+  feed(device, jobListEnd(), now);
+  CHECK(device.menuCount() == 3);
+  CHECK(device.menuEntry(1).kind == dd::MenuKind::Job && device.menuEntry(1).job->id == 70000);
+  CHECK(device.menuEntry(1).job->suggested && strcmp(device.menuEntry(2).job->label, "01.10. 14:32") == 0);
+
+  // Turning moves through the menu, wrapping, without touching the carousel.
+  const uint8_t slotIndex = device.index();
+  host.sent.clear();
+  device.rotate(-1, now);
+  CHECK(device.menuIndex() == 2);
+  device.rotate(2, now);
+  CHECK(device.menuIndex() == 1 && device.index() == slotIndex && host.sent.empty());
+
+  // Click starts the job and closes the menu; the confirmation follows.
+  device.click();
+  CHECK(!device.menuOpen() && host.sent.size() == 1 && host.sent[0][5] == 0x07);
+  CHECK(startedJob(host.sent[0]) == 70000);
+  feed(device, timerResult(0), now);
+  feed(device, timerState(true, 70000, 0, "M\xC3\xBCller"), now);
+  CHECK(device.screen() == dd::Screen::TimerNotice && device.noticeCode() == 0);
+  now += dd::kTimerNoticeMs + 1;
+  device.tick(now);
+  CHECK(device.screen() == dd::Screen::Slot && device.mode() == dd::Mode::Select);
+  CHECK(device.timerRunning() && strcmp(device.timerLabel(), "M\xC3\xBCller") == 0);
+
+  // With a running clock "Stop" comes first, then "New job".
+  openMenu(device, now);
+  CHECK(device.menuCount() == 4 && device.menuIndex() == 0);
+  CHECK(device.menuEntry(0).kind == dd::MenuKind::Stop && device.menuEntry(1).kind == dd::MenuKind::NewJob);
+  host.sent.clear();
+  device.rotate(1, now);
+  device.click();
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x07 && startedJob(host.sent[0]) == dd::kNewJobId);
+
+  openMenu(device, now);
+  host.sent.clear();
+  device.click();  // "Stop"
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x08 && !device.menuOpen());
+  feed(device, timerResult(1), now);
+  feed(device, timerState(false, 0, 0, ""), now);
+  CHECK(device.noticeCode() == 1 && !device.timerRunning());
+
+  // An error from the service is shown with its text.
+  feed(device, timerResult(2, "Archiviert"), now);
+  CHECK(device.screen() == dd::Screen::TimerNotice && strcmp(device.noticeText(), "Archiviert") == 0);
+
+  // A broken list keeps the previous one.
+  feed(device, jobListBegin(3), now);
+  feed(device, jobItem(0, 9, false, false, "x"), now);
+  feed(device, jobListEnd(), now);
+  CHECK(device.menuCount() == 3);
+
+  // Without service the menu opens but allows no action.
+  now += dd::kHeartbeatTimeoutMs + 1;
+  device.tick(now);
+  openMenu(device, now);
+  CHECK(device.menuOpen() && !device.serviceConnected());
+  host.sent.clear();
+  device.click();
+  CHECK(device.menuOpen() && host.sent.empty());
+}
+
+static void testClock() {
+  char text[12];
+  dd::formatElapsed(0, text);
+  CHECK(strcmp(text, "00:00") == 0);
+  dd::formatElapsed(59 * 60 + 59, text);
+  CHECK(strcmp(text, "59:59") == 0);
+  dd::formatElapsed(3600, text);
+  CHECK(strcmp(text, "1:00") == 0);
+  dd::formatElapsed(12 * 3600 + 5 * 60 + 59, text);
+  CHECK(strcmp(text, "12:05") == 0);
+
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  feed(device, status(dd::kStatusLightroom), 10000);
+  feed(device, timerState(true, 4, 125, "Job"), 10000);
+  CHECK(device.timerSeconds(10000) == 125 && device.timerSeconds(10999) == 125 && device.timerSeconds(11000) == 126);
+
+  // The display is refreshed once per second, not more often.
+  device.tick(10100);
+  const uint32_t revision = device.revision();
+  device.tick(10900);
+  CHECK(device.revision() == revision);
+  feed(device, status(dd::kStatusLightroom), 11000);
+  const uint32_t afterStatus = device.revision();
+  device.tick(11000);
+  CHECK(device.revision() == afterStatus + 1);
+
+  // A later TimerState corrects drift.
+  feed(device, status(dd::kStatusLightroom), 70000);
+  feed(device, timerState(true, 4, 190, "Job"), 70000);
+  CHECK(device.timerSeconds(70500) == 190);
+
+  // Without service the clock is not shown; the service sends it again later.
+  device.tick(70000 + dd::kHeartbeatTimeoutMs + 1);
+  CHECK(!device.timerRunning());
+}
+
+static void testDoubleTap() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), 0);
+  device.rotate(2, 0);
+
+  // In the carousel a tap is a click at once.
+  device.tap(100);
+  CHECK(device.mode() == dd::Mode::Edit);
+
+  // In edit mode a single tap waits for a possible second one, then clicks.
+  host.sent.clear();
+  device.tap(1000);
+  device.tick(1000 + dd::kDoubleTapMs);
+  CHECK(device.mode() == dd::Mode::Edit && host.sent.empty());
+  device.tick(1000 + dd::kDoubleTapMs + 1);
+  CHECK(device.mode() == dd::Mode::Select && host.sent.size() == 1 && host.sent[0][5] == 0x03);
+
+  // Two taps in edit mode reset the slot and stay in edit mode.
+  device.tap(2000);
+  CHECK(device.mode() == dd::Mode::Edit);
+  host.sent.clear();
+  device.tap(3000);
+  device.tap(3200);
+  const uint8_t expected[] = {0xF0, 0x7D, 0x44, 0x44, 1, 0x09, 0x00, 0x02, 0xF7};
+  CHECK(host.sent.size() == 1 && host.sent[0] == Bytes(expected, expected + sizeof(expected)));
+  device.tick(4000);
+  CHECK(device.mode() == dd::Mode::Edit && host.sent.size() == 1);
+
+  // Two slow taps are two clicks.
+  device.tap(4500);
+  device.tick(4500 + dd::kDoubleTapMs + 1);
+  CHECK(device.mode() == dd::Mode::Select);
+}
+
 int main() {
+  testDoubleTap();
+  testLongPress();
+  testJobMenu();
+  testClock();
   testCodec();
   testDecode();
   testUsbPackets();

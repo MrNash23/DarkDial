@@ -17,12 +17,26 @@ constexpr uint8_t kTypeSlotSelect = 0x02;
 constexpr uint8_t kTypeSlotLeave = 0x03;
 constexpr uint8_t kTypeSlotFocus = 0x04;
 constexpr uint8_t kTypeConfigAck = 0x05;
+constexpr uint8_t kTypeJobListRequest = 0x06;
+constexpr uint8_t kTypeTimerStart = 0x07;
+constexpr uint8_t kTypeTimerStop = 0x08;
+constexpr uint8_t kTypeSlotReset = 0x09;
 constexpr uint8_t kTypeHelloRequest = 0x41;
 constexpr uint8_t kTypeConfigBegin = 0x42;
 constexpr uint8_t kTypeConfigSlot = 0x43;
 constexpr uint8_t kTypeConfigEnd = 0x44;
 constexpr uint8_t kTypeValue = 0x45;
 constexpr uint8_t kTypeStatus = 0x46;
+constexpr uint8_t kTypeJobListBegin = 0x47;
+constexpr uint8_t kTypeJobItem = 0x48;
+constexpr uint8_t kTypeJobListEnd = 0x49;
+constexpr uint8_t kTypeTimerState = 0x4A;
+constexpr uint8_t kTypeTimerResult = 0x4B;
+
+uint32_t readU32(const uint8_t *p) {
+  return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
+         (static_cast<uint32_t>(p[2]) << 8) | p[3];
+}
 
 size_t frame(uint8_t *out, uint8_t type, const uint8_t *payload, size_t n) {
   size_t i = 0;
@@ -163,6 +177,37 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       out.statusFlags = p[0];
       out.notice = p[1];
       return true;
+    case kTypeJobListBegin:
+      if (size < 1) return false;
+      out.type = MessageType::JobListBegin;
+      out.jobCount = p[0];
+      return true;
+    case kTypeJobItem:
+      if (size < 7) return false;
+      out.index = p[0];
+      out.job.id = readU32(p + 1);
+      out.job.suggested = (p[5] & 1) != 0;
+      out.job.running = (p[5] & 2) != 0;
+      if (!readString(p, size, 6, out.job.label, kMaxLabelBytes)) return false;
+      out.type = MessageType::JobItem;
+      return true;
+    case kTypeJobListEnd:
+      out.type = MessageType::JobListEnd;
+      return true;
+    case kTypeTimerState:
+      if (size < 10) return false;
+      out.timerRunning = (p[0] & 1) != 0;
+      out.timerJobId = readU32(p + 1);
+      out.timerElapsed = readU32(p + 5);
+      if (!readString(p, size, 9, out.text, kMaxLabelBytes)) return false;
+      out.type = MessageType::TimerState;
+      return true;
+    case kTypeTimerResult:
+      if (size < 2) return false;
+      out.resultCode = p[0];
+      if (!readString(p, size, 1, out.text, kMaxLabelBytes)) return false;
+      out.type = MessageType::TimerResult;
+      return true;
     default:
       return false;
   }
@@ -201,6 +246,17 @@ size_t buildConfigAck(uint8_t *out, uint8_t result, uint16_t crc) {
   const uint8_t p[3] = {result, static_cast<uint8_t>(crc >> 8), static_cast<uint8_t>(crc & 0xFF)};
   return frame(out, kTypeConfigAck, p, sizeof(p));
 }
+
+size_t buildJobListRequest(uint8_t *out) { return frame(out, kTypeJobListRequest, nullptr, 0); }
+
+size_t buildTimerStart(uint8_t *out, uint32_t jobId) {
+  const uint8_t p[4] = {static_cast<uint8_t>(jobId >> 24), static_cast<uint8_t>(jobId >> 16),
+                        static_cast<uint8_t>(jobId >> 8), static_cast<uint8_t>(jobId)};
+  return frame(out, kTypeTimerStart, p, sizeof(p));
+}
+
+size_t buildTimerStop(uint8_t *out) { return frame(out, kTypeTimerStop, nullptr, 0); }
+size_t buildSlotReset(uint8_t *out, uint8_t slot) { return frame(out, kTypeSlotReset, &slot, 1); }
 
 size_t buildRotation(uint8_t *out, int delta) {
   if (delta > 63) delta = 63;

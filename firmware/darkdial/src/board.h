@@ -14,8 +14,8 @@ void begin();
 
 /// Detents turned since the last call; sign gives the direction.
 int readDetents();
-/// True once per press of the knob.
-bool readClick();
+/// Debounced state of the knob switch: true while it is held down.
+bool buttonPressed();
 
 /// Sets all eight ring LEDs to one colour.
 void setLeds(uint8_t r, uint8_t g, uint8_t b);

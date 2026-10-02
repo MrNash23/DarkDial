@@ -72,7 +72,8 @@ def extract_symbol(path, crop, black_level):
 
 
 def draw_status(icon_id, size):
-    """Placeholder status icons, white line art in the style of the set."""
+    """Placeholder status and time tracking icons, white line art in the style
+    of the set."""
     s = 4
     n = size * s
     image = Image.new("RGB", (n, n), (0, 0, 0))
@@ -101,6 +102,20 @@ def draw_status(icon_id, size):
             kx = c + knob * n
             kr = n * 0.055
             d.ellipse((kx - kr, y - kr, kx + kr, y + kr), fill=(0, 0, 0), outline=white, width=stroke)
+    elif icon_id == 29:  # stopwatch
+        r = n * 0.27
+        cy = c + n * 0.04
+        d.ellipse((c - r, cy - r, c + r, cy + r), outline=white, width=stroke)
+        d.line((c, cy - r, c, cy - r - n * 0.07), fill=white, width=stroke)
+        d.line((c - n * 0.07, cy - r - n * 0.07, c + n * 0.07, cy - r - n * 0.07), fill=white, width=stroke)
+        d.line((c, cy, c + n * 0.11, cy - n * 0.13), fill=white, width=stroke)
+    elif icon_id == 30:  # plus: new job
+        a = n * 0.24
+        d.line((c - a, c, c + a, c), fill=white, width=stroke)
+        d.line((c, c - a, c, c + a), fill=white, width=stroke)
+    elif icon_id == 31:  # stop
+        a = n * 0.20
+        d.rounded_rectangle((c - a, c - a, c + a, c + a), radius=n * 0.04, outline=white, width=stroke)
     return image.resize((size, size), Image.LANCZOS)
 
 

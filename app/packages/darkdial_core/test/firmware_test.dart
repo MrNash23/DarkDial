@@ -24,6 +24,9 @@ class FirmwareProcess implements MidiConnection {
       } else if (line.startsWith('S ')) {
         _state?.complete(line.substring(2));
         _state = null;
+      } else if (line.startsWith('J ')) {
+        _timer?.complete(line.substring(2));
+        _timer = null;
       }
     });
   }
@@ -33,6 +36,7 @@ class FirmwareProcess implements MidiConnection {
   final Process _process;
   final StreamController<Uint8List> _input = StreamController<Uint8List>();
   Completer<String>? _state;
+  Completer<String>? _timer;
 
   static Uint8List _fromHex(String hex) => Uint8List.fromList([
         for (var i = 0; i + 1 < hex.length; i += 2) int.parse(hex.substring(i, i + 2), radix: 16),
@@ -52,6 +56,36 @@ class FirmwareProcess implements MidiConnection {
   void rotate(int detents) => _process.stdin.writeln('R $detents');
   void click() => _process.stdin.writeln('C');
   void advance(int ms) => _process.stdin.writeln('T $ms');
+  void tap() => _process.stdin.writeln('P');
+  void buttonDown() => _process.stdin.writeln('D');
+  void buttonUp() => _process.stdin.writeln('U');
+
+  /// Holds the knob for [ms] of device time.
+  void hold(int ms) {
+    buttonDown();
+    advance(ms);
+    buttonUp();
+  }
+
+  /// Time tracking state: menu open, menu index, menu count, clock running,
+  /// seconds, notice code (-1 none), label of the selected menu line.
+  Future<({bool menuOpen, int menuIndex, int menuCount, bool running, int seconds, int notice, String label})>
+      timer() async {
+    final completer = _timer = Completer<String>();
+    _process.stdin.writeln('?');
+    final line = await completer.future.timeout(const Duration(seconds: 2));
+    final split = line.indexOf('|');
+    final head = line.substring(0, split).split(' ');
+    return (
+      menuOpen: head[0] == '1',
+      menuIndex: int.parse(head[1]),
+      menuCount: int.parse(head[2]),
+      running: head[3] == '1',
+      seconds: int.parse(head[4]),
+      notice: int.parse(head[5]),
+      label: line.substring(split + 1),
+    );
+  }
 
   /// mode, index, slot count, screen, then label|text|position|valid.
   Future<({bool editing, int index, int slots, int screen, String label, String text, int position, bool valid})>
@@ -104,8 +138,100 @@ Future<void> until(FutureOr<bool> Function() condition, String what) async {
   }
 }
 
+/// Keeps the device's clock moving like real time would, so its heartbeat
+/// timeout and the engine's status messages stay in step.
+Timer runClock(FirmwareProcess firmware) =>
+    Timer.periodic(const Duration(milliseconds: 100), (_) => firmware.advance(100));
+
 void main() {
   final available = File(_binary).existsSync();
+
+  test('time tracking and double tap against the C++ firmware core', () async {
+    final plugin = FakePlugin();
+    await plugin.start(toService: 0, fromService: 0);
+    final firmware = await FirmwareProcess.start();
+    final db = TimeDatabase.inMemory();
+    final tracker = TimeTracker(db);
+    final engine = Engine(
+      transport: _OneDevice(firmware),
+      lightroom: LightroomLink(
+        appVersion: '0.2.0',
+        fromPluginPort: plugin.toServicePort,
+        toPluginPort: plugin.fromServicePort,
+        retryInterval: const Duration(milliseconds: 50),
+      ),
+      config: AppConfig.defaults(Language.de),
+      appVersion: const [0, 2, 0],
+      options: const EngineOptions(
+        flushInterval: Duration(milliseconds: 5),
+        heartbeatInterval: Duration(milliseconds: 500),
+      ),
+      timeTracker: tracker,
+    );
+    addTearDown(() async {
+      await engine.dispose();
+      await tracker.dispose();
+      db.close();
+      await plugin.stop();
+    });
+    await engine.start();
+    await until(() => engine.state.device == DeviceLinkState.connected, 'handshake');
+    await until(() async => (await firmware.state()).valid, 'values');
+    final clock = runClock(firmware);
+    addTearDown(clock.cancel);
+
+    final wedding = tracker.createJob(name: 'Hochzeit Müller', short: 'Müller');
+    tracker.assignSource(wedding.id, const LrSource(kind: 'collection', key: '77', name: 'Auswahl'));
+    tracker.createJob(name: 'Katalog');
+
+    // A short press is a click and never opens the menu.
+    firmware.hold(200);
+    await until(() => engine.state.editing, 'click enters edit mode');
+    expect((await firmware.timer()).menuOpen, isFalse);
+
+    // A long press opens it, from edit mode; the list arrives.
+    firmware.hold(800);
+    await until(() async => (await firmware.timer()).menuOpen, 'menu');
+    await until(() async => (await firmware.timer()).menuCount == 3, 'new job + two jobs');
+    expect((await firmware.timer()).label, '<new>');
+    expect(engine.state.editing, isTrue, reason: 'the state behind the menu is untouched');
+
+    // The collection opened in Lightroom moves its job to the top.
+    plugin.userOpensSource('collection', 'Auswahl', '77');
+    firmware.rotate(1);
+    await until(() async => (await firmware.timer()).label == 'Müller', 'suggested job first');
+
+    // Click starts it: confirmation, clock running, menu closed.
+    firmware.click();
+    await until(() => tracker.running?.job.id == wedding.id, 'clock started');
+    await until(() async => (await firmware.timer()).running, 'clock on the device');
+    var timer = await firmware.timer();
+    expect(timer.menuOpen, isFalse);
+    expect(timer.notice, TimerResult.started);
+
+    // The device counts on by itself.
+    final before = (await firmware.timer()).seconds;
+    await Future<void>.delayed(const Duration(milliseconds: 1300));
+    expect((await firmware.timer()).seconds, greaterThan(before));
+
+    // Stop from the menu: "Stop" is the first line while a clock runs.
+    firmware.hold(800);
+    await until(() async => (await firmware.timer()).menuOpen, 'menu again');
+    expect((await firmware.timer()).label, '<stop>');
+    firmware.click();
+    await until(() => tracker.running == null, 'stopped');
+    await until(() async => !(await firmware.timer()).running, 'device follows');
+
+    // Double tap in edit mode resets the slider in Lightroom.
+    await until(() async => (await firmware.timer()).notice == -1, 'notice gone');
+    final name = engine.state.slots[engine.state.activeSlot].settings.param.lr;
+    plugin.userSets(name, 12);
+    await until(() => engine.state.slots[engine.state.activeSlot].value == 12, 'value set');
+    firmware.tap();
+    firmware.tap();
+    await until(() => plugin.values[name] == plugin.defaults[name], 'reset in Lightroom');
+    expect(engine.state.editing, isTrue);
+  }, skip: available ? false : 'firmware core not built: run firmware/host/build.sh --core-only');
 
   test('engine drives the C++ firmware core end to end', () async {
     final plugin = FakePlugin();

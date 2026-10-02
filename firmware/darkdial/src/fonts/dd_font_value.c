@@ -683,6 +683,20 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     0xde, 0xff, 0xed, 0xa7, 0x20, 0x0, 0x0, 0x0,
     0x0, 0x0,
 
+    /* U+003A ":" */
+    0x2, 0xbf, 0xd6, 0x1, 0xff, 0xff, 0xf6, 0x8f,
+    0xff, 0xff, 0xda, 0xff, 0xff, 0xff, 0x8f, 0xff,
+    0xff, 0xc1, 0xef, 0xff, 0xf4, 0x1, 0xad, 0xc4,
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+    0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0xad,
+    0xc4, 0x1, 0xef, 0xff, 0xf5, 0x8f, 0xff, 0xff,
+    0xda, 0xff, 0xff, 0xff, 0x8f, 0xff, 0xff, 0xd1,
+    0xff, 0xff, 0xf5, 0x2, 0xbf, 0xd6, 0x0,
+
     /* U+004B "K" */
     0xcf, 0xff, 0xf4, 0x0, 0x0, 0x0, 0x0, 0x0,
     0x0, 0x0, 0x0, 0x4, 0xff, 0xff, 0xf7, 0xc,
@@ -775,7 +789,8 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 3550, .adv_w = 478, .box_w = 27, .box_h = 35, .ofs_x = 1, .ofs_y = 0},
     {.bitmap_index = 4023, .adv_w = 515, .box_w = 28, .box_h = 35, .ofs_x = 2, .ofs_y = 0},
     {.bitmap_index = 4513, .adv_w = 494, .box_w = 28, .box_h = 35, .ofs_x = 1, .ofs_y = 0},
-    {.bitmap_index = 5003, .adv_w = 575, .box_w = 31, .box_h = 35, .ofs_x = 5, .ofs_y = 0}
+    {.bitmap_index = 5003, .adv_w = 182, .box_w = 7, .box_h = 27, .ofs_x = 2, .ofs_y = 0},
+    {.bitmap_index = 5098, .adv_w = 575, .box_w = 31, .box_h = 35, .ofs_x = 5, .ofs_y = 0}
 };
 
 /*---------------------
@@ -784,7 +799,7 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
 
 static const uint16_t unicode_list_0[] = {
     0x0, 0xb, 0xd, 0xe, 0x10, 0x11, 0x12, 0x13,
-    0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x2b
+    0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x2b
 };
 
 /*Collect the unicode lists and glyph_id offsets*/
@@ -792,7 +807,7 @@ static const lv_font_fmt_txt_cmap_t cmaps[] =
 {
     {
         .range_start = 32, .range_length = 44, .glyph_id_start = 1,
-        .unicode_list = unicode_list_0, .glyph_id_ofs_list = NULL, .list_length = 15, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
+        .unicode_list = unicode_list_0, .glyph_id_ofs_list = NULL, .list_length = 16, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
     }
 };
 
@@ -805,35 +820,39 @@ static const lv_font_fmt_txt_cmap_t cmaps[] =
 static const uint8_t kern_left_class_mapping[] =
 {
     0, 0, 1, 1, 2, 3, 0, 4,
-    5, 6, 7, 8, 9, 10, 3, 11
+    5, 6, 7, 8, 9, 10, 3, 11,
+    12
 };
 
 /*Map glyph_ids to kern right classes*/
 static const uint8_t kern_right_class_mapping[] =
 {
     0, 0, 1, 1, 2, 3, 4, 5,
-    6, 7, 8, 3, 9, 10, 11, 0
+    6, 7, 8, 3, 9, 10, 11, 12,
+    0
 };
 
 /*Kern values between classes*/
 static const int8_t kern_class_values[] =
 {
     2, -6, 6, -14, -10, -16, 6, 0,
-    -8, 0, 0, -6, 0, -10, -10, 8,
-    8, -7, 0, -10, 8, 0, 6, -10,
-    0, -2, -2, -8, 0, 0, -6, 0,
-    0, -6, 8, -2, 0, 0, 0, -15,
-    0, -2, 0, 0, 0, 0, 0, 0,
-    -4, -4, 0, -8, -10, 0, 0, 8,
-    16, 0, -20, -2, -10, 0, -2, -38,
-    8, -6, 0, 0, 0, 0, -4, -4,
-    0, -4, -10, 0, 0, 4, 8, 0,
-    0, 0, 0, 0, 0, -6, 0, 0,
+    -8, 0, 0, 0, -6, 0, -10, -10,
+    8, 8, -7, 0, -10, 8, 0, 0,
+    6, -10, 0, -2, -2, -8, 0, 0,
+    -6, 0, 0, 0, -6, 8, -2, 0,
+    0, 0, -15, 0, -2, 0, 0, 0,
+    0, 0, 0, 0, -4, -4, 0, -8,
+    -10, 0, 0, 0, 8, 16, 0, -20,
+    -2, -10, 0, -2, -38, 8, -6, 6,
+    0, 0, 0, 0, -4, -4, 0, -4,
+    -10, 0, 0, 0, 4, 8, 0, 0,
+    0, 0, 0, 0, -6, 0, 0, 0,
     -40, -42, -16, 8, 0, -6, -52, -14,
-    0, -14, 0, 0, 8, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, -26, 0,
-    -18, 16, 2, -6, -38, 0, 0, -18,
-    -8
+    0, -14, 0, -16, 0, 8, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    6, 0, 0, 0, -26, 0, -18, 16,
+    2, -6, -38, 0, 0, -18, -8, 0
 };
 
 
@@ -843,8 +862,8 @@ static const lv_font_fmt_txt_kern_classes_t kern_classes =
     .class_pair_values   = kern_class_values,
     .left_class_mapping  = kern_left_class_mapping,
     .right_class_mapping = kern_right_class_mapping,
-    .left_class_cnt      = 11,
-    .right_class_cnt     = 11,
+    .left_class_cnt      = 12,
+    .right_class_cnt     = 12,
 };
 
 /*--------------------

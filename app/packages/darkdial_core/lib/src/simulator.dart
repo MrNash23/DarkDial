@@ -1,5 +1,5 @@
 /// A Darkdial in software. [DeviceModel] is the same state machine the
-/// firmware runs (firmware/darkdial/src/core/state.*); [SimulatedDevice] puts
+/// firmware runs (firmware/darkdial/src/core/device.*); [SimulatedDevice] puts
 /// it behind the real MIDI wire format so the service cannot tell it from
 /// hardware.
 library;
@@ -20,13 +20,26 @@ class SlotValue {
   final String text;
 }
 
-/// State machine of the device: carousel, edit mode, configuration transfer.
+enum MenuKind { stop, newJob, job }
+
+/// One line of the time tracking menu.
+class MenuLine {
+  const MenuLine(this.kind, [this.job]);
+  final MenuKind kind;
+
+  /// Only for [MenuKind.job].
+  final JobItem? job;
+}
+
+/// State machine of the device: carousel, edit mode, configuration transfer,
+/// and the time tracking menu behind the long press.
 class DeviceModel {
   DeviceModel() {
     _loadDefaults();
   }
 
   static const Duration heartbeatTimeout = Duration(seconds: 5);
+  static const Duration noticeTime = Duration(milliseconds: 1200);
 
   List<ConfigSlot> slots = [];
   List<SlotValue> values = [];
@@ -37,8 +50,24 @@ class DeviceModel {
   /// False until a Status arrives, and again when the heartbeat stops.
   bool serviceConnected = false;
 
+  // Time tracking.
+  bool menuOpen = false;
+  int menuIndex = 0;
+  List<JobItem> jobs = [];
+  bool timerRunning = false;
+  int timerJobId = 0;
+  String timerLabel = '';
+  int _timerBaseSeconds = 0;
+  DateTime _timerBaseAt = DateTime.now();
+
+  /// The confirmation shown briefly after start or stop, null when none.
+  TimerResult? notice;
+  Timer? _noticeTimer;
+
   List<ConfigSlot>? _incoming;
   int _incomingCount = 0;
+  List<JobItem>? _incomingJobs;
+  int _incomingJobCount = 0;
 
   /// Messages the device wants to send; set by the owner.
   void Function(DeviceMessage message) emit = (_) {};
@@ -62,9 +91,26 @@ class DeviceModel {
     values = List.filled(slots.length, const SlotValue());
   }
 
+  /// The menu as shown: "Stop" only while a clock runs, "New job", the jobs.
+  List<MenuLine> get menu => [
+        if (timerRunning) const MenuLine(MenuKind.stop),
+        const MenuLine(MenuKind.newJob),
+        for (final job in jobs) MenuLine(MenuKind.job, job),
+      ];
+
+  /// Seconds of the running entry, counted on since the last TimerState.
+  int get timerSeconds =>
+      timerRunning ? _timerBaseSeconds + DateTime.now().difference(_timerBaseAt).inSeconds : 0;
+
   /// Turns the knob by [detents].
   void rotate(int detents) {
-    if (detents == 0 || slots.isEmpty) return;
+    if (detents == 0) return;
+    if (menuOpen) {
+      menuIndex = (menuIndex + detents) % menu.length;
+      onChanged();
+      return;
+    }
+    if (slots.isEmpty) return;
     if (mode == DeviceMode.select) {
       index = (index + detents) % slots.length;
       emit(SlotFocus(index));
@@ -76,6 +122,10 @@ class DeviceModel {
 
   /// Knob click or tap on the display.
   void click() {
+    if (menuOpen) {
+      _menuAction();
+      return;
+    }
     if (slots.isEmpty) return;
     if (mode == DeviceMode.select) {
       mode = DeviceMode.edit;
@@ -87,22 +137,61 @@ class DeviceModel {
     onChanged();
   }
 
-  void heartbeatLost() {
-    serviceConnected = false;
+  /// Double tap on the display: in edit mode, reset the slot to its default.
+  void doubleTap() {
+    if (menuOpen || mode != DeviceMode.edit || slots.isEmpty) return;
+    emit(SlotReset(index));
+  }
+
+  /// Long press on the knob: opens the time tracking menu from any state, or
+  /// closes it without change.
+  void longPress() {
+    if (menuOpen) {
+      menuOpen = false;
+    } else {
+      menuOpen = true;
+      menuIndex = 0;
+      notice = null;
+      emit(const JobListRequest());
+    }
     onChanged();
   }
+
+  void _menuAction() {
+    if (!serviceConnected) return;
+    final line = menu[menuIndex];
+    switch (line.kind) {
+      case MenuKind.stop:
+        emit(const TimerStop());
+      case MenuKind.newJob:
+        emit(const TimerStart(newJobId));
+      case MenuKind.job:
+        emit(TimerStart(line.job!.id));
+    }
+    menuOpen = false;
+    onChanged();
+  }
+
+  void heartbeatLost() {
+    serviceConnected = false;
+    timerRunning = false;
+    if (menuOpen) menuIndex = 0;
+    onChanged();
+  }
+
+  void dispose() => _noticeTimer?.cancel();
 
   /// Handles a message from the service.
   void handle(DeviceMessage message, {List<int> serial = const [0, 0, 0, 0, 0, 0]}) {
     switch (message) {
       case IdentityRequest():
-        emit(const IdentityReply(1, 0, 1, 0));
+        emit(const IdentityReply(1, 0, 2, 0));
       case HelloRequest():
         emit(Hello(
           major: protocolMajor,
           minor: protocolMinor,
           fwMajor: 0,
-          fwMinor: 1,
+          fwMinor: 2,
           fwPatch: 0,
           serial: serial,
           configCrc: configCrc(slots),
@@ -153,6 +242,45 @@ class DeviceModel {
       case Status():
         status = message;
         serviceConnected = true;
+        onChanged();
+      case JobListBegin(:final count):
+        _incomingJobs = count <= maxDeviceJobs ? [] : null;
+        _incomingJobCount = count;
+      case JobItem():
+        final incoming = _incomingJobs;
+        if (incoming == null) return;
+        if (message.index != incoming.length || incoming.length >= _incomingJobCount) {
+          _incomingJobs = null;
+        } else {
+          incoming.add(message);
+        }
+      case JobListEnd():
+        final incoming = _incomingJobs;
+        _incomingJobs = null;
+        if (incoming == null || incoming.length != _incomingJobCount) return; // keep the previous list
+        jobs = incoming;
+        if (menuIndex >= menu.length) menuIndex = 0;
+        onChanged();
+      case TimerState():
+        // "Stop" appears or disappears in front of the list; stay on the same line.
+        final wasRunning = timerRunning;
+        timerRunning = message.running;
+        timerJobId = message.jobId;
+        timerLabel = message.label;
+        _timerBaseSeconds = message.elapsedSeconds;
+        _timerBaseAt = DateTime.now();
+        if (menuOpen && wasRunning != timerRunning) {
+          menuIndex += timerRunning ? 1 : (menuIndex > 0 ? -1 : 0);
+          if (menuIndex >= menu.length) menuIndex = 0;
+        }
+        onChanged();
+      case TimerResult():
+        notice = message;
+        _noticeTimer?.cancel();
+        _noticeTimer = Timer(noticeTime, () {
+          notice = null;
+          onChanged();
+        });
         onChanged();
       default:
         break;
@@ -205,6 +333,7 @@ class SimulatedDevice implements MidiConnection {
   Future<void> close() async {
     _opened = false;
     _heartbeat?.cancel();
+    model.dispose();
     model.heartbeatLost();
     if (!_input.isClosed) await _input.close();
   }

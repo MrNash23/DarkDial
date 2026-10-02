@@ -8,6 +8,7 @@
 extern "C" {
 extern const lv_font_t dd_font_label;
 extern const lv_font_t dd_font_value;
+extern const lv_font_t dd_font_small;
 }
 
 namespace {
@@ -23,6 +24,10 @@ constexpr int kRingTopDeg = 270;
 constexpr int kIconTop = 61;
 constexpr int kLabelTop = 184;
 constexpr int kValueTop = 234;
+constexpr int kGapTimeBottom = 10;  // the running time sits in the gap of the ring
+// The ring only starts to fill after this part of the long press, so a
+// normal click does not flash it.
+constexpr float kHoldVisibleFrom = 0.2f;
 constexpr uint32_t kColorTrack = 0x26262B;
 constexpr uint32_t kColorSelect = 0x8A8A90;
 constexpr uint32_t kColorAccent = 0xFF9F0A;
@@ -37,13 +42,14 @@ lv_obj_t *icon = nullptr;
 lv_obj_t *dot = nullptr;
 lv_obj_t *label = nullptr;
 lv_obj_t *value = nullptr;
+lv_obj_t *gapTime = nullptr;
 lv_obj_t *logo = nullptr;
 
 void (*tapHandler)() = nullptr;
 uint32_t bootMs = 0;
 uint32_t shownRevision = UINT32_MAX;
 int shownIndex = -1;
-bool shownSlotScreen = false;
+int shownHold = 0;
 
 void onScreenClicked(lv_event_t *) {
   if (tapHandler) tapHandler();
@@ -72,11 +78,12 @@ void animate(lv_obj_t *object, lv_anim_exec_xcb_t exec, int32_t from, int32_t to
   lv_anim_start(&a);
 }
 
-/// Icon slides in from the side it was turned to, the ring fades over.
-void startSlide(int direction) {
+/// Icon slides in from the side it was turned to; with a value ring, that
+/// fades over.
+void startSlide(int direction, bool withRing) {
   animate(iconBox, setTranslateX, direction * kSlideDistance, 0, kSlideMs);
   animate(iconBox, setOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kSlideMs);
-  animate(ring, setRingOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kSlideMs + 60);
+  if (withRing) animate(ring, setRingOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kSlideMs + 60);
 }
 
 void setIcon(uint8_t iconId) {
@@ -121,16 +128,59 @@ void showIndicator(uint16_t position, bool bipolar, uint32_t color) {
   if (!lv_anim_get(ring, setRingOpacity)) lv_obj_set_style_arc_opa(ring, LV_OPA_COVER, LV_PART_INDICATOR);
 }
 
-void showStatus(uint8_t iconId, uint8_t language) {
+/// A screen without slot: icon, one line of text, optionally a big value.
+void showMessage(uint8_t iconId, const char *text, const char *big = "") {
   setIcon(iconId);
   lv_obj_set_hidden(dot, true);
+  lv_label_set_text(label, text);
+  lv_label_set_text(value, big);
+  hideIndicator();
+}
+
+void showStatus(uint8_t iconId, uint8_t language) {
   const char *text = "";
   for (const dd::StatusText &status : dd::kStatusText) {
     if (status.icon == iconId) text = language == 0 ? status.de : status.en;
   }
-  lv_label_set_text(label, text);
-  lv_label_set_text(value, "");
-  hideIndicator();
+  showMessage(iconId, text);
+}
+
+const char *timerText(dd::TimerTextId id, uint8_t language) {
+  return language == 0 ? dd::kTimerText[id].de : dd::kTimerText[id].en;
+}
+
+/// The time tracking menu: one entry at a time, like the carousel.
+void showJobMenu(const dd::Device &device, uint32_t nowMs) {
+  if (!device.serviceConnected()) {
+    showStatus(dd::ICON_STATUS_OFFLINE, device.language());
+    return;
+  }
+  char time[12] = "";
+  if (device.timerRunning()) dd::formatElapsed(device.timerSeconds(nowMs), time);
+  const dd::MenuEntry entry = device.menuEntry(device.menuIndex());
+  switch (entry.kind) {
+    case dd::MenuKind::Stop:
+      showMessage(dd::ICON_TIMER_STOP, timerText(dd::TEXT_STOP, device.language()), time);
+      break;
+    case dd::MenuKind::NewJob:
+      showMessage(dd::ICON_TIMER_PLUS, timerText(dd::TEXT_NEWJOB, device.language()));
+      break;
+    case dd::MenuKind::Job:
+      showMessage(dd::ICON_TIMER_STOPWATCH, entry.job->label, entry.job->running ? time : "");
+      // The job that matches what is open in Lightroom stands out.
+      if (entry.job->suggested) lv_obj_set_style_text_color(label, lv_color_hex(kColorAccent), 0);
+      break;
+  }
+}
+
+void showTimerNotice(const dd::Device &device) {
+  if (device.noticeCode() == 0) {
+    showMessage(dd::ICON_TIMER_STOPWATCH, timerText(dd::TEXT_STARTED, device.language()));
+  } else if (device.noticeCode() == 1) {
+    showMessage(dd::ICON_TIMER_STOP, timerText(dd::TEXT_STOPPED, device.language()));
+  } else {
+    showMessage(dd::ICON_STATUS_OFFLINE, device.noticeText());
+  }
 }
 
 void showSlot(const dd::Device &device) {
@@ -165,7 +215,7 @@ void ui_init(void (*onTap)(), uint32_t nowMs) {
   bootMs = nowMs;
   shownRevision = UINT32_MAX;
   shownIndex = -1;
-  shownSlotScreen = false;
+  shownHold = 0;
 
   lv_obj_t *screen = lv_screen_active();
   lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
@@ -219,6 +269,12 @@ void ui_init(void (*onTap)(), uint32_t nowMs) {
   lv_obj_align(value, LV_ALIGN_TOP_MID, 0, kValueTop);
   lv_label_set_text(value, "");
 
+  gapTime = lv_label_create(screen);
+  lv_obj_set_style_text_font(gapTime, &dd_font_small, 0);
+  lv_obj_set_style_text_color(gapTime, lv_color_hex(kColorLabel), 0);
+  lv_obj_align(gapTime, LV_ALIGN_BOTTOM_MID, 0, -kGapTimeBottom);
+  lv_label_set_text(gapTime, "");
+
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
   lv_obj_center(logo);
@@ -229,11 +285,20 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
     lv_obj_delete(logo);
     logo = nullptr;
   }
-  if (device.revision() == shownRevision) return;
+  // The ring fills while the knob is held towards the long press.
+  const float progress = device.holdProgress(nowMs);
+  const int hold = progress > kHoldVisibleFrom
+                       ? 1 + static_cast<int>((progress - kHoldVisibleFrom) / (1 - kHoldVisibleFrom) * kRingSweepDeg)
+                       : 0;
+  if (device.revision() == shownRevision && hold == shownHold) return;
   shownRevision = device.revision();
+  shownHold = hold;
 
-  const dd::Screen screen = device.slotCount() ? device.screen() : dd::Screen::Offline;
-  const bool slotScreen = screen == dd::Screen::Slot;
+  lv_obj_set_style_text_color(label, lv_color_hex(kColorLabel), 0);
+  const dd::Screen screen = device.screen();
+  // What the carousel animation compares: slots and menu entries slide, a
+  // change of screen does not.
+  int index = -1;
   switch (screen) {
     case dd::Screen::Offline:
       showStatus(dd::ICON_STATUS_OFFLINE, device.language());
@@ -248,13 +313,39 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
       showStatus(dd::ICON_STATUS_NOPHOTO, device.language());
       break;
     case dd::Screen::Slot:
-      showSlot(device);
-      // Slide only when the carousel moved, not when a screen changed.
-      if (shownSlotScreen && shownIndex >= 0 && shownIndex != device.index() && device.lastMove() != 0) {
-        startSlide(device.lastMove());
+      if (device.slotCount() == 0) {
+        showStatus(dd::ICON_STATUS_OFFLINE, device.language());
+      } else {
+        showSlot(device);
+        index = device.index();
       }
       break;
+    case dd::Screen::JobMenu:
+      showJobMenu(device, nowMs);
+      if (device.serviceConnected()) index = 1000 + device.menuIndex();
+      break;
+    case dd::Screen::TimerNotice:
+      showTimerNotice(device);
+      break;
   }
-  shownIndex = slotScreen ? device.index() : -1;
-  shownSlotScreen = slotScreen;
+  if (index >= 0 && shownIndex >= 0 && index != shownIndex && (index >= 1000) == (shownIndex >= 1000) &&
+      device.lastMove() != 0) {
+    startSlide(device.lastMove(), index < 1000);
+  }
+  shownIndex = index;
+
+  // The running time: small in the gap of the ring; in the menu it is shown big.
+  char time[12] = "";
+  if (device.timerRunning() && screen != dd::Screen::JobMenu && screen != dd::Screen::Offline) {
+    dd::formatElapsed(device.timerSeconds(nowMs), time);
+  }
+  lv_label_set_text(gapTime, time);
+
+  if (hold > 0) {
+    lv_anim_delete(ring, setRingOpacity);
+    lv_arc_set_angles(ring, static_cast<lv_value_precise_t>(kRingStartDeg),
+                      static_cast<lv_value_precise_t>((kRingStartDeg + (hold > kRingSweepDeg ? kRingSweepDeg : hold)) % 360));
+    lv_obj_set_style_arc_color(ring, lv_color_white(), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_opa(ring, LV_OPA_COVER, LV_PART_INDICATOR);
+  }
 }

@@ -88,7 +88,7 @@ void engineTests() {
     await rig.ready();
 
     final state = rig.engine.state;
-    expect(state.firmwareVersion, '0.1.0');
+    expect(state.firmwareVersion, '0.2.0');
     expect(state.deviceSerial, '0200514D0001');
     expect(state.pluginVersion, '0.1.0');
     expect(state.developActive, isTrue);

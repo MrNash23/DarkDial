@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolMajor = 1;
-const int protocolMinor = 0;
+const int protocolMinor = 1;
 
 const int _sysexStart = 0xF0;
 const int _sysexEnd = 0xF7;
@@ -18,6 +18,12 @@ const int maxLabelBytes = 20;
 const int maxValueTextBytes = 8;
 const int positionMax = 16383;
 const int positionCentre = 8192;
+
+/// Jobs in one job list (the device adds "Stop" and "New job" itself).
+const int maxDeviceJobs = 13;
+
+/// TimerStart with this id creates a new, unnamed job.
+const int newJobId = 0xFFFFFFFF;
 
 /// Packs 8-bit bytes into 7-bit bytes: per group of up to 7 bytes one byte
 /// with the MSBs, then the bytes without their MSB.
@@ -183,6 +189,28 @@ class ConfigAck extends DeviceMessage {
   final int crc;
 }
 
+/// Double tap in edit mode: reset the slot to Lightroom's default.
+class SlotReset extends DeviceMessage {
+  const SlotReset(this.slot);
+  final int slot;
+}
+
+/// The job menu was opened.
+class JobListRequest extends DeviceMessage {
+  const JobListRequest();
+}
+
+class TimerStart extends DeviceMessage {
+  const TimerStart(this.jobId);
+
+  /// [newJobId] creates a new job.
+  final int jobId;
+}
+
+class TimerStop extends DeviceMessage {
+  const TimerStop();
+}
+
 // Service -> device ------------------------------------------------------------
 
 class IdentityRequest extends DeviceMessage {
@@ -272,6 +300,53 @@ class Status extends DeviceMessage {
   int get flags => (lightroomConnected ? 1 : 0) | (developActive ? 2 : 0) | (photoSelected ? 4 : 0);
 }
 
+class JobListBegin extends DeviceMessage {
+  const JobListBegin(this.count);
+  final int count;
+}
+
+class JobItem extends DeviceMessage {
+  const JobItem({
+    required this.index,
+    required this.id,
+    required this.suggested,
+    required this.running,
+    required this.label,
+  });
+  final int index;
+  final int id;
+
+  /// Matches what is open in Lightroom.
+  final bool suggested;
+  final bool running;
+  final String label;
+}
+
+class JobListEnd extends DeviceMessage {
+  const JobListEnd();
+}
+
+class TimerState extends DeviceMessage {
+  const TimerState({required this.running, this.jobId = 0, this.elapsedSeconds = 0, this.label = ''});
+  final bool running;
+  final int jobId;
+
+  /// Time of the running entry so far; the device counts on from here.
+  final int elapsedSeconds;
+  final String label;
+}
+
+class TimerResult extends DeviceMessage {
+  const TimerResult(this.code, [this.text = '']);
+
+  static const int started = 0;
+  static const int stopped = 1;
+  static const int error = 2;
+
+  final int code;
+  final String text;
+}
+
 // Encoding -----------------------------------------------------------------------
 
 List<int> _truncateUtf8(String text, int maxBytes) {
@@ -298,6 +373,13 @@ Uint8List _frame(int type, List<int> payload) => Uint8List.fromList([
     ]);
 
 List<int> _u16(int value) => [(value >> 8) & 0xFF, value & 0xFF];
+
+List<int> _u32(int value) => [(value >> 24) & 0xFF, (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF];
+
+List<int> _str(String text, int maxBytes) {
+  final bytes = _truncateUtf8(text, maxBytes);
+  return [bytes.length, ...bytes];
+}
 
 /// Encodes [message] as one complete MIDI message.
 Uint8List encodeMessage(DeviceMessage message) => switch (message) {
@@ -342,6 +424,25 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
           ]);
         }(),
       Status() => _frame(0x46, [message.flags, message.notice]),
+      JobListRequest() => _frame(0x06, const []),
+      TimerStart(:final jobId) => _frame(0x07, _u32(jobId)),
+      TimerStop() => _frame(0x08, const []),
+      SlotReset(:final slot) => _frame(0x09, [slot]),
+      JobListBegin(:final count) => _frame(0x47, [count]),
+      JobItem() => _frame(0x48, [
+          message.index,
+          ..._u32(message.id),
+          (message.suggested ? 1 : 0) | (message.running ? 2 : 0),
+          ..._str(message.label, maxLabelBytes),
+        ]),
+      JobListEnd() => _frame(0x49, const []),
+      TimerState() => _frame(0x4A, [
+          message.running ? 1 : 0,
+          ..._u32(message.jobId),
+          ..._u32(message.elapsedSeconds),
+          ..._str(message.label, maxLabelBytes),
+        ]),
+      TimerResult(:final code, :final text) => _frame(0x4B, [code, ..._str(text, maxLabelBytes)]),
     };
 
 /// Decodes one complete MIDI message. Returns null for anything that is not a
@@ -371,6 +472,7 @@ DeviceMessage? decodeMessage(List<int> bytes) {
   final type = bytes[5];
   final p = unpack7(bytes.sublist(6, bytes.length - 1));
   int u16(int at) => (p[at] << 8) | p[at + 1];
+  int u32(int at) => (p[at] << 24) | (p[at + 1] << 16) | (p[at + 2] << 8) | p[at + 3];
   String? str(int at) {
     if (at >= p.length || at + 1 + p[at] > p.length) return null;
     return utf8.decode(p.sublist(at + 1, at + 1 + p[at]), allowMalformed: true);
@@ -425,6 +527,29 @@ DeviceMessage? decodeMessage(List<int> bytes) {
         photoSelected: p[0] & 4 != 0,
         notice: p[1],
       );
+    case 0x06:
+      return const JobListRequest();
+    case 0x07:
+      return p.length < 4 ? null : TimerStart(u32(0));
+    case 0x08:
+      return const TimerStop();
+    case 0x09:
+      return p.isEmpty ? null : SlotReset(p[0]);
+    case 0x47:
+      return p.isEmpty ? null : JobListBegin(p[0]);
+    case 0x48:
+      final label = p.length < 7 ? null : str(6);
+      if (label == null) return null;
+      return JobItem(index: p[0], id: u32(1), suggested: p[5] & 1 != 0, running: p[5] & 2 != 0, label: label);
+    case 0x49:
+      return const JobListEnd();
+    case 0x4A:
+      final label = p.length < 10 ? null : str(9);
+      if (label == null) return null;
+      return TimerState(running: p[0] & 1 != 0, jobId: u32(1), elapsedSeconds: u32(5), label: label);
+    case 0x4B:
+      final text = p.length < 2 ? null : str(1);
+      return text == null ? null : TimerResult(p[0], text);
   }
   return null;
 }

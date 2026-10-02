@@ -64,5 +64,16 @@
     {"key": "noPhoto",  "icon": 26, "de": "Kein Foto",  "en": "No photo"},
     {"key": "loaded",   "icon": 27, "de": "Geladen",    "en": "Loaded"},
     {"key": "develop",  "icon": 28, "de": "Entwickeln", "en": "Develop"}
+  ],
+  "timerIcons": [
+    {"key": "stopwatch", "icon": 29},
+    {"key": "plus",      "icon": 30},
+    {"key": "stop",      "icon": 31}
+  ],
+  "timerTexts": [
+    {"key": "stop",    "de": "Stopp",     "en": "Stop"},
+    {"key": "newJob",  "de": "Neuer Job", "en": "New job"},
+    {"key": "started", "de": "Gestartet", "en": "Started"},
+    {"key": "stopped", "de": "Gestoppt",  "en": "Stopped"}
   ]
 }

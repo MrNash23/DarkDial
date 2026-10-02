@@ -5,6 +5,8 @@
 //   M <hex>   MIDI in       M <hex>   MIDI out
 //   R <n>     rotate        S <mode> <index> <slots> <screen> <label>|<text>|<position>|<valid>
 //   C         click                   (answer to ?)
+//   P         tap on the display
+//   D / U     knob down / up          then: J <menuOpen> <menuIndex> <menuCount> <running> <seconds> <notice>|<label>
 //   T <ms>    advance time
 //   ?         report state
 #include <stdio.h>
@@ -49,6 +51,15 @@ int main() {
       case 'C':
         device.click();
         break;
+      case 'P':
+        device.tap(nowMs);
+        break;
+      case 'D':
+        device.buttonDown(nowMs);
+        break;
+      case 'U':
+        device.buttonUp(nowMs);
+        break;
       case 'T':
         nowMs += static_cast<uint32_t>(atoi(line + 2));
         device.tick(nowMs);
@@ -58,6 +69,14 @@ int main() {
         printf("S %d %d %d %d %s|%s|%d|%d\n", device.mode() == dd::Mode::Edit ? 1 : 0, i, device.slotCount(),
                static_cast<int>(device.screen()), device.slot(i).label, device.value(i).text,
                device.value(i).position, device.value(i).valid ? 1 : 0);
+        const char *menuLabel = "";
+        if (device.menuOpen()) {
+          const dd::MenuEntry entry = device.menuEntry(device.menuIndex());
+          menuLabel = entry.kind == dd::MenuKind::Stop ? "<stop>" : entry.kind == dd::MenuKind::NewJob ? "<new>" : entry.job->label;
+        }
+        printf("J %d %d %d %d %u %d|%s\n", device.menuOpen() ? 1 : 0, device.menuIndex(), device.menuCount(),
+               device.timerRunning() ? 1 : 0, static_cast<unsigned>(device.timerSeconds(nowMs)),
+               device.screen() == dd::Screen::TimerNotice ? device.noticeCode() : -1, menuLabel);
         fflush(stdout);
         break;
       }

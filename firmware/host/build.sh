@@ -35,7 +35,7 @@ if [ ! -f "$BUILD/liblvgl.a" ] || [ "$OPTS" -nt "$BUILD/liblvgl.a" ]; then
   ar rcs "$BUILD/liblvgl.a" "$BUILD"/lvgl/*.o
 fi
 
-for file in "$SRC/icons.c" "$SRC/fonts/dd_font_label.c" "$SRC/fonts/dd_font_value.c"; do
+for file in "$SRC/icons.c" "$SRC"/fonts/dd_font_*.c; do
   cc -O1 -w "@$OPTS" -I"$LVGL_DIR" -c "$file" -o "$BUILD/$(basename "$file").o"
 done
 c++ $CXXFLAGS "@$OPTS" -I"$LVGL_DIR" -o "$BUILD/snapshot" "$HERE/snapshot.cpp" "$SRC/ui.cpp" \

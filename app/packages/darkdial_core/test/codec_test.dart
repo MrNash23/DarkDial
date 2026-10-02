@@ -98,6 +98,33 @@ void main() {
           [true, false, true, 1]);
     });
 
+    test('time tracking messages round-trip within the size limit', () {
+      final start = decodeMessage(encodeMessage(const TimerStart(newJobId))) as TimerStart;
+      expect(start.jobId, newJobId);
+      expect(decodeMessage(encodeMessage(const TimerStart(70000))), isA<TimerStart>().having((m) => m.jobId, 'id', 70000));
+      expect(decodeMessage(encodeMessage(const TimerStop())), isA<TimerStop>());
+      expect(decodeMessage(encodeMessage(const JobListRequest())), isA<JobListRequest>());
+      expect((decodeMessage(encodeMessage(const JobListBegin(13))) as JobListBegin).count, 13);
+      expect(decodeMessage(encodeMessage(const JobListEnd())), isA<JobListEnd>());
+
+      const item = JobItem(index: 2, id: 4000000000, suggested: true, running: false, label: 'Müller Hochzeit 2026 Potsdam');
+      final itemBytes = encodeMessage(item);
+      expect(itemBytes.length, lessThanOrEqualTo(64));
+      final decodedItem = decodeMessage(itemBytes) as JobItem;
+      expect([decodedItem.index, decodedItem.id, decodedItem.suggested, decodedItem.running],
+          [2, 4000000000, true, false]);
+      expect(decodedItem.label, 'Müller Hochzeit 202', reason: 'cut to 20 bytes; ü takes two');
+
+      const state = TimerState(running: true, jobId: 7, elapsedSeconds: 360000, label: '01.10. 14:32 und länger');
+      final stateBytes = encodeMessage(state);
+      expect(stateBytes.length, lessThanOrEqualTo(64));
+      final decodedState = decodeMessage(stateBytes) as TimerState;
+      expect([decodedState.running, decodedState.jobId, decodedState.elapsedSeconds], [true, 7, 360000]);
+
+      final result = decodeMessage(encodeMessage(const TimerResult(TimerResult.error, 'Archiviert'))) as TimerResult;
+      expect([result.code, result.text], [2, 'Archiviert']);
+    });
+
     test('unknown, foreign and truncated messages decode to null', () {
       expect(decodeMessage([0xF0, 0x7D, 0x44, 0x44, 1, 0x7A, 0xF7]), isNull);
       expect(decodeMessage([0xF0, 0x41, 0x10, 0x00, 0x00, 0xF7]), isNull);

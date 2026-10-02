@@ -34,7 +34,10 @@ enum IconId : uint8_t {
   ICON_STATUS_NOPHOTO = 26,
   ICON_STATUS_LOADED = 27,
   ICON_STATUS_DEVELOP = 28,
-  ICON_COUNT = 29
+  ICON_TIMER_STOPWATCH = 29,
+  ICON_TIMER_PLUS = 30,
+  ICON_TIMER_STOP = 31,
+  ICON_COUNT = 32
 };
 
 struct StatusText {
@@ -48,6 +51,26 @@ static const StatusText kStatusText[] = {
   {26, "Kein Foto", "No photo"},  // noPhoto
   {27, "Geladen", "Loaded"},  // loaded
   {28, "Entwickeln", "Develop"},  // develop
+};
+
+// Texts of the time tracking menu, indexed by TimerTextId.
+enum TimerTextId : uint8_t {
+  TEXT_STOP,
+  TEXT_NEWJOB,
+  TEXT_STARTED,
+  TEXT_STOPPED,
+};
+
+struct TimerText {
+  const char *de;
+  const char *en;
+};
+
+static const TimerText kTimerText[] = {
+  {"Stopp", "Stop"},  // stop
+  {"Neuer Job", "New job"},  // newJob
+  {"Gestartet", "Started"},  // started
+  {"Gestoppt", "Stopped"},  // stopped
 };
 
 // Slots shown before the service has ever sent a configuration.

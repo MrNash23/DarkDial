@@ -1,5 +1,6 @@
 // State machine of the device: carousel, edit mode, configuration transfer,
-// heartbeat. Portable C++; the Dart twin is DeviceModel in
+// heartbeat, and the time tracking menu behind the long press. Portable C++;
+// the Dart twin is DeviceModel in
 // app/packages/darkdial_core/lib/src/simulator.dart - keep both in sync.
 #pragma once
 #include <stddef.h>
@@ -18,6 +19,16 @@ enum class Screen : uint8_t {
   Loaded,     // configuration received, shown briefly
   NoPhoto,    // no photo selected in Lightroom
   Slot,
+  JobMenu,      // time tracking menu, opened by a long press
+  TimerNotice,  // "started" / "stopped" / an error text, shown briefly
+};
+
+/// One line of the time tracking menu.
+enum class MenuKind : uint8_t { Stop, NewJob, Job };
+
+struct MenuEntry {
+  MenuKind kind = MenuKind::NewJob;
+  const Job *job = nullptr;  // only for MenuKind::Job
 };
 
 constexpr uint8_t kStatusLightroom = 1;
@@ -26,6 +37,13 @@ constexpr uint8_t kStatusPhoto = 4;
 
 constexpr uint32_t kHeartbeatTimeoutMs = 5000;
 constexpr uint32_t kLoadedNoticeMs = 1200;
+constexpr uint32_t kLongPressMs = 700;
+constexpr uint32_t kTimerNoticeMs = 1200;
+constexpr uint32_t kDoubleTapMs = 350;
+
+/// Writes the time for the display: mm:ss below one hour, then h:mm.
+/// `out` needs 12 bytes.
+void formatElapsed(uint32_t seconds, char *out);
 
 // Stored configuration: count, language, then per slot a length byte and the
 // ConfigSlot payload.
@@ -62,8 +80,18 @@ class Device {
 
   /// Knob turned by `detents` (sign = direction).
   void rotate(int detents, uint32_t nowMs);
-  /// Knob pressed or display tapped.
+  /// A click: knob released before the long-press threshold, or display tapped.
   void click();
+  /// The display was tapped. A tap is a click, except in edit mode, where two
+  /// taps within kDoubleTapMs reset the slot to its default; a single tap
+  /// there becomes a click once that time has passed.
+  void tap(uint32_t nowMs);
+  /// The knob went down / came up. A click is only decided on release, and
+  /// only if the long press has not fired, so the two can never overlap.
+  void buttonDown(uint32_t nowMs);
+  void buttonUp(uint32_t nowMs);
+  /// 0 … 1 while the knob is held towards a long press, else 0.
+  float holdProgress(uint32_t nowMs) const;
   /// One complete MIDI message from the service.
   void onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs);
   /// Call regularly; handles the heartbeat timeout and notices.
@@ -86,9 +114,25 @@ class Device {
   /// Direction of the last carousel move: -1, 0 or +1, for the slide animation.
   int lastMove() const { return lastMove_; }
 
+  // Time tracking -------------------------------------------------------------
+  bool menuOpen() const { return menuOpen_; }
+  uint8_t menuCount() const;
+  uint8_t menuIndex() const { return menuIndex_; }
+  MenuEntry menuEntry(uint8_t i) const;
+  bool timerRunning() const { return timerRunning_; }
+  uint32_t timerJobId() const { return timerJobId_; }
+  const char *timerLabel() const { return timerLabel_; }
+  /// Seconds of the running entry, counted on locally since the last TimerState.
+  uint32_t timerSeconds(uint32_t nowMs) const;
+  /// TimerNotice: 0 started, 1 stopped, otherwise an error with noticeText().
+  uint8_t noticeCode() const { return noticeCode_; }
+  const char *noticeText() const { return noticeText_; }
+
   uint16_t configCrc() const;
 
  private:
+  void longPress();
+  void menuAction();
   void loadDefaults();
   void changed() { revision_++; }
   void finishConfig(const Message &message, uint32_t nowMs);
@@ -120,6 +164,35 @@ class Device {
   uint8_t incomingExpected_ = 0;
   uint8_t incomingLanguage_ = 1;
   uint16_t incomingCrc_ = 0xFFFF;
+
+  // Display taps.
+  bool tapPending_ = false;
+  uint32_t tapAtMs_ = 0;
+
+  // Knob.
+  bool pressed_ = false;
+  bool longFired_ = false;
+  uint32_t pressedAtMs_ = 0;
+
+  // Time tracking.
+  bool menuOpen_ = false;
+  uint8_t menuIndex_ = 0;
+  Job jobs_[kMaxJobs];
+  uint8_t jobCount_ = 0;
+  Job incomingJobs_[kMaxJobs];
+  uint8_t incomingJobCount_ = 0;
+  uint8_t incomingJobExpected_ = 0;
+  bool receivingJobs_ = false;
+  bool timerRunning_ = false;
+  uint32_t timerJobId_ = 0;
+  uint32_t timerBaseSeconds_ = 0;
+  uint32_t timerBaseMs_ = 0;
+  uint32_t timerShownSeconds_ = 0;
+  char timerLabel_[kMaxLabelBytes + 1] = {0};
+  bool timerNotice_ = false;
+  uint32_t timerNoticeAtMs_ = 0;
+  uint8_t noticeCode_ = 0;
+  char noticeText_[kMaxLabelBytes + 1] = {0};
 
   Accelerator accelerator_;
   uint32_t revision_ = 0;

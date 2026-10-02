@@ -5,6 +5,8 @@ import 'device_session.dart';
 import 'lightroom_link.dart';
 import 'midi_codec.dart';
 import 'param_def.dart';
+import 'time/database.dart';
+import 'time/time_tracker.dart';
 import 'value_mapping.dart';
 
 class EngineOptions {
@@ -13,7 +15,12 @@ class EngineOptions {
     this.useTracking = false,
     this.heartbeatInterval = const Duration(seconds: 2),
     this.echoGuard = const Duration(seconds: 1),
+    this.clockSyncInterval = const Duration(minutes: 1),
   });
+
+  /// How often the running time is sent again to correct drift on the device.
+  final Duration clockSyncInterval;
+
 
   /// Rotation is bundled into one `set` per interval (40 Hz).
   final Duration flushInterval;
@@ -91,12 +98,16 @@ class Engine {
     required this._config,
     required this.appVersion,
     this.options = const EngineOptions(),
+    this.timeTracker,
   });
 
   final MidiTransport transport;
   final LightroomLink lightroom;
   final List<int> appVersion;
   final EngineOptions options;
+
+  /// Jobs and the clock; null runs the engine without time tracking.
+  final TimeTracker? timeTracker;
 
   AppConfig _config;
   List<SlotSettings> _active = [];
@@ -127,6 +138,9 @@ class Engine {
   final List<StreamSubscription<void>> _subscriptions = [];
   Timer? _flushTimer;
   Timer? _heartbeatTimer;
+  Timer? _clockTimer;
+  String? _sentTimerState;
+  String? _sentJobList;
 
   Stream<EngineState> get states => _states.stream;
 
@@ -155,6 +169,16 @@ class Engine {
       ..add(lightroom.messages.listen(_onLightroomMessage));
     _flushTimer = Timer.periodic(options.flushInterval, (_) => _flush());
     _heartbeatTimer = Timer.periodic(options.heartbeatInterval, (_) => _sendStatus());
+    final tracker = timeTracker;
+    if (tracker != null) {
+      _subscriptions.add(tracker.changes.listen((_) {
+        _sendTimerState();
+        _sendJobList();
+        _notify();
+      }));
+      // The device counts on by itself; once a minute corrects its drift.
+      _clockTimer = Timer.periodic(options.clockSyncInterval, (_) => _sendTimerState(force: true));
+    }
     lightroom.start();
     await transport.start();
   }
@@ -163,6 +187,7 @@ class Engine {
     _disposed = true;
     _flushTimer?.cancel();
     _heartbeatTimer?.cancel();
+    _clockTimer?.cancel();
     for (final subscription in List.of(_subscriptions)) {
       await subscription.cancel();
     }
@@ -195,6 +220,8 @@ class Engine {
       for (var i = 0; i < _active.length; i++) {
         _sendValue(i);
       }
+      _sendTimerState(force: true);
+      _sendJobList(force: true);
     }
     return ok;
   }
@@ -238,6 +265,8 @@ class Engine {
   void _onDeviceGone(DeviceSession session) {
     if (_session != session) return;
     _session = null;
+    _sentTimerState = null;
+    _sentJobList = null;
     _deviceState = DeviceLinkState.disconnected;
     _editing = false;
     _pendingDetents = 0;
@@ -268,6 +297,26 @@ class Engine {
         if (slot >= _active.length) return;
         _activeSlot = slot;
         _notify();
+      case SlotReset(:final slot):
+        _resetSlot(slot);
+      case JobListRequest():
+        _sendJobList(force: true);
+        _sendTimerState(force: true);
+      case TimerStart(:final jobId):
+        _timerAction(() {
+          final tracker = timeTracker!;
+          if (jobId == newJobId) {
+            tracker.startNew(origin: 'device');
+          } else {
+            tracker.start(jobId, origin: 'device');
+          }
+          return TimerResult.started;
+        });
+      case TimerStop():
+        _timerAction(() {
+          timeTracker!.stop();
+          return TimerResult.stopped;
+        });
       default:
         break;
     }
@@ -305,6 +354,85 @@ class Engine {
     _notify();
   }
 
+  /// Double tap on the device: back to Lightroom's default.
+  void _resetSlot(int slot) {
+    if (slot >= _active.length || !lightroom.connected || !_photo) return;
+    final name = _active[slot].param.lr;
+    _pendingDetents = 0;
+    final seq = ++_seq;
+    _lastSetSeq[name] = seq;
+    _unanswered[name] = DateTime.now();
+    lightroom.send({'t': 'reset', 'p': name, 's': seq});
+  }
+
+  // Time tracking ----------------------------------------------------------------
+
+  /// Devices announce time tracking with protocol minor 1.
+  bool get _deviceTracksTime => (_session?.hello.minor ?? 0) >= 1;
+
+  /// Runs a start or stop asked for by the device and answers with the
+  /// result; the new clock state follows through the tracker's change event.
+  void _timerAction(int Function() action) {
+    final session = _session;
+    if (session == null) return;
+    if (timeTracker == null) {
+      session.send(const TimerResult(TimerResult.error, '–'));
+      return;
+    }
+    try {
+      session.send(TimerResult(action()));
+    } on TimeTrackingError catch (error) {
+      final german = _config.language == Language.de;
+      final text = switch (error.message) {
+        'archived' => german ? 'Archiviert' : 'Archived',
+        _ => german ? 'Unbekannt' : 'Unknown',
+      };
+      session.send(TimerResult(TimerResult.error, text));
+      _sendJobList(force: true); // the device's list was out of date
+    }
+    _sendTimerState(force: true);
+  }
+
+  void _sendTimerState({bool force = false}) {
+    final session = _session;
+    if (session == null || !_deviceTracksTime) return;
+    final tracker = timeTracker;
+    final clock = tracker?.running;
+    final message = clock == null
+        ? const TimerState(running: false)
+        : TimerState(
+            running: true,
+            jobId: clock.job.id,
+            elapsedSeconds: clock.elapsed(tracker!.now.toUtc()).inSeconds,
+            label: tracker.displayLabel(clock.job),
+          );
+    // Without force only real changes go out; the seconds alone are not one.
+    final signature = '${message.running}|${message.jobId}|${message.label}|${clock?.entry.start}';
+    if (!force && signature == _sentTimerState) return;
+    _sentTimerState = signature;
+    session.send(message);
+  }
+
+  void _sendJobList({bool force = false}) {
+    final session = _session;
+    if (session == null || !_deviceTracksTime) return;
+    final jobs = timeTracker?.deviceJobs() ?? const <DeviceJob>[];
+    final signature = [for (final j in jobs) '${j.job.id}|${j.label}|${j.suggested}|${j.running}'].join(';');
+    if (!force && signature == _sentJobList) return;
+    _sentJobList = signature;
+    session.send(JobListBegin(jobs.length));
+    for (var i = 0; i < jobs.length; i++) {
+      session.send(JobItem(
+        index: i,
+        id: jobs[i].job.id,
+        suggested: jobs[i].suggested,
+        running: jobs[i].running,
+        label: jobs[i].label,
+      ));
+    }
+    session.send(const JobListEnd());
+  }
+
   void _sendStatus() {
     _session?.send(Status(
       lightroomConnected: lightroom.connected,
@@ -337,6 +465,7 @@ class Engine {
       _module = '';
       _photo = false;
       _switchingToDevelop = false;
+      timeTracker?.currentSource = null;
       for (var i = 0; i < _active.length; i++) {
         _sendValue(i);
       }
@@ -367,6 +496,14 @@ class Engine {
           }
         }
         _sendStatus();
+      case 'source':
+        // Where the photos on screen come from; decides the suggested job.
+        final kind = message['kind'];
+        final id = message['id'];
+        final sourceName = message['name'];
+        timeTracker?.currentSource = kind is String && kind.isNotEmpty && id != null
+            ? LrSource(kind: kind, key: '$id', name: sourceName is String ? sourceName : '')
+            : null;
       case 'range':
         final min = message['min'];
         final max = message['max'];
