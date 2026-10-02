@@ -319,7 +319,8 @@ LrTasks.startAsyncTask(function()
         onError = function(socket, err)
           sendConnected = false
           Darkdial.CONNECTED = false
-          log:warn('send socket: ' .. tostring(err))
+          -- Timeouts just mean the app is not running; they repeat every few seconds.
+          if err ~= 'timeout' then log:warn('send socket: ' .. tostring(err)) end
           if Darkdial.RUNNING then socket:reconnect() end
         end,
       }
