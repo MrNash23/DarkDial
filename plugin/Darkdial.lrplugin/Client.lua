@@ -31,12 +31,10 @@ local POLL_INTERVAL    = 0.25  -- seconds, module and photo changes
 local OBSERVER_INTERVAL = 0.03 -- seconds, minimum between two change scans
 local MODULE_SWITCH_TIMEOUT = 3 -- seconds
 
+-- Writes ~/Library/Logs/Adobe/Lightroom/LrClassicLogs/Darkdial.log. Only start-up, connection
+-- changes and errors are logged, so the file stays small.
 local log = LrLogger('Darkdial')
--- Create an empty file named DEBUG in the plugin folder to get a log file in
--- ~/Documents/LrClassicLogs/Darkdial.log.
-if LrFileUtils.exists(LrPathUtils.child(_PLUGIN.path, 'DEBUG')) then
-  log:enable('logfile')
-end
+log:enable('logfile')
 
 local function readVersion()
   local text = LrFileUtils.readFile(LrPathUtils.child(_PLUGIN.path, 'version.txt'))
@@ -243,8 +241,14 @@ local function onMessage(_, line)
   end
 end
 
+log:info('loading plugin ' .. readVersion() .. ' in Lightroom ' .. LrApplication.versionString())
+
 LrTasks.startAsyncTask(function()
   LrFunctionContext.callWithContext('darkdial_sockets', function(context)
+    -- Errors inside a task vanish silently otherwise.
+    context:addFailureHandler(function(_, message)
+      log:error('main task failed: ' .. tostring(message))
+    end)
 
     local function startSender()
       Darkdial.SENDER = LrSocket.bind {
@@ -252,10 +256,19 @@ LrTasks.startAsyncTask(function()
         plugin = _PLUGIN,
         port = SEND_PORT,
         mode = 'send',
-        onConnected = function() sendConnected = true end,
-        onClosed = function() sendConnected = false end,
-        onError = function(socket)
+        onConnected = function()
+          sendConnected = true
+          Darkdial.CONNECTED = true
+          log:info('service connected')
+        end,
+        onClosed = function()
           sendConnected = false
+          Darkdial.CONNECTED = false
+        end,
+        onError = function(socket, err)
+          sendConnected = false
+          Darkdial.CONNECTED = false
+          log:warn('send socket: ' .. tostring(err))
           if Darkdial.RUNNING then socket:reconnect() end
         end,
       }
@@ -277,11 +290,16 @@ LrTasks.startAsyncTask(function()
         end
       end,
       onError = function(socket, err)
-        if err == 'timeout' and Darkdial.RUNNING then socket:reconnect() end
+        if err == 'timeout' then
+          if Darkdial.RUNNING then socket:reconnect() end
+        else
+          log:warn('receive socket: ' .. tostring(err))
+        end
       end,
     }
 
     startSender()
+    log:info('listening on ports ' .. SEND_PORT .. ' and ' .. RECEIVE_PORT)
 
     local observing = false
     while Darkdial.RUNNING do

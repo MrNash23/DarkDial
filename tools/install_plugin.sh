@@ -5,6 +5,5 @@ set -e
 SRC="$(cd "$(dirname "$0")/.." && pwd)/plugin/Darkdial.lrplugin"
 DEST="$HOME/Library/Application Support/Adobe/Lightroom/Modules/Darkdial.lrplugin"
 mkdir -p "$DEST"
-rsync -a --delete --exclude DEBUG "$SRC/" "$DEST/"
-[ "$1" = "--debug" ] && touch "$DEST/DEBUG"
+rsync -a --delete "$SRC/" "$DEST/"
 echo "installed $(cat "$DEST/version.txt") to $DEST"

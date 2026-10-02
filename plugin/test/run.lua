@@ -128,11 +128,13 @@ local sdk = {
   },
   LrFileUtils = {
     exists = function() return false end,
-    readFile = function() return '0.1.0\n' end,
+    readFile = function() return '0.1.1\n' end,
   },
-  LrFunctionContext = { callWithContext = function(_, fn) return fn({}) end },
+  LrFunctionContext = {
+    callWithContext = function(_, fn) return fn({ addFailureHandler = function() end }) end,
+  },
   LrLogger = function()
-    return { enable = function() end, warn = function() end, error = function() end }
+    return { enable = function() end, info = function() end, warn = function() end, error = function() end }
   end,
   LrPathUtils = { child = function(a, b) return a .. '/' .. b end },
   LrSocket = {
@@ -197,7 +199,7 @@ receive { t = 'hello', app = 'test', proto = '1.0' }
 do
   local messages = drain()
   local hello = find(messages, 'hello')
-  equal(hello and hello.plugin, '0.1.0', 'hello carries plugin version')
+  equal(hello and hello.plugin, '0.1.1', 'hello carries plugin version')
   equal(hello and hello.proto, '1.0', 'hello carries protocol version')
   equal(hello and hello.lr, '15.2', 'hello carries Lightroom version')
   local status = find(messages, 'status')

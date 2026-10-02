@@ -60,7 +60,21 @@ class AppController extends ChangeNotifier {
   /// The simulated device while the simulator is in use, for knob input.
   DeviceModel? get simulatorModel => _simulator?.model;
 
-  bool get pluginOutdated => installedPluginVersion != null && installedPluginVersion != bundledPluginVersion;
+  /// True if an installed plugin is older than the bundled one. A newer one
+  /// (development install) is left alone.
+  bool get pluginOutdated {
+    final installed = installedPluginVersion;
+    if (installed == null) return false;
+    List<int> parts(String v) => [for (final p in v.split('.')) int.tryParse(p) ?? 0];
+    final a = parts(installed);
+    final b = parts(bundledPluginVersion);
+    for (var i = 0; i < 3; i++) {
+      final x = i < a.length ? a[i] : 0;
+      final y = i < b.length ? b[i] : 0;
+      if (x != y) return x < y;
+    }
+    return false;
+  }
 
   Future<void> init() async {
     final directory = _settingsDirectory ?? await getApplicationSupportDirectory();
