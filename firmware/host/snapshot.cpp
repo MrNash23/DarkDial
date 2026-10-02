@@ -72,7 +72,10 @@ int main(int argc, char **argv) {
   run(device, 300);
   save("01_boot_logo");
 
-  run(device, 1500);
+  run(device, 3000);
+  save("01b_powered_by");
+
+  run(device, 3000);
   save("02_offline");
 
   configure(device,

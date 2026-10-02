@@ -120,7 +120,7 @@ class TimeDatabase {
 
   final Database _db;
 
-  void close() => _db.close();
+  void close() => _db.dispose();
 
   /// Brings an older file up to [schemaVersion], one step at a time.
   void _migrate() {

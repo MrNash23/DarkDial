@@ -70,6 +70,8 @@ local lr = {
   time = 0,
   tracking = nil,
   observer = nil,
+  sources = nil,           -- what catalog:getActiveSources() returns
+  photoPath = '/Fotos/2026/Hochzeit/IMG_0001.dng',
   sockets = {},
   sent = {},
   tasks = {},
@@ -96,9 +98,16 @@ end
 local sdk = {
   LrApplication = {
     activeCatalog = function()
-      return { getTargetPhoto = function()
-        return lr.photoId and { localIdentifier = lr.photoId } or nil
-      end }
+      return {
+        getTargetPhoto = function()
+          if not lr.photoId then return nil end
+          return {
+            localIdentifier = lr.photoId,
+            getRawMetadata = function(_, key) return key == 'path' and lr.photoPath or nil end,
+          }
+        end,
+        getActiveSources = function() return lr.sources or { 'all_photographs' } end,
+      }
     end,
     versionString = function() return '15.2' end,
   },
@@ -133,7 +142,7 @@ local sdk = {
   },
   LrFileUtils = {
     exists = function() return false end,
-    readFile = function() return '0.1.1\n' end,
+    readFile = function() return '0.2.0\n' end,
   },
   LrFunctionContext = {
     callWithContext = function(_, fn) return fn({ addFailureHandler = function() end }) end,
@@ -141,7 +150,11 @@ local sdk = {
   LrLogger = function()
     return { enable = function() end, info = function() end, warn = function() end, error = function() end }
   end,
-  LrPathUtils = { child = function(a, b) return a .. '/' .. b end },
+  LrPathUtils = {
+    child = function(a, b) return a .. '/' .. b end,
+    parent = function(path) return path:match('^(.*)/[^/]+$') end,
+    leafName = function(path) return path:match('([^/]+)$') end,
+  },
   LrSocket = {
     bind = function(options)
       local socket = { options = options, closed = false }
@@ -204,13 +217,45 @@ receive { t = 'hello', app = 'test', proto = '1.0' }
 do
   local messages = drain()
   local hello = find(messages, 'hello')
-  equal(hello and hello.plugin, '0.1.1', 'hello carries plugin version')
-  equal(hello and hello.proto, '1.0', 'hello carries protocol version')
+  equal(hello and hello.plugin, '0.2.0', 'hello carries plugin version')
+  equal(hello and hello.proto, '1.1', 'hello carries protocol version')
   equal(hello and hello.lr, '15.2', 'hello carries Lightroom version')
   local status = find(messages, 'status')
   equal(status and status.module, 'library', 'status module')
   equal(status and status.photo, true, 'status photo')
+  -- No collection or folder selected: the folder of the target photo.
+  local source = find(messages, 'source')
+  equal(source and source.kind, 'folder', 'source falls back to the photo folder')
+  equal(source and source.name, 'Hochzeit', 'folder name')
+  equal(source and source.id, '/Fotos/2026/Hochzeit', 'folder path as id')
 end
+
+-- Selecting a collection, then a folder, is reported once each.
+lr.sources = { {
+  type = function() return 'LrCollection' end,
+  getName = function() return 'Hochzeit Auswahl' end,
+  localIdentifier = 77,
+} }
+step()
+do
+  local messages = drain()
+  local source = find(messages, 'source')
+  equal(source and source.kind, 'collection', 'collection reported')
+  equal(source and source.name, 'Hochzeit Auswahl', 'collection name')
+  equal(source and source.id, '77', 'collection id as string')
+end
+step()
+equal(find(drain(), 'source'), nil, 'unchanged source is not repeated')
+lr.sources = { {
+  type = function() return 'LrFolder' end,
+  getName = function() return '2026' end,
+  getPath = function() return '/Fotos/2026' end,
+} }
+step()
+equal(find(drain(), 'source').id, '/Fotos/2026', 'folder reported with its path')
+lr.sources = nil
+step()
+drain()
 
 receive { t = 'ping' }
 check(find(drain(), 'pong') ~= nil, 'ping answered')
@@ -350,6 +395,15 @@ do
   local text = file:read('*l')
   file:close()
   equal(string.format('%d.%d.%d', v.major, v.minor, v.revision), text, 'Info.lua VERSION matches version.txt')
+end
+
+-- The Plug-in Manager section builds with a minimal view factory.
+do
+  local provider = dofile('Darkdial.lrplugin/PluginInfo.lua')
+  local factory = { row = function(_, t) return t end, static_text = function(_, t) return t end }
+  local sections = provider.sectionsForTopOfDialog(factory, {})
+  equal(sections[1].title, 'Darkdial', 'plug-in manager section')
+  check(sections[1][1][1].title:find('meine%-belichtungszeit%.de') ~= nil, 'powered-by line')
 end
 
 print(string.format('%d checks, %d failed', checks, failures))

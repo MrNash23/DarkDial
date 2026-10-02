@@ -20,4 +20,4 @@ elseif connected then
 else
   message = 'Waiting for the Darkdial app (ports 54770 and 54771).'
 end
-LrDialogs.message('Darkdial', message, 'info')
+LrDialogs.message('Darkdial', message .. '\n\npowered by meine-belichtungszeit.de', 'info')

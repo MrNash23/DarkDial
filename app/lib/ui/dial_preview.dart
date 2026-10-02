@@ -33,6 +33,37 @@ class DialPreview extends StatelessWidget {
       statusLabel = s.statusText('noPhoto');
     }
 
+    // Time tracking menu and confirmations live on the device only; the
+    // simulator's model has them, a real device shows them itself.
+    final model = controller.simulatorModel;
+    final clock = controller.tracker.running;
+    String menuTime = '';
+    if (model != null && model.notice != null) {
+      final notice = model.notice!;
+      statusIcon = notice.code == TimerResult.started ? kTimerIcons['stopwatch'] : kTimerIcons['stop'];
+      final texts = notice.code == TimerResult.started
+          ? kTimerTexts['started']!
+          : (notice.code == TimerResult.stopped ? kTimerTexts['stopped']! : [notice.text, notice.text]);
+      statusLabel = texts[s.language.index];
+    } else if (model != null && model.menuOpen) {
+      final line = model.menu[model.menuIndex];
+      final running = clock == null ? '' : formatClock(clock.elapsed(DateTime.now().toUtc()));
+      switch (line.kind) {
+        case MenuKind.stop:
+          statusIcon = kTimerIcons['stop'];
+          statusLabel = kTimerTexts['stop']![s.language.index];
+          menuTime = running;
+        case MenuKind.newJob:
+          statusIcon = kTimerIcons['plus'];
+          statusLabel = kTimerTexts['newJob']![s.language.index];
+        case MenuKind.job:
+          statusIcon = kTimerIcons['stopwatch'];
+          statusLabel = line.job!.label;
+          if (line.job!.running) menuTime = running;
+      }
+    }
+    final inMenu = model != null && model.menuOpen && model.notice == null;
+
     final slot = state.slots.isEmpty ? null : state.slots[state.activeSlot];
     final live = state.lightroomConnected && slot?.value != null;
     final slotColor = slot != null && slot.slot.color != 0 ? Color(0xFF000000 | slot.slot.color) : null;
@@ -49,7 +80,7 @@ class DialPreview extends StatelessWidget {
         size: size,
         icon: Image.asset('assets/icons/icon_$statusIcon.png', width: iconSize, height: iconSize),
         label: statusLabel!,
-        value: '',
+        value: menuTime,
       );
     } else if (slot == null) {
       content = const SizedBox.shrink();
@@ -90,7 +121,29 @@ class DialPreview extends StatelessWidget {
           bipolar: slot?.slot.bipolar ?? true,
           color: ringColor,
         ),
-        child: content,
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Positioned.fill(child: content),
+            // The running time sits in the gap of the ring; in the menu it is shown big.
+            if (clock != null && !inMenu)
+              Positioned(
+                bottom: size * 10 / 360,
+                child: ValueListenableBuilder<int>(
+                  valueListenable: controller.clockTick,
+                  builder: (context, _, _) => Text(
+                    formatClock(clock.elapsed(DateTime.now().toUtc())),
+                    key: const Key('preview-gap-time'),
+                    style: TextStyle(
+                      color: const Color(0xFFB8B8BE),
+                      fontSize: size * 0.062,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

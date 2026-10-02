@@ -24,7 +24,7 @@ local LrTasks             = import 'LrTasks'
 
 local Json = require 'Json'
 
-local PROTOCOL_VERSION = '1.0'
+local PROTOCOL_VERSION = '1.1'
 local SEND_PORT        = 54770 -- plugin -> service
 local RECEIVE_PORT     = 54771 -- service -> plugin
 local POLL_INTERVAL    = 0.25  -- seconds, module and photo changes
@@ -49,6 +49,7 @@ local watched = {}        -- array of parameter names
 local lastValue = {}      -- name -> last reported value
 local lastRange = {}      -- name -> { min, max }
 local state = { module = nil, photoId = nil }
+local lastSource = nil    -- kind .. id of the source last reported
 local lastScan = 0
 
 local function send(message)
@@ -119,6 +120,43 @@ local function reportStatus()
     photo = state.photoId ~= nil,
     photoId = state.photoId,
   }
+end
+
+--- Where the photos on screen come from: the collection or folder selected
+--- in the Library, otherwise the folder of the target photo. Returns kind,
+--- name, id; kind is '' if there is none.
+local function currentSource()
+  local catalog = LrApplication.activeCatalog()
+  local ok, sources = pcall(function() return catalog:getActiveSources() end)
+  if ok and type(sources) == 'table' and #sources == 1 and type(sources[1]) == 'table' then
+    local source = sources[1]
+    local kind = source:type()
+    if kind == 'LrCollection' or kind == 'LrPublishedCollection' then
+      return 'collection', source:getName(), tostring(source.localIdentifier)
+    elseif kind == 'LrFolder' then
+      return 'folder', source:getName(), source:getPath()
+    end
+  end
+  local photo = catalog:getTargetPhoto()
+  if photo then
+    local okPath, path = pcall(function() return photo:getRawMetadata('path') end)
+    if okPath and type(path) == 'string' then
+      local folder = LrPathUtils.parent(path)
+      if folder then return 'folder', LrPathUtils.leafName(folder), folder end
+    end
+  end
+  return '', '', ''
+end
+
+--- Reports the source if it changed (time tracking: the service suggests the
+--- job that belongs to it).
+local function pollSource(force)
+  local kind, name, id = currentSource()
+  local key = kind .. '\n' .. id
+  if force or key ~= lastSource then
+    lastSource = key
+    send { t = 'source', kind = kind, name = name, id = id }
+  end
 end
 
 --- Sends status if module or photo changed. Returns true if it did.
@@ -193,6 +231,7 @@ function handlers.hello(message)
     lr = LrApplication.versionString(),
   }
   pollStatus(true)
+  pollSource(true)
 end
 
 function handlers.watch(message)
@@ -316,6 +355,7 @@ LrTasks.startAsyncTask(function()
     local observing = false
     while Darkdial.RUNNING do
       local changed = pollStatus(false)
+      pollSource(false)
       if canEdit() then
         if not observing then
           -- Registering only works once the Develop module has a photo.

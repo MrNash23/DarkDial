@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:darkdial_core/darkdial_core.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
@@ -42,6 +43,19 @@ class AppController extends ChangeNotifier {
   /// True until the first settings file has been written.
   bool firstRun = false;
 
+  /// Jobs and the clock. Lives as long as the app, across engine restarts.
+  late final TimeDatabase _timeDatabase;
+  late final TimeTracker tracker;
+  late final Reports reports;
+  StreamSubscription<void>? _trackerChanges;
+  Timer? _secondTimer;
+
+  /// Counts up once a second while a clock runs, for widgets that show it.
+  final ValueNotifier<int> clockTick = ValueNotifier<int>(0);
+
+  /// Section of the window: 0 device, 1 time tracking.
+  final ValueNotifier<int> section = ValueNotifier<int>(0);
+
   Engine? _engine;
   SimulatedDevice? _simulator;
   StreamSubscription<EngineState>? _states;
@@ -80,6 +94,15 @@ class AppController extends ChangeNotifier {
     final directory = _settingsDirectory ?? await getApplicationSupportDirectory();
     _settingsFile = File(p.join(directory.path, 'settings.json'));
     await _load();
+
+    await directory.create(recursive: true);
+    _timeDatabase = TimeDatabase.open(p.join(directory.path, 'time.sqlite'));
+    tracker = TimeTracker(_timeDatabase)..startHeartbeat();
+    reports = Reports(tracker);
+    _trackerChanges = tracker.changes.listen((_) => notifyListeners());
+    _secondTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (tracker.running != null) clockTick.value++;
+    });
 
     try {
       final dot = jsonDecode(await rootBundle.loadString('assets/icons/hsl_dot.json')) as Map<String, dynamic>;
@@ -131,11 +154,14 @@ class AppController extends ChangeNotifier {
     await _states?.cancel();
     await _engine?.dispose();
     _simulator = useSimulator ? SimulatedDevice() : null;
+    // Menu and notices exist only on the device; repaint the preview for them.
+    _simulator?.model.onChanged = notifyListeners;
     final engine = Engine(
       transport: useSimulator ? SimulatedTransport(_simulator!) : FlutterMidiTransport(),
       lightroom: _lightroom(),
       config: config,
       appVersion: appVersion,
+      timeTracker: tracker,
     );
     _engine = engine;
     _states = engine.states.listen((_) => notifyListeners());
@@ -234,8 +260,49 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Time tracking ----------------------------------------------------------------
+
+  /// Runs a tracker action; a rule violation comes back as its message.
+  String? track(void Function() action) {
+    try {
+      action();
+      return null;
+    } on TimeTrackingError catch (error) {
+      return error.message;
+    }
+  }
+
+  /// Asks where to save a file; replaced in tests.
+  Future<String?> Function(String suggestedName) savePathPicker = (suggestedName) async {
+    final location = await getSaveLocation(suggestedName: suggestedName);
+    return location?.path;
+  };
+
+  /// Writes the CSV export to a file the user picks. Returns its path, null
+  /// if cancelled.
+  Future<String?> exportCsv({DateTime? from, DateTime? to, Set<int>? jobIds, required Rounding rounding}) async {
+    final path = await savePathPicker('darkdial-zeiten.csv');
+    if (path == null) return null;
+    final csv = reports.exportCsv(from: from, to: to, jobIds: jobIds, rounding: rounding, header: strings.csvHeader);
+    await File(path).writeAsString(csv);
+    return path;
+  }
+
+  /// Unnamed jobs created on the device, waiting for a name.
+  List<Job> get unnamedJobs => tracker.jobs().where((job) => job.unnamed).toList();
+
+  String jobTitle(Job job) => job.unnamed ? '${strings.unnamed} · ${tracker.displayLabel(job)}' : job.name;
+
+  bool _shutDown = false;
+
   Future<void> shutdown() async {
+    if (_shutDown) return;
+    _shutDown = true;
+    _secondTimer?.cancel();
+    await _trackerChanges?.cancel();
     await _states?.cancel();
     await _engine?.dispose();
+    await tracker.dispose();
+    _timeDatabase.close();
   }
 }

@@ -32,7 +32,10 @@ constexpr uint32_t kColorTrack = 0x26262B;
 constexpr uint32_t kColorSelect = 0x8A8A90;
 constexpr uint32_t kColorAccent = 0xFF9F0A;
 constexpr uint32_t kColorLabel = 0xB8B8BE;
-constexpr uint32_t kBootLogoMs = 1500;
+constexpr uint32_t kBootLogoMs = 3000;   // the Darkdial logo
+constexpr uint32_t kPoweredByMs = 3000;  // then "powered by" with its logo, never both together
+constexpr int kPoweredByTextTop = 44;
+constexpr int kPoweredByLogoTop = 92;
 constexpr uint32_t kSlideMs = 160;
 constexpr int kSlideDistance = 90;
 
@@ -44,6 +47,7 @@ lv_obj_t *label = nullptr;
 lv_obj_t *value = nullptr;
 lv_obj_t *gapTime = nullptr;
 lv_obj_t *logo = nullptr;
+lv_obj_t *poweredBy = nullptr;
 
 void (*tapHandler)() = nullptr;
 uint32_t bootMs = 0;
@@ -275,6 +279,24 @@ void ui_init(void (*onTap)(), uint32_t nowMs) {
   lv_obj_align(gapTime, LV_ALIGN_BOTTOM_MID, 0, -kGapTimeBottom);
   lv_label_set_text(gapTime, "");
 
+  // Second splash screen: covers everything, hidden until the logo is gone.
+  poweredBy = lv_obj_create(screen);
+  lv_obj_remove_style_all(poweredBy);
+  lv_obj_set_size(poweredBy, kDisplaySize, kDisplaySize);
+  lv_obj_set_style_bg_color(poweredBy, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(poweredBy, LV_OPA_COVER, 0);
+  lv_obj_set_clickable(poweredBy, false);
+  lv_obj_set_scrollable(poweredBy, false);
+  lv_obj_t *poweredByText = lv_label_create(poweredBy);
+  lv_obj_set_style_text_font(poweredByText, &dd_font_label, 0);
+  lv_obj_set_style_text_color(poweredByText, lv_color_hex(kColorLabel), 0);
+  lv_label_set_text(poweredByText, "powered by");
+  lv_obj_align(poweredByText, LV_ALIGN_TOP_MID, 0, kPoweredByTextTop);
+  lv_obj_t *poweredByLogo = lv_image_create(poweredBy);
+  lv_image_set_src(poweredByLogo, &dd_powered_by);
+  lv_obj_align(poweredByLogo, LV_ALIGN_TOP_MID, 0, kPoweredByLogoTop);
+  lv_obj_set_hidden(poweredBy, true);
+
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
   lv_obj_center(logo);
@@ -284,6 +306,11 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   if (logo && nowMs - bootMs >= kBootLogoMs) {
     lv_obj_delete(logo);
     logo = nullptr;
+    lv_obj_set_hidden(poweredBy, false);
+  }
+  if (poweredBy && !logo && nowMs - bootMs >= kBootLogoMs + kPoweredByMs) {
+    lv_obj_delete(poweredBy);
+    poweredBy = nullptr;
   }
   // The ring fills while the knob is held towards the long press.
   const float progress = device.holdProgress(nowMs);

@@ -4,6 +4,7 @@
   "crop": 128,
   "blackLevel": 30,
   "logo": "Lgoo.PNG",
+  "poweredByLogo": "meine-Belichtungszeit_Quadrat_weiß.png",
   "icons": {
     "1": "Temperatur.jpg",
     "2": "tint.jpg",

@@ -76,6 +76,7 @@ void main() {
   test('switching jobs on the device stops one and starts the other in one step', () async {
     final a = tracker.createJob(name: 'Hochzeit Müller', short: 'Müller');
     final b = tracker.createJob(name: 'Katalog');
+    await pause(5); // "last used" has millisecond resolution
     tracker.start(a.id, origin: 'app');
     await until(() => model().timerRunning && model().timerJobId == a.id, 'clock on the device');
 
@@ -120,6 +121,7 @@ void main() {
   test('the Lightroom collection in use puts its job on top as suggestion', () async {
     final wedding = tracker.createJob(name: 'Hochzeit');
     final other = tracker.createJob(name: 'Anderes');
+    await pause(5);
     tracker.start(other.id, origin: 'app');
     tracker.stop();
     tracker.assignSource(wedding.id, const LrSource(kind: 'collection', key: '77', name: 'Hochzeit Auswahl'));

@@ -268,7 +268,8 @@ class _PreviewSection extends StatelessWidget {
     final model = controller.simulatorModel;
     Widget dial = DialPreview(controller: controller);
     if (model != null) {
-      // With the simulator the preview is the device: wheel turns, click presses.
+      // With the simulator the preview is the device: wheel turns, click
+      // presses, long press opens time tracking, double click resets a slot.
       dial = Listener(
         onPointerSignal: (event) {
           if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
@@ -279,6 +280,8 @@ class _PreviewSection extends StatelessWidget {
         },
         child: GestureDetector(
           onTap: model.click,
+          onDoubleTap: model.doubleTap,
+          onLongPress: model.longPress,
           child: MouseRegion(cursor: SystemMouseCursors.click, child: dial),
         ),
       );
@@ -497,6 +500,14 @@ class _InfoSection extends StatelessWidget {
           title: Text(s.useSimulator),
           value: c.useSimulator,
           onChanged: c.setUseSimulator,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Image.asset('assets/powered_by.png', width: 44, height: 44),
+            const SizedBox(width: 12),
+            Text(s.poweredBy, style: small),
+          ],
         ),
       ],
     );

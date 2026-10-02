@@ -7,6 +7,7 @@ import 'app_controller.dart';
 import 'tray.dart';
 import 'ui/config_window.dart';
 import 'ui/dial_preview.dart';
+import 'ui/time/time_window.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,8 +21,8 @@ Future<void> main() async {
   final window = _Window(controller);
   await windowManager.waitUntilReadyToShow(
     const WindowOptions(
-      size: Size(1040, 720),
-      minimumSize: Size(960, 600),
+      size: Size(1140, 740),
+      minimumSize: Size(1060, 600),
       center: true,
       title: 'Darkdial',
       skipTaskbar: true,
@@ -37,7 +38,19 @@ Future<void> main() async {
   );
   windowManager.addListener(window);
 
-  final tray = Tray(controller, onConfigure: window.show, onQuit: () => _quit(controller));
+  final tray = Tray(
+    controller,
+    onOpen: (section) {
+      controller.section.value = section;
+      window.show();
+    },
+    onQuit: () => _quit(controller),
+  );
+  // A clock left open by a crash needs a decision: bring the question up.
+  if (controller.tracker.pendingRecovery != null) {
+    controller.section.value = 1;
+    await window.show();
+  }
   await tray.init();
 
   runApp(DarkdialApp(controller: controller));
@@ -81,7 +94,59 @@ class DarkdialApp extends StatelessWidget {
       title: 'Darkdial',
       debugShowCheckedModeBanner: false,
       theme: darkdialTheme(),
-      home: ConfigWindow(controller: controller),
+      home: MainWindow(controller: controller),
+    );
+  }
+}
+
+/// The window: device configuration and time tracking side by side.
+class MainWindow extends StatelessWidget {
+  const MainWindow({super.key, required this.controller});
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([controller, controller.section]),
+      builder: (context, _) {
+        final s = controller.strings;
+        final section = controller.section.value;
+        return Scaffold(
+          body: Row(
+            children: [
+              NavigationRail(
+                selectedIndex: section,
+                onDestinationSelected: (index) => controller.section.value = index,
+                labelType: NavigationRailLabelType.all,
+                leading: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Image.asset('assets/logo.png', width: 44, height: 44),
+                ),
+                destinations: [
+                  NavigationRailDestination(icon: const Icon(Icons.tune), label: Text(s.sectionDevice)),
+                  NavigationRailDestination(
+                    icon: Badge(
+                      isLabelVisible: controller.ready && controller.unnamedJobs.isNotEmpty,
+                      child: const Icon(Icons.timer_outlined),
+                    ),
+                    label: Text(s.sectionTime),
+                  ),
+                ],
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(
+                child: IndexedStack(
+                  index: section,
+                  children: [
+                    ConfigWindow(controller: controller),
+                    TimeWindow(controller: controller),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

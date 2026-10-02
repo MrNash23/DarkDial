@@ -17,6 +17,7 @@ return {
   LrInitPlugin = 'Client.lua',
   LrForceInitPlugin = true,
   LrShutdownPlugin = 'Shutdown.lua',
+  LrPluginInfoProvider = 'PluginInfo.lua',
   -- Library > Plug-in Extras and File > Plug-in Extras. Lightroom 15 did not
   -- run LrInitPlugin at startup while the plug-in offered no menu item.
   LrLibraryMenuItems = {
@@ -26,5 +27,5 @@ return {
     { title = 'Darkdial: Status', file = 'Status.lua' },
   },
   -- keep in sync with version.txt (checked by plugin/test/run.lua)
-  VERSION = { major = 0, minor = 1, revision = 1 },
+  VERSION = { major = 0, minor = 2, revision = 0 },
 }

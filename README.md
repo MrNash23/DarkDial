@@ -6,10 +6,14 @@ click, 8 WS2812 LEDs).
 
 Turn to pick a slider, click, turn to change it. The ring on the display shows
 the value and follows Lightroom live, also when you move a slider with the
-mouse.
+mouse. A double tap on the display resets the slider.
 
-> **Status:** early development. Nothing here is released yet, and the firmware
-> has not run on real hardware so far.
+A long press opens time tracking: start and stop a clock per job on the
+device, with the job that belongs to the collection open in Lightroom
+suggested first. The desktop app keeps the books (overview, entries, archive,
+search, CSV export); see [docs/darkdial-upgrade-zeiterfassung.md](docs/darkdial-upgrade-zeiterfassung.md).
+
+> **Status:** early development. Nothing here is released yet.
 
 ## Parts
 
@@ -65,7 +69,10 @@ macOS 13 or newer first. Windows is planned and follows after the macOS MVP.
 Firmware, plugin and app are licensed under the
 [GNU General Public License v3.0](LICENSE).
 
-**The name "Darkdial" and the Darkdial logo are not covered by the GPL.**
+Darkdial is powered by [meine-belichtungszeit.de](https://meine-belichtungszeit.de).
+
+**The name "Darkdial", the Darkdial logo and the meine-Belichtungszeit logo
+are not covered by the GPL.**
 You are welcome to fork and use the code under the terms of the license, but
 forks may not be distributed under the name Darkdial or with this logo.
 
