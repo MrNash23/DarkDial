@@ -50,6 +50,7 @@ local lastValue = {}      -- name -> last reported value
 local lastRange = {}      -- name -> { min, max }
 local state = { module = nil, photoId = nil }
 local lastSource = nil    -- kind .. id of the source last reported
+local applying = false    -- true while a value from the service is being set
 local lastScan = 0
 
 local function send(message)
@@ -112,6 +113,9 @@ end
 --- `quiet`: the values changed for a reason other than the user moving a
 --- slider (photo or module change), so nothing is reported as touched.
 local function reportChanges(force, quiet)
+  -- Lightroom calls the observer from inside setValue. A change the service
+  -- asked for is answered by applyValue; it is not the user moving a slider.
+  if applying then return end
   if not canEdit() then return end
   -- Another photo brings other values; the status poll has not seen it yet.
   quiet = quiet or force or targetPhotoId() ~= state.photoId
@@ -191,7 +195,9 @@ local function applyValue(param, value, delta, seq, reset)
   local min, max = getRange(param)
   if not min then return end
   if reset then
+    applying = true
     local ok, err = pcall(LrDevelopController.resetToDefault, param)
+    applying = false
     if not ok then
       log:warn('resetToDefault failed for ' .. tostring(param) .. ': ' .. tostring(err))
     end
@@ -205,7 +211,9 @@ local function applyValue(param, value, delta, seq, reset)
   end
   if type(value) ~= 'number' then return end
   value = math.max(min, math.min(max, value))
+  applying = true
   local ok, err = pcall(LrDevelopController.setValue, param, value)
+  applying = false
   if not ok then
     log:warn('setValue failed for ' .. tostring(param) .. ': ' .. tostring(err))
   end

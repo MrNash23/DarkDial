@@ -96,6 +96,10 @@ class FakePlugin {
   void _source() =>
       _send({'t': 'source', 'kind': source?.kind ?? '', 'name': source?.name ?? '', 'id': source?.id ?? ''});
 
+  /// Reports a slider as moved by the user, without a new value - what a
+  /// late observer call in Lightroom looks like to the service.
+  void reportsTouched(String param) => _send({'t': 'touched', 'p': param});
+
   /// Clicks a collection or folder in the Library.
   void userOpensSource(String kind, String name, String id) {
     source = (kind: kind, name: name, id: id);

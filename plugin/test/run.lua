@@ -125,6 +125,11 @@ local sdk = {
     setValue = function(param, value)
       if lr.values[param] == nil then error('unknown parameter') end
       lr.values[param] = value
+      -- Like the real Lightroom: the observer runs from inside setValue.
+      if lr.observer then
+        lr.time = lr.time + 1
+        lr.observer()
+      end
     end,
     getRange = function(param)
       if lr.module ~= 'develop' then error('not in develop') end
@@ -135,6 +140,10 @@ local sdk = {
     resetToDefault = function(param)
       if lr.values[param] == nil then error('unknown parameter') end
       lr.values[param] = lr.defaults[param]
+      if lr.observer then
+        lr.time = lr.time + 1
+        lr.observer()
+      end
     end,
     startTracking = function(param) lr.tracking = param end,
     stopTracking = function() lr.tracking = nil end,
@@ -142,7 +151,7 @@ local sdk = {
   },
   LrFileUtils = {
     exists = function() return false end,
-    readFile = function() return '0.3.0\n' end,
+    readFile = function() return '0.3.1\n' end,
   },
   LrFunctionContext = {
     callWithContext = function(_, fn) return fn({ addFailureHandler = function() end }) end,
@@ -217,7 +226,7 @@ receive { t = 'hello', app = 'test', proto = '1.0' }
 do
   local messages = drain()
   local hello = find(messages, 'hello')
-  equal(hello and hello.plugin, '0.3.0', 'hello carries plugin version')
+  equal(hello and hello.plugin, '0.3.1', 'hello carries plugin version')
   equal(hello and hello.proto, '1.2', 'hello carries protocol version')
   equal(hello and hello.lr, '15.2', 'hello carries Lightroom version')
   local status = find(messages, 'status')
@@ -288,9 +297,16 @@ do
   equal(find(messages, 'value', 'Contrast').v, 10, 'watched value reported')
 end
 
--- Values are clamped to the range.
+-- Values are clamped to the range. A set from the service is answered once,
+-- with its sequence number, and is not mistaken for the user moving a slider.
 receive { t = 'set', p = 'Exposure', v = 99, s = 2 }
-equal(find(drain(), 'value', 'Exposure').v, 5, 'set clamps to max')
+do
+  local messages = drain()
+  equal(#messages, 1, 'one answer per set')
+  equal(messages[1].v, 5, 'set clamps to max')
+  equal(messages[1].s, 2, 'the answer carries the sequence number')
+  equal(find(messages, 'touched'), nil, 'a set from the service is not touched')
+end
 receive { t = 'delta', p = 'Exposure', d = -0.5, s = 3 }
 equal(find(drain(), 'value', 'Exposure').v, 4.5, 'delta adds to current value')
 

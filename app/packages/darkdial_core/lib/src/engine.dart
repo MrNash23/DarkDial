@@ -17,7 +17,13 @@ class EngineOptions {
     this.heartbeatInterval = const Duration(seconds: 2),
     this.echoGuard = const Duration(seconds: 1),
     this.clockSyncInterval = const Duration(minutes: 1),
+    this.followGuard = const Duration(seconds: 1),
   });
+
+  /// After the knob was used, a slider reported as moved in Lightroom is not
+  /// followed for this long: it is most likely the knob's own change coming
+  /// back late.
+  final Duration followGuard;
 
   /// How often the running time is sent again to correct drift on the device.
   final Duration clockSyncInterval;
@@ -134,6 +140,10 @@ class Engine {
   int _activeSlot = 0;
   bool _editing = false;
   double _pendingDetents = 0;
+  DateTime _deviceUsedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Slot of a SlotGoto the device has not answered yet.
+  int? _gotoSlot;
 
   final StreamController<EngineState> _states = StreamController.broadcast();
   final List<StreamSubscription<void>> _subscriptions = [];
@@ -280,6 +290,18 @@ class Engine {
   }
 
   void _onDeviceMessage(DeviceMessage message) {
+    // Knob and touch count as use; the device's answer to our own SlotGoto
+    // (leaving one slot, selecting the other) and handshake messages do not.
+    final answerToGoto = _gotoSlot != null && (message is SlotLeave || message is SlotSelect);
+    final input = message is Rotation ||
+        message is SlotFocus ||
+        message is SlotSelect ||
+        message is SlotLeave ||
+        message is SlotReset ||
+        message is MenuOpen ||
+        message is MenuSelect;
+    if (input && !answerToGoto) _deviceUsedAt = DateTime.now();
+    if (message is SlotSelect) _gotoSlot = null;
     switch (message) {
       case Rotation(:final delta):
         if (_editing && _activeSlot < _active.length) {
@@ -491,8 +513,11 @@ class Engine {
         // One slider was moved in Lightroom: the device follows it, unless it
         // is on that slider already.
         if (name is! String || !_config.followLightroom) return;
+        // While the knob is in use the device stays where the user put it.
+        if (DateTime.now().difference(_deviceUsedAt) < options.followGuard) return;
         final slot = _active.indexWhere((s) => s.param.lr == name);
         if (slot < 0 || (_editing && slot == _activeSlot)) return;
+        _gotoSlot = slot;
         _session?.send(SlotGoto(slot));
         return;
       case 'source':

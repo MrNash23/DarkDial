@@ -321,6 +321,7 @@ void main() {
     expect((await firmware.state()).position, lessThan(positionCentre));
 
     // The mouse moves another slider: the device jumps there in edit mode.
+    await Future<void>.delayed(const Duration(milliseconds: 1100)); // the knob was just used
     plugin.userSets('Contrast', 15);
     await until(() async => (await firmware.state()).label == 'Kontrast', 'device follows Lightroom');
     await until(() => engine.state.editing && engine.state.slots[engine.state.activeSlot].settings.param.lr == 'Contrast',

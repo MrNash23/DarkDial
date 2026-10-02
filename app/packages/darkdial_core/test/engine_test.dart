@@ -28,7 +28,10 @@ class Rig {
     AppConfig? config,
     FakePlugin? plugin,
     bool startPlugin = true,
-    EngineOptions options = const EngineOptions(flushInterval: Duration(milliseconds: 5)),
+    EngineOptions options = const EngineOptions(
+      flushInterval: Duration(milliseconds: 5),
+      followGuard: Duration(milliseconds: 150),
+    ),
   }) async {
     this.plugin = plugin ?? FakePlugin();
     if (startPlugin) await this.plugin.start(toService: 0, fromService: 0);
@@ -166,6 +169,7 @@ void engineTests() {
     await until(() => rig.plugin.values['Contrast'] == 22, 'knob continues on Contrast');
 
     // Mouse on another slider while editing: leave one, enter the other.
+    await pause(200); // the knob was just used
     final shadows = rig.slotOf('Shadows');
     rig.plugin.userSets('Shadows', -10);
     await until(() => rig.model.index == shadows && rig.engine.state.activeSlot == shadows, 'second jump');
@@ -175,6 +179,29 @@ void engineTests() {
     rig.plugin.userSets('Sharpness', 40);
     await pause();
     expect(rig.model.index, shadows);
+  });
+
+  test('while the knob is in use the device does not jump to a late report', () async {
+    await rig.start();
+    await rig.ready();
+    await rig.edit('Contrast');
+    rig.model.rotate(3);
+    await until(() => rig.plugin.values['Contrast'] == 3, 'Contrast 3');
+
+    // The user leaves Contrast and moves on in the carousel ...
+    rig.model.click();
+    rig.model.rotate(2);
+    final here = rig.model.index;
+    // ... and only now Lightroom reports Contrast as moved: no jump back.
+    rig.plugin.reportsTouched('Contrast');
+    await pause(80);
+    expect(rig.model.index, here);
+    expect(rig.model.mode, DeviceMode.select);
+
+    // Once the knob has been left alone, the mouse is followed again.
+    await pause(200);
+    rig.plugin.userSets('Contrast', 30);
+    await until(() => rig.model.index == rig.slotOf('Contrast') && rig.model.mode == DeviceMode.edit, 'follows');
   });
 
   test('following can be switched off', () async {
