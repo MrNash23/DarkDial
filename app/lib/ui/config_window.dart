@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import '../app_controller.dart';
 import '../strings.dart';
-import '../version.dart';
 import 'dial_preview.dart';
 
 /// The configuration window: available controls, order on the device,
@@ -64,8 +63,6 @@ class _ConfigWindowState extends State<ConfigWindow> {
                           _sendRow(s),
                           const SizedBox(height: 20),
                           if (selected != null) _SlotEditor(key: ValueKey(selected.paramId), controller: c, slot: selected),
-                          const SizedBox(height: 20),
-                          _InfoSection(controller: c),
                         ],
                       ),
                     ),
@@ -436,120 +433,6 @@ class _SlotEditorState extends State<_SlotEditor> {
       ],
     );
   }
-}
-
-class _InfoSection extends StatelessWidget {
-  const _InfoSection({required this.controller});
-  final AppController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = controller;
-    final s = c.strings;
-    final state = c.state;
-    final small = Theme.of(context).textTheme.bodySmall;
-    final warning = small?.copyWith(color: Theme.of(context).colorScheme.error);
-
-    Widget row(String name, String value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(children: [SizedBox(width: 120, child: Text(name)), Expanded(child: Text(value))]),
-        );
-
-    final deviceText = switch (state.device) {
-      DeviceLinkState.connected =>
-        '${state.firmwareVersion}${c.useSimulator ? ' (${s.simulator})' : ' · ${state.deviceSerial}'}',
-      DeviceLinkState.incompatible => s.versionConflict,
-      DeviceLinkState.disconnected => s.notConnected,
-    };
-    final pluginText = c.installedPluginVersion == null
-        ? s.notInstalled
-        : '${c.installedPluginVersion}${state.lightroomConnected ? ' · ${s.connected}' : ''}';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionTitle(s.info),
-        row(s.app, appVersionText),
-        row(s.firmware, deviceText),
-        row(s.plugin, pluginText),
-        row(s.lightroom, state.lightroomConnected ? (state.lightroomVersion ?? '') : s.notConnected),
-        if (state.device == DeviceLinkState.incompatible) Text(s.conflictDevice, style: warning),
-        if (state.lightroomConflict) Text(s.conflictPlugin, style: warning),
-        if (c.pluginJustInstalled && !state.lightroomConnected) Text(s.restartLightroom, style: small),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton(
-              onPressed: c.installPlugin,
-              child: Text(c.installedPluginVersion == null ? s.installPlugin : s.updatePlugin),
-            ),
-            Tooltip(
-              message: s.uninstallHint,
-              child: OutlinedButton(
-                onPressed: c.installedPluginVersion == null && !c.launchAtLogin ? null : c.uninstall,
-                child: Text(s.uninstall),
-              ),
-            ),
-          ],
-        ),
-        SwitchListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(s.useSimulator),
-          value: c.useSimulator,
-          onChanged: c.setUseSimulator,
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            key: const Key('factory-reset'),
-            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
-            onPressed: () => _confirmFactoryReset(context, c),
-            child: Text(s.factoryReset),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Image.asset('assets/powered_by.png', width: 44, height: 44),
-            const SizedBox(width: 12),
-            Text(s.poweredBy, style: small),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Factory reset deletes all recorded times, so it spells out what is lost.
-void _confirmFactoryReset(BuildContext context, AppController controller) {
-  final s = controller.strings;
-  final tracker = controller.tracker;
-  final jobs = tracker.jobs().length + tracker.jobs(archived: true).length;
-  showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(s.factoryResetTitle),
-      content: SizedBox(width: 460, child: Text(s.factoryResetWarning(jobs, tracker.entries().length))),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(s.cancel)),
-        FilledButton(
-          key: const Key('factory-reset-confirm'),
-          style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-          onPressed: () async {
-            final messenger = ScaffoldMessenger.of(context);
-            Navigator.of(context).pop();
-            await controller.factoryReset();
-            messenger.showSnackBar(SnackBar(content: Text(s.factoryResetDone)));
-          },
-          child: Text(s.factoryResetConfirm),
-        ),
-      ],
-    ),
-  );
 }
 
 /// Shown on the very first start: installs the plugin and the login item.

@@ -74,6 +74,32 @@ class Strings {
   // Time tracking ----------------------------------------------------------------
   String get sectionDevice => _t('Gerät', 'Device');
   String get sectionTime => _t('Zeiterfassung', 'Time tracking');
+  String get sectionInfo => _t('Infos', 'About');
+  String get tagline => _t('Drehregler für Lightroom Classic mit Zeiterfassung', 'Rotary controller for Lightroom Classic with time tracking');
+  String get versions => _t('Versionen und Verbindung', 'Versions and connection');
+  String get license => _t('Lizenz', 'Licence');
+  String get licenseText => _t(
+        'Darkdial ist freie Software, veröffentlicht unter der GNU General Public License Version 3 (GPLv3). '
+            'Du darfst sie nutzen, weitergeben und verändern, solange Weitergaben unter derselben Lizenz stehen '
+            'und der Quelltext mitgeliefert wird.',
+        'Darkdial is free software, published under the GNU General Public License version 3 (GPLv3). '
+            'You may use, share and modify it, as long as what you pass on is under the same licence '
+            'and comes with its source code.',
+      );
+  String get licenseCondition => _t(
+        'Zusätzliche Bedingung (GPLv3 Abschnitt 7 b): Der Hinweis „powered by meine-belichtungszeit.de“ muss '
+            'in jeder weitergegebenen oder veränderten Fassung erhalten bleiben – auf dem Gerät beim Start, '
+            'in dieser App und im Lightroom-Plugin.',
+        'Additional term (GPLv3 section 7 b): the notice "powered by meine-belichtungszeit.de" must be kept '
+            'in every version that is passed on or modified – on the device at start-up, in this app and in the '
+            'Lightroom plug-in.',
+      );
+  String get licenseMarks => _t(
+        'Der Name „Darkdial“, das Darkdial-Logo und das Logo von meine-Belichtungszeit stehen nicht unter der GPL. '
+            'Darkdial ist nicht mit Adobe verbunden; Lightroom ist eine Marke von Adobe Inc.',
+        'The name "Darkdial", the Darkdial logo and the meine-Belichtungszeit logo are not covered by the GPL. '
+            'Darkdial is not affiliated with Adobe; Lightroom is a trademark of Adobe Inc.',
+      );
   String get timeTracking => _t('Zeiterfassung …', 'Time tracking …');
   String get poweredBy => 'powered by meine-belichtungszeit.de';
   String get unnamed => _t('Unbenannt', 'Unnamed');

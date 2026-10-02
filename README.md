@@ -67,14 +67,17 @@ macOS 13 or newer first. Windows is planned and follows after the macOS MVP.
 ## License
 
 Firmware, plugin and app are licensed under the
-[GNU General Public License v3.0](LICENSE).
+[GNU General Public License v3.0](LICENSE), with one additional term under its
+section 7(b), see [ADDITIONAL-TERMS.md](ADDITIONAL-TERMS.md):
 
-Darkdial is powered by [meine-belichtungszeit.de](https://meine-belichtungszeit.de).
+**The notice "powered by [meine-belichtungszeit.de](https://meine-belichtungszeit.de)"
+must be kept** in every copy and modified version – on the device at start-up,
+in the app's info section and in the Lightroom plug-in.
 
 **The name "Darkdial", the Darkdial logo and the meine-Belichtungszeit logo
-are not covered by the GPL.**
-You are welcome to fork and use the code under the terms of the license, but
-forks may not be distributed under the name Darkdial or with this logo.
+are not covered by the GPL.** You are welcome to fork and use the code under
+the terms of the license, but forks may not be distributed under the name
+Darkdial or with these logos as their own.
 
 The firmware fonts are generated from Montserrat (SIL Open Font License 1.1).
 

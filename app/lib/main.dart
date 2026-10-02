@@ -7,6 +7,7 @@ import 'app_controller.dart';
 import 'tray.dart';
 import 'ui/config_window.dart';
 import 'ui/dial_preview.dart';
+import 'ui/info_window.dart';
 import 'ui/time/time_window.dart';
 
 Future<void> main() async {
@@ -131,6 +132,7 @@ class MainWindow extends StatelessWidget {
                     ),
                     label: Text(s.sectionTime),
                   ),
+                  NavigationRailDestination(icon: const Icon(Icons.info_outline), label: Text(s.sectionInfo)),
                 ],
               ),
               const VerticalDivider(width: 1),
@@ -140,6 +142,7 @@ class MainWindow extends StatelessWidget {
                   children: [
                     ConfigWindow(controller: controller),
                     TimeWindow(controller: controller),
+                    InfoWindow(controller: controller),
                   ],
                 ),
               ),

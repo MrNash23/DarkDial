@@ -53,7 +53,7 @@ class AppController extends ChangeNotifier {
   /// Counts up once a second while a clock runs, for widgets that show it.
   final ValueNotifier<int> clockTick = ValueNotifier<int>(0);
 
-  /// Section of the window: 0 device, 1 time tracking.
+  /// Section of the window: 0 device, 1 time tracking, 2 info.
   final ValueNotifier<int> section = ValueNotifier<int>(0);
 
   Engine? _engine;

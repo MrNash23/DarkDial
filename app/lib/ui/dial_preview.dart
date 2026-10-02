@@ -140,7 +140,7 @@ class DialPreview extends StatelessWidget {
               ),
             if (inMenu)
               Positioned(
-                top: size * 30 / 360,
+                top: size * 44 / 360,
                 child: Text(
                   model.menuTitle,
                   key: const Key('preview-menu-title'),

@@ -10,6 +10,7 @@ import 'package:darkdial/main.dart';
 import 'package:darkdial/plugin_installer.dart';
 import 'package:darkdial/ui/config_window.dart';
 import 'package:darkdial/ui/dial_preview.dart';
+import 'package:darkdial/ui/info_window.dart';
 import 'package:darkdial/ui/time/time_window.dart';
 import 'package:darkdial_core/darkdial_core.dart';
 import 'package:darkdial_core/src/fake_plugin.dart';
@@ -54,7 +55,12 @@ void main() {
     await tester.pump();
   }
 
-  Future<void> start(WidgetTester tester, {Map<String, dynamic>? settings, bool timeWindow = false}) async {
+  Future<void> start(
+    WidgetTester tester, {
+    Map<String, dynamic>? settings,
+    bool timeWindow = false,
+    bool infoWindow = false,
+  }) async {
     tester.view.physicalSize = const Size(1040, 720);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -90,7 +96,9 @@ void main() {
       theme: darkdialTheme(fontFamily: font),
       home: RepaintBoundary(
         key: const Key('shot'),
-        child: timeWindow ? TimeWindow(controller: controller) : ConfigWindow(controller: controller),
+        child: timeWindow
+            ? TimeWindow(controller: controller)
+            : (infoWindow ? InfoWindow(controller: controller) : ConfigWindow(controller: controller)),
       ),
     ));
     // Asset images decode on real time.
@@ -371,8 +379,8 @@ void main() {
     await tester.runAsync(controller.shutdown);
   });
 
-  testWidgets('factory reset asks, then removes jobs, clients, times and the control selection', (tester) async {
-    await start(tester, settings: {
+  testWidgets('info section: versions, licence with the attribution term, factory reset', (tester) async {
+    await start(tester, infoWindow: true, settings: {
       'simulator': true,
       'config': {
         'language': 'de',
@@ -381,6 +389,11 @@ void main() {
         ],
       },
     });
+    expect(find.textContaining('GNU General Public License Version 3'), findsOneWidget);
+    expect(find.byKey(const Key('license-condition')), findsOneWidget);
+    expect(find.textContaining('„powered by meine-belichtungszeit.de“ muss'), findsOneWidget);
+    expect(find.text('powered by meine-belichtungszeit.de'), findsOneWidget);
+    await screenshot(tester, 'info');
     await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
     final model = controller.simulatorModel!;
     await settle(tester, () => model.slots.length == 1, 'custom configuration on the device');
@@ -394,7 +407,7 @@ void main() {
     await tester.scrollUntilVisible(
       button,
       200,
-      scrollable: find.descendant(of: find.byKey(const Key('config-details')), matching: find.byType(Scrollable)).first,
+      scrollable: find.descendant(of: find.byKey(const Key('info-page')), matching: find.byType(Scrollable)).first,
     );
     await tester.ensureVisible(button);
     await tester.pumpAndSettle();

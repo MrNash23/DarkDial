@@ -26,7 +26,7 @@ constexpr int kIconTop = 61;
 constexpr int kLabelTop = 184;
 constexpr int kValueTop = 234;
 constexpr int kGapTimeBottom = 10;
-constexpr int kMenuTitleTop = 30;   // page title of the time tracking menu
+constexpr int kMenuTitleTop = 44;   // page title of the time tracking menu, clear of the ring
 constexpr int kInfoTop = 178;       // wrapped help text below the icon
 constexpr int kInfoWidth = 250;  // the running time sits in the gap of the ring
 // The ring only starts to fill after this part of the long press, so a
