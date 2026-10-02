@@ -39,20 +39,6 @@ void onLongTouch() { longTouched = true; }
 // Diagnostics on the serial port: what opened or closed the time tracking
 // menu, and which touches were ignored because they came with a knob press.
 const char *lastInput = "boot";
-// Which slot is shown and in which mode, whenever that changes: tells a jump
-// asked for by the service ("service") from one made on the device.
-bool serviceActed = false;
-void reportSlot() {
-  static int shownIndex = -1;
-  static dd::Mode shownMode = dd::Mode::Select;
-  if (device->index() == shownIndex && device->mode() == shownMode) return;
-  shownIndex = device->index();
-  shownMode = device->mode();
-  Serial.printf("[%lu] slot %d %s (%s) after: %s\n", millis(), shownIndex,
-                shownMode == dd::Mode::Edit ? "edit" : "select", device->slot(shownIndex).label,
-                serviceActed ? "service" : lastInput);
-}
-
 void reportMenu() {
   static bool wasOpen = false;
   if (device->menuOpen() == wasOpen) return;
@@ -104,25 +90,14 @@ void loop() {
   const uint32_t now = millis();
 
   uint8_t packet[4];
-  serviceActed = false;
   while (board::midiRead(packet)) {
-    if (assembler.feedPacket(packet)) {
-      const int index = device->index();
-      const dd::Mode mode = device->mode();
-      device->onMessage(assembler.data(), assembler.size(), now);
-      if (device->index() != index || device->mode() != mode) {
-        serviceActed = true;
-        reportSlot();
-      }
-    }
+    if (assembler.feedPacket(packet)) device->onMessage(assembler.data(), assembler.size(), now);
   }
-  serviceActed = false;
 
   const int detents = board::readDetents();
   if (detents) {
     lastInput = "turn";
     device->rotate(detents, now);
-    Serial.printf("[%lu] turn %+d\n", millis(), detents);
   }
   // The knob reports down and up; the core decides between click and long
   // press. Taps on the display go through tap(), which also detects the
@@ -155,7 +130,6 @@ void loop() {
 
   device->tick(now);
   reportMenu();
-  reportSlot();
   ui_update(*device, now);
   updateLeds();
   lv_timer_handler();

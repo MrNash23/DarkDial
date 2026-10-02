@@ -27,7 +27,7 @@ Only facts (pins, bus settings) were taken over; the code in
 | LCD power | GPIO 1 and GPIO 2 high |
 | Backlight | GPIO 46, PWM 5 kHz, 8 bit |
 | Touch | CST816T at I²C 0x15, SDA 6, SCL 7, RST 5 |
-| Encoder | A 45, B 42, one detent per edge of A (confirmed on the device); switch 41, active low |
+| Encoder | A 45, B 42, a detent wherever both lines are equal (confirmed on the device); external pull-ups with about 1 ms RC; switch 41, active low |
 | LED ring | 8 × WS2812 on GPIO 48 (GRB), power enable GPIO 17 |
 | Power light | GPIO 40, active low |
 | Flash / PSRAM | 16 MB flash, OPI PSRAM (the firmware itself does not need PSRAM) |
@@ -50,8 +50,13 @@ there, hold BOOT, press RESET, release BOOT.
    belongs. Otherwise `display.setRotation()`.
 4. **Encoder direction.** In the carousel, turning clockwise should go to the
    next slot. If reversed, flip `kEncoderDirection`.
-5. **Encoder quality.** One click of the knob = one slot. Skipped or doubled
-   steps → `kEncoderDebounceUs`, or decode both edges.
+5. **Encoder quality.** One click of the knob = one slot, slowly and fast,
+   and never a step the wrong way. The contacts of this encoder stop
+   conducting for milliseconds while the knob moves, so edges cannot be
+   counted; `core/encoder.h` describes the decoder and its thresholds, and
+   `firmware/host/fixtures/encoder_raw.txt` holds recordings of the real knob
+   that the host tests replay. For a new recording, sample both lines at
+   4 kHz and print every change (commit 98b4b1b did that).
 6. **Knob press** toggles select/edit; no double triggers
    (`kSwitchDebounceMs`).
 7. **Touch.** A tap anywhere does the same as the knob press. If nothing
