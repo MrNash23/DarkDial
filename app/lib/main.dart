@@ -8,6 +8,7 @@ import 'tray.dart';
 import 'ui/config_window.dart';
 import 'ui/dial_preview.dart';
 import 'ui/info_window.dart';
+import 'ui/library_window.dart';
 import 'ui/time/time_window.dart';
 
 Future<void> main() async {
@@ -49,7 +50,7 @@ Future<void> main() async {
   );
   // A clock left open by a crash needs a decision: bring the question up.
   if (controller.tracker.pendingRecovery != null) {
-    controller.section.value = 1;
+    controller.section.value = sectionTime;
     await window.show();
   }
   await tray.init();
@@ -100,7 +101,7 @@ class DarkdialApp extends StatelessWidget {
   }
 }
 
-/// The window: device configuration and time tracking side by side.
+/// The window: sliders, Library mode, time tracking and info side by side.
 class MainWindow extends StatelessWidget {
   const MainWindow({super.key, required this.controller});
   final AppController controller;
@@ -124,7 +125,11 @@ class MainWindow extends StatelessWidget {
                   child: Image.asset('assets/logo.png', width: 44, height: 44),
                 ),
                 destinations: [
-                  NavigationRailDestination(icon: const Icon(Icons.tune), label: Text(s.sectionDevice)),
+                  NavigationRailDestination(icon: const Icon(Icons.tune), label: Text(s.sectionSliders)),
+                  NavigationRailDestination(
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: Text(s.sectionLibrary),
+                  ),
                   NavigationRailDestination(
                     icon: Badge(
                       isLabelVisible: controller.ready && controller.unnamedCount > 0,
@@ -141,6 +146,7 @@ class MainWindow extends StatelessWidget {
                   index: section,
                   children: [
                     ConfigWindow(controller: controller),
+                    LibraryWindow(controller: controller),
                     TimeWindow(controller: controller),
                     InfoWindow(controller: controller),
                   ],

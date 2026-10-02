@@ -7,8 +7,8 @@ import '../app_controller.dart';
 import '../strings.dart';
 import 'dial_preview.dart';
 
-/// The configuration window: available controls, order on the device,
-/// preview, per-control settings and version info.
+/// The sliders: available controls, order on the device, preview, settings
+/// of the selected control, and what applies to all of them.
 class ConfigWindow extends StatefulWidget {
   const ConfigWindow({super.key, required this.controller});
   final AppController controller;
@@ -58,9 +58,27 @@ class _ConfigWindowState extends State<ConfigWindow> {
                         key: const Key('config-details'),
                         padding: const EdgeInsets.all(20),
                         children: [
-                          _PreviewSection(controller: c),
-                          const SizedBox(height: 16),
-                          _sendRow(s),
+                          PreviewSection(controller: c),
+                          if (selected != null) ...[
+                            const Divider(height: 40),
+                            _SlotEditor(key: ValueKey(selected.paramId), controller: c, slot: selected),
+                          ],
+                          const Divider(height: 40),
+                          SectionTitle(s.general),
+                          Row(
+                            children: [
+                              Expanded(child: Text(s.languageLabel)),
+                              SegmentedButton<Language>(
+                                segments: const [
+                                  ButtonSegment(value: Language.de, label: Text('DE')),
+                                  ButtonSegment(value: Language.en, label: Text('EN')),
+                                ],
+                                selected: {c.config.language},
+                                showSelectedIcon: false,
+                                onSelectionChanged: (value) => c.setLanguage(value.first),
+                              ),
+                            ],
+                          ),
                           SwitchListTile(
                             key: const Key('follow-lightroom'),
                             dense: true,
@@ -69,9 +87,8 @@ class _ConfigWindowState extends State<ConfigWindow> {
                             value: c.config.followLightroom,
                             onChanged: (value) => c.setConfig(c.config.copyWith(followLightroom: value)),
                           ),
-                          _LibrarySection(controller: c),
-                          const SizedBox(height: 12),
-                          if (selected != null) _SlotEditor(key: ValueKey(selected.paramId), controller: c, slot: selected),
+                          const SizedBox(height: 8),
+                          _sendRow(s),
                         ],
                       ),
                     ),
@@ -89,7 +106,7 @@ class _ConfigWindowState extends State<ConfigWindow> {
     final hasDevice = c.state.device == DeviceLinkState.connected;
     return Row(
       children: [
-        FilledButton.icon(
+        OutlinedButton.icon(
           onPressed: hasDevice
               ? () async {
                   final ok = await c.sendToDevice();
@@ -105,15 +122,6 @@ class _ConfigWindowState extends State<ConfigWindow> {
             hasDevice ? (_sendResult ?? '') : s.noDevice,
             style: Theme.of(context).textTheme.bodySmall,
           ),
-        ),
-        SegmentedButton<Language>(
-          segments: const [
-            ButtonSegment(value: Language.de, label: Text('DE')),
-            ButtonSegment(value: Language.en, label: Text('EN')),
-          ],
-          selected: {c.config.language},
-          showSelectedIcon: false,
-          onSelectionChanged: (value) => c.setLanguage(value.first),
         ),
       ],
     );
@@ -153,8 +161,8 @@ Widget _slotIcon(SlotSettings slot, {double size = 28}) {
   );
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(this.text, {super.key});
   final String text;
 
   @override
@@ -177,7 +185,7 @@ class _AvailableList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _SectionTitle(s.available)),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: SectionTitle(s.available)),
         for (final group in kParamGroups) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -225,7 +233,7 @@ class _ActiveList extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(s.onDevice),
+              SectionTitle(s.onDevice),
               Text(
                 active.isEmpty
                     ? s.noneEnabled
@@ -265,8 +273,10 @@ class _ActiveList extends StatelessWidget {
   }
 }
 
-class _PreviewSection extends StatelessWidget {
-  const _PreviewSection({required this.controller});
+/// The round display as the device shows it; with the simulator it is the
+/// device and takes the mouse.
+class PreviewSection extends StatelessWidget {
+  const PreviewSection({super.key, required this.controller});
   final AppController controller;
 
   @override
@@ -297,72 +307,13 @@ class _PreviewSection extends StatelessWidget {
     }
     return Column(
       children: [
-        Align(alignment: Alignment.centerLeft, child: _SectionTitle(s.preview)),
+        Align(alignment: Alignment.centerLeft, child: SectionTitle(s.preview)),
         dial,
         if (model != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(s.previewHint, style: Theme.of(context).textTheme.bodySmall),
           ),
-      ],
-    );
-  }
-}
-
-/// What the device does while Lightroom shows the Library.
-class _LibrarySection extends StatelessWidget {
-  const _LibrarySection({required this.controller});
-  final AppController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = controller;
-    final s = c.strings;
-    final library = c.config.library;
-    void update(LibrarySettings next) => c.setConfig(c.config.copyWith(library: next));
-
-    Widget action(String key, String label, LibraryMark value, void Function(LibraryMark) onChanged) => Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Row(
-            children: [
-              SizedBox(width: 120, child: Text(label)),
-              Expanded(
-                child: DropdownButton<LibraryMark>(
-                  key: Key(key),
-                  value: value,
-                  isExpanded: true,
-                  isDense: true,
-                  onChanged: library.enabled ? (mark) => onChanged(mark ?? value) : null,
-                  items: [
-                    for (final mark in LibraryMark.values)
-                      DropdownMenuItem(value: mark, child: Text(s.libraryMark(mark))),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        _SectionTitle(s.librarySection),
-        SwitchListTile(
-          key: const Key('library-enabled'),
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(s.libraryEnabled),
-          value: library.enabled,
-          onChanged: (value) => update(library.copyWith(enabled: value)),
-        ),
-        action('library-tap', s.libraryTap, library.tap, (mark) => update(library.copyWith(tap: mark))),
-        action('library-double-tap', s.libraryDoubleTap, library.doubleTap,
-            (mark) => update(library.copyWith(doubleTap: mark))),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(s.libraryHint, style: Theme.of(context).textTheme.bodySmall),
-        ),
       ],
     );
   }
@@ -405,7 +356,7 @@ class _SlotEditorState extends State<_SlotEditor> {
       children: [
         Row(
           children: [
-            Expanded(child: _SectionTitle(_slotTitle(slot, language))),
+            Expanded(child: SectionTitle(_slotTitle(slot, language))),
             TextButton(
               onPressed: () {
                 _label.clear();

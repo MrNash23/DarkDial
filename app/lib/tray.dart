@@ -11,7 +11,7 @@ class Tray with TrayListener {
 
   final AppController controller;
 
-  /// Opens the window on a section: 0 device, 1 time tracking.
+  /// Opens the window on a section, see `sectionSliders` and its siblings.
   final void Function(int section) onOpen;
   final void Function() onQuit;
 
@@ -114,9 +114,9 @@ class Tray with TrayListener {
       case 'stop':
         controller.tracker.stop();
       case 'time':
-        onOpen(1);
+        onOpen(sectionTime);
       case 'configure':
-        onOpen(0);
+        onOpen(sectionSliders);
       case 'login':
         controller.setLaunchAtLogin(!controller.launchAtLogin);
       case 'quit':

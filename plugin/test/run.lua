@@ -172,7 +172,7 @@ local sdk = {
   },
   LrFileUtils = {
     exists = function() return false end,
-    readFile = function() return '0.4.0\n' end,
+    readFile = function() return '0.4.1\n' end,
   },
   LrFunctionContext = {
     callWithContext = function(_, fn) return fn({ addFailureHandler = function() end }) end,
@@ -249,7 +249,7 @@ receive { t = 'hello', app = 'test', proto = '1.0' }
 do
   local messages = drain()
   local hello = find(messages, 'hello')
-  equal(hello and hello.plugin, '0.4.0', 'hello carries plugin version')
+  equal(hello and hello.plugin, '0.4.1', 'hello carries plugin version')
   equal(hello and hello.proto, '1.3', 'hello carries protocol version')
   equal(hello and hello.lr, '15.2', 'hello carries Lightroom version')
   local status = find(messages, 'status')
@@ -469,6 +469,16 @@ equal(find(drain(), 'status').label, '', 'label removed')
 receive { t = 'mark', k = 'label', v = 'pink' }
 receive { t = 'mark', k = 'nonsense', v = 1 }
 equal(#drain(), 0, 'unknown marks are ignored')
+-- A mark with `next` goes on to the next photo; the mark stays on the old one.
+do
+  local before = lr.photoId
+  receive { t = 'mark', k = 'rating', v = 4, next = true }
+  local status = find(drain(), 'status')
+  equal(lr.marks[before].rating, 4, 'mark set on the photo that was selected')
+  equal(lr.photoId, before + 1, 'next photo selected after the mark')
+  equal(status.photoId, before + 1, 'status is of the next photo')
+  equal(status.rating, 0, 'which has no stars')
+end
 -- A mark set in Lightroom itself is noticed by the poll.
 lr.mark('rating', 2)
 step()

@@ -108,19 +108,45 @@ const List<String> kColorLabels = ['red', 'yellow', 'green', 'blue', 'purple'];
 /// The Library mode: while Lightroom shows the Library, the knob browses the
 /// photos and taps on the display mark them.
 class LibrarySettings {
-  const LibrarySettings({this.enabled = true, this.tap = LibraryMark.pick, this.doubleTap = LibraryMark.star1});
+  const LibrarySettings({
+    this.enabled = true,
+    this.tap = LibraryMark.pick,
+    this.doubleTap = LibraryMark.star1,
+    this.tapAdvances = false,
+    this.doubleTapAdvances = false,
+  });
 
   final bool enabled;
   final LibraryMark tap;
   final LibraryMark doubleTap;
 
-  LibrarySettings copyWith({bool? enabled, LibraryMark? tap, LibraryMark? doubleTap}) => LibrarySettings(
+  /// After the tap (double tap) has set its mark, go on to the next photo.
+  /// Taking a mark back stays on the photo.
+  final bool tapAdvances;
+  final bool doubleTapAdvances;
+
+  LibrarySettings copyWith({
+    bool? enabled,
+    LibraryMark? tap,
+    LibraryMark? doubleTap,
+    bool? tapAdvances,
+    bool? doubleTapAdvances,
+  }) =>
+      LibrarySettings(
         enabled: enabled ?? this.enabled,
         tap: tap ?? this.tap,
         doubleTap: doubleTap ?? this.doubleTap,
+        tapAdvances: tapAdvances ?? this.tapAdvances,
+        doubleTapAdvances: doubleTapAdvances ?? this.doubleTapAdvances,
       );
 
-  Map<String, dynamic> toJson() => {'enabled': enabled, 'tap': tap.name, 'doubleTap': doubleTap.name};
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'tap': tap.name,
+        'doubleTap': doubleTap.name,
+        'tapAdvances': tapAdvances,
+        'doubleTapAdvances': doubleTapAdvances,
+      };
 
   factory LibrarySettings.fromJson(Object? json) {
     const defaults = LibrarySettings();
@@ -129,6 +155,8 @@ class LibrarySettings {
       enabled: json['enabled'] != false,
       tap: LibraryMark.parse(json['tap'], defaults.tap),
       doubleTap: LibraryMark.parse(json['doubleTap'], defaults.doubleTap),
+      tapAdvances: json['tapAdvances'] == true,
+      doubleTapAdvances: json['doubleTapAdvances'] == true,
     );
   }
 }

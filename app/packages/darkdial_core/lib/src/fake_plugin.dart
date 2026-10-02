@@ -208,6 +208,7 @@ class FakePlugin {
           'label' => (rating: mark.rating, flag: mark.flag, label: value == 'none' ? '' : value as String),
           _ => mark,
         };
+        if (decoded['next'] == true) photoId = (id + 1).clamp(1, photoCount);
         _status();
       case 'set' || 'delta' || 'reset':
         if (param is! String || !values.containsKey(param) || photoId == null) return;

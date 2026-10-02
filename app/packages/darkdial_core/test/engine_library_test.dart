@@ -94,6 +94,34 @@ void main() {
     expect(model().library.flag, 0);
   });
 
+  test('a mark can go on to the next photo, for tap and double tap separately', () async {
+    await boot(
+      library: const LibrarySettings(tap: LibraryMark.star2, doubleTap: LibraryMark.pick, tapAdvances: true),
+    );
+    plugin.userSwitchesModule('library');
+    await until(() => model().libraryActive, 'library on the device');
+
+    // The tap sets two stars on photo 1 and moves on.
+    model().tap();
+    await until(() => plugin.photoId == 2, 'next photo');
+    expect(plugin.marks[1]!.rating, 2);
+    await until(() => model().library.name == 'IMG_0002.CR3' && model().library.rating == 0, 'device shows photo 2');
+
+    // The double tap does not move on here.
+    model().doubleTap();
+    await until(() => plugin.marks[2]?.flag == 1, 'picked');
+    await pause();
+    expect(plugin.photoId, 2);
+
+    // Taking a mark back stays on the photo.
+    model().rotate(-1);
+    await until(() => model().library.name == 'IMG_0001.CR3' && model().library.rating == 2, 'back on photo 1');
+    model().tap();
+    await until(() => plugin.marks[1]!.rating == 0, 'stars removed');
+    await pause();
+    expect(plugin.photoId, 1);
+  });
+
   test('reject and colour labels', () async {
     await boot(library: const LibrarySettings(tap: LibraryMark.reject, doubleTap: LibraryMark.green));
     plugin.userSwitchesModule('library');

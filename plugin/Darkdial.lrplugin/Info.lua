@@ -27,5 +27,5 @@ return {
     { title = 'Darkdial: Status', file = 'Status.lua' },
   },
   -- keep in sync with version.txt (checked by plugin/test/run.lua)
-  VERSION = { major = 0, minor = 4, revision = 0 },
+  VERSION = { major = 0, minor = 4, revision = 1 },
 }

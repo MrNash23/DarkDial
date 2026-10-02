@@ -11,6 +11,7 @@ import 'package:darkdial/plugin_installer.dart';
 import 'package:darkdial/ui/config_window.dart';
 import 'package:darkdial/ui/dial_preview.dart';
 import 'package:darkdial/ui/info_window.dart';
+import 'package:darkdial/ui/library_window.dart';
 import 'package:darkdial/ui/time/time_window.dart';
 import 'package:darkdial_core/darkdial_core.dart';
 import 'package:darkdial_core/src/fake_plugin.dart';
@@ -60,6 +61,7 @@ void main() {
     Map<String, dynamic>? settings,
     bool timeWindow = false,
     bool infoWindow = false,
+    bool libraryWindow = false,
   }) async {
     tester.view.physicalSize = const Size(1040, 720);
     tester.view.devicePixelRatio = 1;
@@ -98,7 +100,11 @@ void main() {
         key: const Key('shot'),
         child: timeWindow
             ? TimeWindow(controller: controller)
-            : (infoWindow ? InfoWindow(controller: controller) : ConfigWindow(controller: controller)),
+            : infoWindow
+                ? InfoWindow(controller: controller)
+                : libraryWindow
+                    ? LibraryWindow(controller: controller)
+                    : ConfigWindow(controller: controller),
       ),
     ));
     // Asset images decode on real time.
@@ -238,14 +244,17 @@ void main() {
     await tester.tap(tile);
     await settle(tester, () => model.slots.length == 1 && model.slots.first.label == 'Kontrast', 'slot on device');
 
+    // The general settings sit below the editor of the selected control.
+    final details =
+        find.descendant(of: find.byKey(const Key('config-details')), matching: find.byType(Scrollable)).first;
+    await tester.scrollUntilVisible(find.text('EN'), 120, scrollable: details);
     await tester.tap(find.text('EN'));
     await settle(tester, () => model.slots.first.label == 'Contrast', 'English label on device');
     expect(find.text('On the device'.toUpperCase()), findsOneWidget);
 
     // Following Lightroom is on by default and can be switched off.
     expect(controller.config.followLightroom, isTrue);
-    await tester.ensureVisible(find.byKey(const Key('follow-lightroom')));
-    await tester.pump();
+    await tester.scrollUntilVisible(find.byKey(const Key('follow-lightroom')), 120, scrollable: details);
     await tester.tap(find.byKey(const Key('follow-lightroom')));
     await tester.pump();
     expect(controller.config.followLightroom, isFalse);
@@ -276,7 +285,7 @@ void main() {
           {'param': 4, 'enabled': true},
         ],
       },
-    });
+    }, libraryWindow: true);
     await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
     await settle(tester, () => controller.state.lightroomConnected, 'lightroom');
     final model = controller.simulatorModel!;
@@ -321,6 +330,26 @@ void main() {
     model.tap();
     await sync(tester);
     expect(plugin.mark.flag, 0, reason: 'the tap is switched off');
+
+    // "Then go to the next photo" for the double tap; the switched-off tap
+    // cannot have it.
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('library-tap-advances'))).onChanged, isNull);
+    await tester.ensureVisible(find.byKey(const Key('library-double-tap-advances')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('library-double-tap-advances')));
+    await settle(tester, () => controller.config.library.doubleTapAdvances, 'advance switched on');
+    await settle(
+      tester,
+      () => File(p.join(temp.path, 'settings.json')).readAsStringSync().contains('"doubleTapAdvances": true'),
+      'setting saved',
+    );
+    await sync(tester);
+    model.rotate(1);
+    await settle(tester, () => plugin.photoId == 3, 'photo 3');
+    model.doubleTap();
+    await settle(tester, () => plugin.marks[3]?.rating == 3 && plugin.photoId == 4, 'marked and moved on');
+    await settle(tester, () => find.text('IMG_0004.CR3').evaluate().isNotEmpty, 'next photo in the preview');
+    expect(tester.widget<CheckboxListTile>(find.byKey(const Key('library-double-tap-advances'))).value, isTrue);
     await screenshot(tester, 'library');
 
     // Switched off, the device leaves the Library mode.

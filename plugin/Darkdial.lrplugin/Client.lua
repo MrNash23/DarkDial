@@ -358,9 +358,10 @@ end
 local COLOR_LABELS = { red = true, yellow = true, green = true, blue = true, purple = true, none = true }
 
 --- Marks the selected photo: k = 'flag' (v 1 pick, -1 reject, 0 none),
---- 'rating' (v 0 … 5) or 'label' (v a colour name or 'none').
+--- 'rating' (v 0 … 5) or 'label' (v a colour name or 'none'). With `next`
+--- the next photo is selected afterwards.
 function handlers.mark(message)
-  local kind, value = message.k, message.v
+  local kind, value, next = message.k, message.v, message.next == true
   if not targetPhotoId() then return end
   LrTasks.startAsyncTask(function()
     if kind == 'flag' then
@@ -374,6 +375,7 @@ function handlers.mark(message)
     else
       return
     end
+    if next then LrSelection.nextPhoto() end
     pollStatus(false)
   end)
 end

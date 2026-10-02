@@ -24,6 +24,12 @@ class HslDot {
 
 /// Everything the UI binds to: settings, the running engine and its state,
 /// plugin installation and the login item.
+/// Sections of the main window, in the order of the navigation rail.
+const int sectionSliders = 0;
+const int sectionLibrary = 1;
+const int sectionTime = 2;
+const int sectionInfo = 3;
+
 class AppController extends ChangeNotifier {
   static const MethodChannel _loginItem = MethodChannel('darkdial/login_item');
 
@@ -54,7 +60,7 @@ class AppController extends ChangeNotifier {
   final ValueNotifier<int> clockTick = ValueNotifier<int>(0);
 
   /// Section of the window: 0 device, 1 time tracking, 2 info.
-  final ValueNotifier<int> section = ValueNotifier<int>(0);
+  final ValueNotifier<int> section = ValueNotifier<int>(sectionSliders);
 
   Engine? _engine;
   SimulatedDevice? _simulator;

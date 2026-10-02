@@ -64,7 +64,8 @@ The first thirteen are on by default. Short names come in German and English.
   of the photo.
 - **Tap** and **double-tap** the display to mark it. What each of the two
   does is chosen in the app: flag as pick or rejected, one to five stars, a
-  colour label, or nothing. The same action again takes the mark back.
+  colour label, or nothing. Each can go on to the next photo by itself. The
+  same action again takes the mark back.
 - **Press** the knob to switch to Develop with the photo you are on.
 
 <!-- Photo: the device showing the Library screen -->
@@ -164,8 +165,8 @@ press selects a slider like a tap.
 Left alone for three minutes, the display shows the Darkdial logo. The next
 turn, press or touch brings it back; that first input does nothing else.
 
-Click the menu-bar icon and choose **Configure …** to pick your sliders and
-what the taps do in the Library, or
+Click the menu-bar icon and choose **Configure …** to pick your sliders
+(section "Sliders") and what the taps do in the Library (section "Library"), or
 **Time tracking …** for clients, jobs and hours. Clients are created in the
 app; on the device you choose among them.
 

@@ -221,7 +221,7 @@ holds the message type. Parameters are identified by their Lightroom SDK name
 | `track` | `p` (name, or `""` to stop) | Calls `startTracking` / `stopTracking` for smoother continuous changes. |
 | `photo` | `d` (number of photos, negative = back) | *1.3.* Select the photo `d` places further; at most 20 per message. Plugin answers `status`. |
 | `module` | `m` (`"library"` or `"develop"`) | *1.3.* Switch to that module. |
-| `mark` | `k`, `v` | *1.3.* Mark the selected photo. `k` `"flag"`: `v` 1 pick, -1 reject, 0 none. `k` `"rating"`: `v` 0 … 5. `k` `"label"`: `v` `"red"`, `"yellow"`, `"green"`, `"blue"`, `"purple"` or `"none"`. Plugin answers `status`. |
+| `mark` | `k`, `v`, `next` (bool, optional) | *1.3.* Mark the selected photo; with `next`, select the next photo afterwards. `k` `"flag"`: `v` 1 pick, -1 reject, 0 none. `k` `"rating"`: `v` 0 … 5. `k` `"label"`: `v` `"red"`, `"yellow"`, `"green"`, `"blue"`, `"purple"` or `"none"`. Plugin answers `status`. |
 | `ping` | – | Plugin answers `pong`. |
 
 If `set`, `delta` or `reset` arrives outside the Develop module, the plugin switches to

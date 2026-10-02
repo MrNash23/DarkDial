@@ -41,16 +41,27 @@ class Strings {
         'Gerät springt zu dem Regler, der in Lightroom bewegt wird',
         'Device jumps to the slider that is moved in Lightroom',
       );
+  String get general => _t('Allgemein', 'General');
   String get librarySection => _t('In der Bibliothek', 'In the Library');
-  String get libraryEnabled => _t(
-        'Drehen blättert durch die Fotos',
-        'Turning browses the photos',
+  String get libraryIntro => _t(
+        'Solange Lightroom die Bibliothek zeigt, blättert der Drehknopf durch die Fotos, und das Display '
+            'zeigt Dateiname, Sterne, Farbe und Markierung.',
+        'While Lightroom shows the Library, the knob goes through the photos and the display shows file '
+            'name, stars, colour label and flag.',
       );
-  String get libraryHint => _t(
-        'Der Knopfdruck wechselt zwischen Bibliothek und Entwickeln; ein Regler wird durch Tippen '
-            'auf das Display gewählt. Dieselbe Aktion noch einmal nimmt die Markierung zurück.',
-        'A press of the knob switches between Library and Develop; a slider is selected by tapping '
-            'the display. The same action again takes the mark back.',
+  String get libraryEnabled => _t('Bibliotheks-Modus verwenden', 'Use the Library mode');
+  String get libraryAction => _t('Aktion', 'Action');
+  String get libraryAdvance => _t('Danach zum nächsten Foto', 'Then go to the next photo');
+  String get libraryUndoHint => _t(
+        'Dieselbe Aktion noch einmal nimmt die Markierung zurück; dabei bleibt das Foto stehen.',
+        'The same action again takes the mark back and stays on the photo.',
+      );
+  String get libraryKnob => _t('Drehknopf', 'Knob');
+  String get libraryKnobHint => _t(
+        'Drehen: nächstes oder vorheriges Foto. Drücken: zwischen Bibliothek und Entwickeln wechseln. '
+            'In Entwickeln wird ein Regler durch Tippen auf das Display gewählt.',
+        'Turn: next or previous photo. Press: switch between Library and Develop. '
+            'In Develop a slider is selected by tapping the display.',
       );
   String get libraryTap => _t('Tippen', 'Tap');
   String get libraryDoubleTap => _t('Doppeltippen', 'Double tap');
@@ -106,7 +117,8 @@ class Strings {
   String get setupButton => _t('Einrichten', 'Set up');
 
   // Time tracking ----------------------------------------------------------------
-  String get sectionDevice => _t('Gerät', 'Device');
+  String get sectionSliders => _t('Regler', 'Sliders');
+  String get sectionLibrary => _t('Bibliothek', 'Library');
   String get sectionTime => _t('Zeiterfassung', 'Time tracking');
   String get sectionInfo => _t('Infos', 'About');
   String get tagline => _t('Drehregler für Lightroom Classic mit Zeiterfassung', 'Rotary controller for Lightroom Classic with time tracking');

@@ -404,28 +404,36 @@ class Engine {
         // The knob switches between the two modules it works in.
         lightroom.send({'t': 'module', 'm': _module == 'library' ? 'develop' : 'library'});
       case LibraryAction.tap:
-        _mark(_config.library.tap);
+        _mark(_config.library.tap, advance: _config.library.tapAdvances);
       case LibraryAction.doubleTap:
-        _mark(_config.library.doubleTap);
+        _mark(_config.library.doubleTap, advance: _config.library.doubleTapAdvances);
     }
   }
 
   /// Applies a mark to the selected photo; the same mark again takes it back.
-  /// The display changes at once, Lightroom's status confirms it.
-  void _mark(LibraryMark mark) {
+  /// The display changes at once, Lightroom's status confirms it. With
+  /// [advance], a mark that was set (not one taken back) is followed by the
+  /// next photo; the plugin does both in one go so the order is certain.
+  void _mark(LibraryMark mark, {bool advance = false}) {
     if (!_libraryActive || !_photo || mark == LibraryMark.none) return;
     final color = mark.colorLabel;
+    final String kind;
+    final Object value;
+    final bool set;
     if (mark == LibraryMark.pick || mark == LibraryMark.reject) {
       final wanted = mark == LibraryMark.pick ? 1 : -1;
       _flag = _flag == wanted ? 0 : wanted;
-      lightroom.send({'t': 'mark', 'k': 'flag', 'v': _flag});
+      (kind, value, set) = ('flag', _flag, _flag != 0);
     } else if (mark.stars > 0) {
       _rating = _rating == mark.stars ? 0 : mark.stars;
-      lightroom.send({'t': 'mark', 'k': 'rating', 'v': _rating});
+      (kind, value, set) = ('rating', _rating, _rating != 0);
     } else if (color != null) {
       _colorLabel = _colorLabel == color ? '' : color;
-      lightroom.send({'t': 'mark', 'k': 'label', 'v': _colorLabel.isEmpty ? 'none' : _colorLabel});
+      (kind, value, set) = ('label', _colorLabel.isEmpty ? 'none' : _colorLabel, _colorLabel.isNotEmpty);
+    } else {
+      return;
     }
+    lightroom.send({'t': 'mark', 'k': kind, 'v': value, if (advance && set) 'next': true});
     _sendLibrary();
     _notify();
   }
