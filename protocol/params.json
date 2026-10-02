@@ -1,0 +1,68 @@
+{
+  "_comment": "Single source of truth for all sliders. Run tools/gen_params.py after editing. IDs and icon numbers are part of the protocol and must never be reused.",
+  "groups": [
+    {"key": "wb",       "de": "Weißabgleich",    "en": "White Balance"},
+    {"key": "tone",     "de": "Ton",             "en": "Tone"},
+    {"key": "presence", "de": "Präsenz",         "en": "Presence"},
+    {"key": "detail",   "de": "Details",         "en": "Detail"},
+    {"key": "effects",  "de": "Effekte",         "en": "Effects"},
+    {"key": "curve",    "de": "Gradationskurve", "en": "Tone Curve"},
+    {"key": "hsl",      "de": "HSL",             "en": "HSL"}
+  ],
+  "params": [
+    {"id": 1,  "lr": "Temperature",            "group": "wb",       "de": "Temperatur", "en": "Temp",       "ring": "bi",  "icon": 1,  "min": 2000, "max": 50000, "step": 50,   "decimals": 0, "format": "kelvin", "default": true},
+    {"id": 2,  "lr": "Tint",                   "group": "wb",       "de": "Tonung",     "en": "Tint",       "ring": "bi",  "icon": 2,  "min": -150, "max": 150,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 3,  "lr": "Exposure",               "group": "tone",     "de": "Belichtung", "en": "Exposure",   "ring": "bi",  "icon": 3,  "min": -5,   "max": 5,     "step": 0.05, "decimals": 2, "format": "signed", "default": true},
+    {"id": 4,  "lr": "Contrast",               "group": "tone",     "de": "Kontrast",   "en": "Contrast",   "ring": "bi",  "icon": 4,  "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 5,  "lr": "Highlights",             "group": "tone",     "de": "Lichter",    "en": "Highlights", "ring": "bi",  "icon": 5,  "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 6,  "lr": "Shadows",                "group": "tone",     "de": "Tiefen",     "en": "Shadows",    "ring": "bi",  "icon": 6,  "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 7,  "lr": "Whites",                 "group": "tone",     "de": "Weiß",       "en": "Whites",     "ring": "bi",  "icon": 7,  "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 8,  "lr": "Blacks",                 "group": "tone",     "de": "Schwarz",    "en": "Blacks",     "ring": "bi",  "icon": 8,  "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 9,  "lr": "Texture",                "group": "presence", "de": "Struktur",   "en": "Texture",    "ring": "bi",  "icon": 9,  "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 10, "lr": "Clarity",                "group": "presence", "de": "Klarheit",   "en": "Clarity",    "ring": "bi",  "icon": 10, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 11, "lr": "Dehaze",                 "group": "presence", "de": "Dunst",      "en": "Dehaze",     "ring": "bi",  "icon": 11, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 12, "lr": "Vibrance",               "group": "presence", "de": "Dynamik",    "en": "Vibrance",   "ring": "bi",  "icon": 12, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 13, "lr": "Saturation",             "group": "presence", "de": "Sättigung",  "en": "Saturation", "ring": "bi",  "icon": 13, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": true},
+    {"id": 14, "lr": "Sharpness",              "group": "detail",   "de": "Schärfen",   "en": "Sharpen",    "ring": "uni", "icon": 14, "min": 0,    "max": 150,   "step": 1,    "decimals": 0, "format": "plain",  "default": false},
+    {"id": 15, "lr": "LuminanceSmoothing",     "group": "detail",   "de": "Rauschen",   "en": "Noise",      "ring": "uni", "icon": 15, "min": 0,    "max": 100,   "step": 1,    "decimals": 0, "format": "plain",  "default": false},
+    {"id": 16, "lr": "PostCropVignetteAmount", "group": "effects",  "de": "Vignette",   "en": "Vignette",   "ring": "bi",  "icon": 16, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
+    {"id": 17, "lr": "GrainAmount",            "group": "effects",  "de": "Körnung",    "en": "Grain",      "ring": "uni", "icon": 17, "min": 0,    "max": 100,   "step": 1,    "decimals": 0, "format": "plain",  "default": false},
+    {"id": 18, "lr": "ParametricHighlights",   "group": "curve",    "de": "Lichter",    "en": "Highlights", "ring": "bi",  "icon": 18, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
+    {"id": 19, "lr": "ParametricLights",       "group": "curve",    "de": "Hell",       "en": "Lights",     "ring": "bi",  "icon": 19, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
+    {"id": 20, "lr": "ParametricDarks",        "group": "curve",    "de": "Dunkel",     "en": "Darks",      "ring": "bi",  "icon": 20, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false},
+    {"id": 21, "lr": "ParametricShadows",      "group": "curve",    "de": "Tiefen",     "en": "Shadows",    "ring": "bi",  "icon": 21, "min": -100, "max": 100,   "step": 1,    "decimals": 0, "format": "signed", "default": false}
+  ],
+  "hsl": {
+    "_comment": "Expanded to 24 params: id = firstId + 8 * kindIndex + colorIndex, lr = kind.lr + color.lr.",
+    "firstId": 32,
+    "group": "hsl",
+    "ring": "bi",
+    "min": -100,
+    "max": 100,
+    "step": 1,
+    "decimals": 0,
+    "format": "signed",
+    "default": false,
+    "kinds": [
+      {"lr": "HueAdjustment",        "de": "Farbton",   "en": "Hue",        "icon": 22},
+      {"lr": "SaturationAdjustment", "de": "Sättigung", "en": "Saturation", "icon": 23},
+      {"lr": "LuminanceAdjustment",  "de": "Luminanz",  "en": "Luminance",  "icon": 24}
+    ],
+    "colors": [
+      {"lr": "Red",     "de": "Rot",        "en": "Red",     "rgb": "E5392F"},
+      {"lr": "Orange",  "de": "Orange",     "en": "Orange",  "rgb": "F58A1F"},
+      {"lr": "Yellow",  "de": "Gelb",       "en": "Yellow",  "rgb": "F2D21B"},
+      {"lr": "Green",   "de": "Grün",       "en": "Green",   "rgb": "3FA845"},
+      {"lr": "Aqua",    "de": "Aquamarin",  "en": "Aqua",    "rgb": "27C2CF"},
+      {"lr": "Blue",    "de": "Blau",       "en": "Blue",    "rgb": "2F7BE5"},
+      {"lr": "Purple",  "de": "Lila",       "en": "Purple",  "rgb": "8E3FD1"},
+      {"lr": "Magenta", "de": "Magenta",    "en": "Magenta", "rgb": "D9309B"}
+    ]
+  },
+  "status": [
+    {"key": "offline",  "icon": 25, "de": "Getrennt",   "en": "Offline"},
+    {"key": "noPhoto",  "icon": 26, "de": "Kein Foto",  "en": "No photo"},
+    {"key": "loaded",   "icon": 27, "de": "Geladen",    "en": "Loaded"},
+    {"key": "develop",  "icon": 28, "de": "Entwickeln", "en": "Develop"}
+  ]
+}

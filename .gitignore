@@ -1,0 +1,29 @@
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Flutter / Dart
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/macos/Flutter/ephemeral/
+app/macos/Pods/
+app/windows/flutter/ephemeral/
+app/packages/*/.dart_tool/
+app/packages/*/build/
+
+# Firmware
+firmware/build/
+firmware/host/build/
+firmware/host/snapshots/
+
+# Release artefacts
+dist/
+*.dmg
