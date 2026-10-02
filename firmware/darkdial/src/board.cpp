@@ -100,8 +100,8 @@ dd::EncoderDecoder encoder;
 // lines are sampled instead of counting edges.
 void sampleEncoder(void *) {
   const uint8_t state = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
-  const int step = encoder.sample(state);
-  if (step) encoderCount += step * kEncoderDirection;
+  const int steps = encoder.sample(state);
+  if (steps) encoderCount += steps * kEncoderDirection;
 }
 
 void flushDisplay(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *pixels) {

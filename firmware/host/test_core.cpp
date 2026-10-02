@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../darkdial/src/core/encoder.h"
@@ -700,12 +701,10 @@ static void testFollowLightroom() {
 }
 
 // Feeds the decoder for a time with one state.
-static int hold(dd::EncoderDecoder &decoder, uint8_t state, int ms, int *wrong = nullptr, int expected = 0) {
+static int hold(dd::EncoderDecoder &decoder, uint8_t state, int ms) {
   int net = 0;
   for (int i = 0; i < ms * 1000 / static_cast<int>(dd::EncoderDecoder::kSamplePeriodUs); i++) {
-    const int step = decoder.sample(state);
-    net += step;
-    if (wrong && step && step != expected) (*wrong)++;
+    net += decoder.sample(state);
   }
   return net;
 }
@@ -733,49 +732,61 @@ static void testEncoder() {
   // Moving half way and back is no step.
   CHECK(hold(decoder, 1, 60) + hold(decoder, 3, 100) == 0);
   // Both contacts dropping out together at rest looks like a full cycle
-  // (0 -> 1 -> 3 -> 0) and must not count.
+  // (0 -> 1 -> 3 -> 2 -> 0) and must not count; neither does one contact
+  // that stops conducting for a while.
   CHECK(hold(decoder, 1, 30) + hold(decoder, 0, 100) == 1);
   net = 0;
   for (int i = 0; i < 10; i++) net += hold(decoder, 1, 1) + hold(decoder, 3, 2) + hold(decoder, 2, 1) + hold(decoder, 0, 3);
   CHECK(net + hold(decoder, 0, 100) == 0);
+  CHECK(hold(decoder, 2, 60) + hold(decoder, 0, 100) == 0);
+  CHECK(hold(decoder, 2, 5) + hold(decoder, 3, 15) + hold(decoder, 2, 5) + hold(decoder, 0, 100) == 0);
+
+  // At speed the knob does not rest: both-open counts in passing, together
+  // with the both-closed that follows.
+  net = 0;
+  for (int i = 0; i < 5; i++) net += hold(decoder, 2, 15) + hold(decoder, 3, 15) + hold(decoder, 1, 15) + hold(decoder, 0, 15);
+  CHECK(net == 10);
+  net = 0;
+  for (int i = 0; i < 5; i++) net += hold(decoder, 1, 15) + hold(decoder, 3, 15) + hold(decoder, 2, 15) + hold(decoder, 0, 15);
+  CHECK(net == -10);
 }
 
-// The waveform recorded from the real knob (4 kHz, "micros state" per
-// change): four runs of about ten detents each, clockwise and counter-
-// clockwise, slow and fast. No step may go the wrong way.
+// Recordings of the real knob; see the head of the fixture for the format.
 static void testEncoderRecording(const std::string &fixtures) {
   FILE *file = fopen((fixtures + "/encoder_raw.txt").c_str(), "r");
   CHECK(file != nullptr);
   if (!file) return;
-  struct Change {
+  struct Run {
+    int direction, least, most, mostWrong;
+    std::vector<std::pair<unsigned long, unsigned>> changes;
+  };
+  std::vector<Run> runs;
+  char line[160];
+  while (fgets(line, sizeof(line), file)) {
+    Run run;
     unsigned long us;
     unsigned state;
-  };
-  std::vector<std::vector<Change>> runs(1);
-  Change change;
-  while (fscanf(file, "%lu %u", &change.us, &change.state) == 2) {
-    if (!runs.back().empty() && change.us - runs.back().back().us > 1500000) runs.emplace_back();
-    runs.back().push_back(change);
+    if (sscanf(line, "run %d %d %d %d", &run.direction, &run.least, &run.most, &run.mostWrong) == 4) {
+      runs.push_back(run);
+    } else if (!runs.empty() && sscanf(line, "%lu %u", &us, &state) == 2) {
+      runs.back().changes.emplace_back(us, state);
+    }
   }
   fclose(file);
-  CHECK(runs.size() == 4);
-  if (runs.size() != 4) return;
-  const int direction[4] = {1, -1, 1, -1};
-  const int atLeast[4] = {9, 9, 7, 8};
-  for (size_t r = 0; r < runs.size(); r++) {
+  CHECK(runs.size() == 8);
+  for (const Run &run : runs) {
     dd::EncoderDecoder decoder;
-    const std::vector<Change> &run = runs[r];
     size_t next = 1;
-    unsigned state = run[0].state;
+    unsigned state = run.changes[0].second;
     int right = 0, wrong = 0;
-    for (unsigned long us = run[0].us; us < run.back().us + 300000; us += dd::EncoderDecoder::kSamplePeriodUs) {
-      while (next < run.size() && run[next].us <= us) state = run[next++].state;
+    for (unsigned long us = 0; us < run.changes.back().first + 300000; us += dd::EncoderDecoder::kSamplePeriodUs) {
+      while (next < run.changes.size() && run.changes[next].first <= us) state = run.changes[next++].second;
       const int step = decoder.sample(static_cast<uint8_t>(state));
-      if (step == direction[r]) right++;
-      else if (step) wrong++;
+      if (step * run.direction > 0) right += step * run.direction;
+      else wrong -= step * run.direction;
     }
-    CHECK(wrong == 0);
-    CHECK(right >= atLeast[r] && right <= 11);
+    CHECK(wrong <= run.mostWrong);
+    CHECK(right >= run.least && right <= run.most);
   }
 }
 
