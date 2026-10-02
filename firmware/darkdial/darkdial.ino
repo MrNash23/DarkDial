@@ -153,6 +153,17 @@ void loop() {
     Serial.printf("[%lu] long touch %s\n", millis(), used ? "used: reset" : "ignored");
   }
 
+  // Diagnostics: the raw waveform of the encoder lines.
+  {
+    uint32_t us;
+    uint8_t state;
+    int printed = 0;
+    while (printed < 64 && board::nextRawChange(us, state)) {
+      Serial.printf("R %lu %u\n", (unsigned long)us, state);
+      printed++;
+    }
+  }
+
   device->tick(now);
   reportMenu();
   reportSlot();

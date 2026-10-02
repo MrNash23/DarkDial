@@ -14,6 +14,10 @@ void begin();
 
 /// Detents turned since the last call; sign gives the direction.
 int readDetents();
+/// Diagnostics: next raw change of the encoder lines (time in microseconds,
+/// state = A << 1 | B), false if none is queued.
+bool nextRawChange(uint32_t &us, uint8_t &state);
+
 /// Debounced state of the knob switch: true while it is held down.
 bool buttonPressed();
 

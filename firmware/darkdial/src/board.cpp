@@ -7,6 +7,7 @@
 #include <USBMIDI.h>
 #include <Wire.h>
 #include <esp_heap_caps.h>
+#include <esp_timer.h>
 #include <lvgl.h>
 
 #include "core/protocol.h"
@@ -108,6 +109,29 @@ void IRAM_ATTR onEncoderEdge() {
   encoderCount += (digitalRead(kPinEncoderB) != a) ? kEncoderDirection : -kEncoderDirection;
 }
 
+// Diagnostics: the raw levels of both encoder lines, sampled at 4 kHz. Every
+// change is queued with its time so the real waveform of the knob can be
+// looked at (and decoders tried against it) off the device.
+struct RawChange {
+  uint32_t us;
+  uint8_t state;  // A << 1 | B
+};
+constexpr size_t kRawQueueSize = 2048;
+RawChange rawQueue[kRawQueueSize];
+volatile size_t rawHead = 0;
+volatile size_t rawTail = 0;
+
+void sampleRaw(void *) {
+  static uint8_t last = 0xFF;
+  const uint8_t state = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
+  if (state == last) return;
+  last = state;
+  const size_t next = (rawHead + 1) % kRawQueueSize;
+  if (next == rawTail) return;  // full: drop
+  rawQueue[rawHead] = {static_cast<uint32_t>(micros()), state};
+  rawHead = next;
+}
+
 void flushDisplay(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *pixels) {
   const int32_t width = area->x2 - area->x1 + 1;
   const int32_t height = area->y2 - area->y1 + 1;
@@ -181,6 +205,17 @@ void begin() {
   encoderLastA = digitalRead(kPinEncoderA);
   attachInterrupt(digitalPinToInterrupt(kPinEncoderA), onEncoderEdge, CHANGE);
 
+  const esp_timer_create_args_t raw = {
+      .callback = sampleRaw,
+      .arg = nullptr,
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "encoder-raw",
+      .skip_unhandled_events = true,
+  };
+  esp_timer_handle_t rawHandle = nullptr;
+  esp_timer_create(&raw, &rawHandle);
+  esp_timer_start_periodic(rawHandle, 250);
+
   lv_init();
   lv_tick_set_cb(tick);
   // A partial buffer in internal RAM: DMA-capable and no PSRAM needed.
@@ -206,6 +241,14 @@ int readDetents() {
   encoderCount = 0;
   interrupts();
   return count;
+}
+
+bool nextRawChange(uint32_t &us, uint8_t &state) {
+  if (rawTail == rawHead) return false;
+  us = rawQueue[rawTail].us;
+  state = rawQueue[rawTail].state;
+  rawTail = (rawTail + 1) % kRawQueueSize;
+  return true;
 }
 
 bool buttonPressed() {

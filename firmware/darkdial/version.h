@@ -2,4 +2,4 @@
 #pragma once
 #define DD_FW_MAJOR 0
 #define DD_FW_MINOR 4
-#define DD_FW_PATCH 3
+#define DD_FW_PATCH 4
