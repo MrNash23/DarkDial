@@ -36,10 +36,7 @@ constexpr uint32_t kColorTrack = 0x26262B;
 constexpr uint32_t kColorSelect = 0x8A8A90;
 constexpr uint32_t kColorAccent = 0xFF9F0A;
 constexpr uint32_t kColorLabel = 0xB8B8BE;
-constexpr uint32_t kBootLogoMs = 3000;   // the Darkdial logo
-constexpr uint32_t kPoweredByMs = 3000;  // then "powered by" with its logo, never both together
-constexpr int kPoweredByTextTop = 44;
-constexpr int kPoweredByLogoTop = 92;
+constexpr uint32_t kBootLogoMs = 3000;  // the logo at start-up; it also shows while idle
 constexpr uint32_t kSlideMs = 160;
 constexpr int kSlideDistance = 90;
 
@@ -53,7 +50,7 @@ lv_obj_t *gapTime = nullptr;
 lv_obj_t *menuTitle = nullptr;
 lv_obj_t *infoText = nullptr;
 lv_obj_t *logo = nullptr;
-lv_obj_t *poweredBy = nullptr;
+bool logoShown = true;
 
 void (*tapHandler)() = nullptr;
 void (*longTouchHandler)() = nullptr;
@@ -246,6 +243,7 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   shownRevision = UINT32_MAX;
   shownIndex = -1;
   shownHold = 0;
+  logoShown = true;
 
   lv_obj_t *screen = lv_screen_active();
   lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
@@ -307,24 +305,6 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   lv_obj_align(gapTime, LV_ALIGN_BOTTOM_MID, 0, -kGapTimeBottom);
   lv_label_set_text(gapTime, "");
 
-  // Second splash screen: covers everything, hidden until the logo is gone.
-  poweredBy = lv_obj_create(screen);
-  lv_obj_remove_style_all(poweredBy);
-  lv_obj_set_size(poweredBy, kDisplaySize, kDisplaySize);
-  lv_obj_set_style_bg_color(poweredBy, lv_color_black(), 0);
-  lv_obj_set_style_bg_opa(poweredBy, LV_OPA_COVER, 0);
-  lv_obj_set_clickable(poweredBy, false);
-  lv_obj_set_scrollable(poweredBy, false);
-  lv_obj_t *poweredByText = lv_label_create(poweredBy);
-  lv_obj_set_style_text_font(poweredByText, &dd_font_label, 0);
-  lv_obj_set_style_text_color(poweredByText, lv_color_hex(kColorLabel), 0);
-  lv_label_set_text(poweredByText, "powered by");
-  lv_obj_align(poweredByText, LV_ALIGN_TOP_MID, 0, kPoweredByTextTop);
-  lv_obj_t *poweredByLogo = lv_image_create(poweredBy);
-  lv_image_set_src(poweredByLogo, &dd_powered_by);
-  lv_obj_align(poweredByLogo, LV_ALIGN_TOP_MID, 0, kPoweredByLogoTop);
-  lv_obj_set_hidden(poweredBy, true);
-
   menuTitle = lv_label_create(screen);
   lv_obj_set_style_text_font(menuTitle, &dd_font_small, 0);
   lv_obj_set_style_text_color(menuTitle, lv_color_hex(kColorSelect), 0);
@@ -340,20 +320,18 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   lv_obj_align(infoText, LV_ALIGN_TOP_MID, 0, kInfoTop);
   lv_label_set_text(infoText, "");
 
+  // The logo is created last so it covers everything while it is shown.
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
   lv_obj_center(logo);
 }
 
 void ui_update(const dd::Device &device, uint32_t nowMs) {
-  if (logo && nowMs - bootMs >= kBootLogoMs) {
-    lv_obj_delete(logo);
-    logo = nullptr;
-    lv_obj_set_hidden(poweredBy, false);
-  }
-  if (poweredBy && !logo && nowMs - bootMs >= kBootLogoMs + kPoweredByMs) {
-    lv_obj_delete(poweredBy);
-    poweredBy = nullptr;
+  // The logo covers everything at start-up and whenever the device is idle.
+  const bool showLogo = nowMs - bootMs < kBootLogoMs || device.idle();
+  if (showLogo != logoShown) {
+    logoShown = showLogo;
+    lv_obj_set_hidden(logo, !showLogo);
   }
   // The ring fills while the knob is held towards the long press.
   const float progress = device.holdProgress(nowMs);
@@ -372,6 +350,8 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   // change of screen does not.
   int index = -1;
   switch (screen) {
+    case dd::Screen::Idle:
+      break;  // the logo covers the display; what is underneath is redrawn on wake-up
     case dd::Screen::Offline:
       showStatus(dd::ICON_STATUS_OFFLINE, device.language());
       break;

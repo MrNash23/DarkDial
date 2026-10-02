@@ -14,6 +14,7 @@ enum class Mode : uint8_t { Select, Edit };
 
 /// What the display shows; status screens replace the slot.
 enum class Screen : uint8_t {
+  Idle,       // nobody touched the device for a while: the logo
   Offline,    // no service
   Switching,  // Lightroom is switching to the Develop module
   Loaded,     // configuration received, shown briefly
@@ -37,6 +38,8 @@ constexpr uint32_t kTimerNoticeMs = 1200;
 constexpr uint32_t kDoubleTapMs = 350;
 // The menu closes by itself after this long without input.
 constexpr uint32_t kMenuTimeoutMs = 20000;
+// Without knob or touch input for this long the display shows the logo.
+constexpr uint32_t kIdleMs = 180000;
 
 /// Writes the time for the display: mm:ss below one hour, then h:mm.
 /// `out` needs 12 bytes.
@@ -91,6 +94,9 @@ class Device {
   /// only if the long press has not fired, so the two can never overlap.
   void buttonDown(uint32_t nowMs);
   void buttonUp(uint32_t nowMs);
+  /// True while the logo is shown because nobody used knob or touch for
+  /// kIdleMs. The next input only brings the display back; it is not acted on.
+  bool idle() const { return idle_; }
   /// 0 … 1 while the knob is held towards a long press, else 0.
   float holdProgress(uint32_t nowMs) const;
   /// One complete MIDI message from the service.
@@ -139,6 +145,7 @@ class Device {
   void menuAction(uint32_t nowMs);
   void closeMenu();
   bool touchAllowed(uint32_t nowMs) const;
+  bool wake(uint32_t nowMs);
   void resetSlot();
   void loadDefaults();
   void changed() { revision_++; }
@@ -175,6 +182,12 @@ class Device {
   // Display taps.
   bool tapPending_ = false;
   uint32_t tapAtMs_ = 0;
+
+  // Idle logo.
+  bool idle_ = false;
+  uint32_t lastInputMs_ = 0;
+  bool swallowPress_ = false;
+  bool knobDown_ = false;  // physically held, whether or not the press counts
 
   // Knob.
   bool pressed_ = false;

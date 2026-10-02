@@ -127,6 +127,16 @@ class DialPreview extends StatelessWidget {
           alignment: Alignment.topCenter,
           children: [
             Positioned.fill(child: content),
+            // Idle: the logo covers the display, as on the device.
+            if (model != null && model.idle)
+              Positioned.fill(
+                child: ClipOval(
+                  child: ColoredBox(
+                    color: Colors.black,
+                    child: Image.asset('assets/logo.png', key: const Key('preview-idle-logo')),
+                  ),
+                ),
+              ),
             if (inMenu && menuInfo != null)
               Positioned(
                 top: size * 178 / 360,

@@ -391,7 +391,7 @@ void main() {
     });
     expect(find.textContaining('GNU General Public License Version 3'), findsOneWidget);
     expect(find.byKey(const Key('license-condition')), findsOneWidget);
-    expect(find.textContaining('„powered by meine-belichtungszeit.de“ muss'), findsOneWidget);
+    expect(find.textContaining('Der Hinweis auf meine-belichtungszeit.de muss'), findsOneWidget);
     expect(find.text('powered by meine-belichtungszeit.de'), findsOneWidget);
     await screenshot(tester, 'info');
     await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');

@@ -289,11 +289,11 @@ void main() {
     await until(() async => (await firmware.state()).label == 'Temperatur', 'German configuration');
     expect((await firmware.state()).slots, 13);
 
-    // Status and values arrive: slot screen (4) with the Kelvin text at the centre.
+    // Status and values arrive: slot screen (5) with the Kelvin text at the centre.
     await until(() async => (await firmware.state()).valid, 'values');
     firmware.advance(1500); // the "loaded" notice passes
     var state = await firmware.state();
-    expect(state.screen, 4);
+    expect(state.screen, 5);
     expect(state.text, '5500K');
     expect(state.position, positionCentre);
 
@@ -330,9 +330,9 @@ void main() {
     expect(state.slots, 1);
     expect(state.label, 'Sättigung');
 
-    // No photo: the device shows the status screen (3).
+    // No photo: the device shows the status screen (4).
     plugin.userSelectsPhoto(null);
     firmware.advance(1500);
-    await until(() async => (await firmware.state()).screen == 3, 'no-photo screen');
+    await until(() async => (await firmware.state()).screen == 4, 'no-photo screen');
   }, skip: available ? false : 'firmware core not built: run firmware/host/build.sh --core-only');
 }

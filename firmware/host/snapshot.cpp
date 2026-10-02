@@ -73,9 +73,6 @@ int main(int argc, char **argv) {
   save("01_boot_logo");
 
   run(device, 3000);
-  save("01b_powered_by");
-
-  run(device, 3000);
   save("02_offline");
 
   configure(device,
@@ -220,5 +217,12 @@ int main(int argc, char **argv) {
   device.buttonUp(nowMs);
   run(device, 200);
   save("31_menu_offline");
+
+  // Left alone for three minutes: the logo, until someone touches the device.
+  run(device, dd::kIdleMs + 1000);
+  save("32_idle_logo");
+  device.rotate(1, nowMs);
+  run(device, 300);
+  save("33_awake_again");
   return 0;
 }

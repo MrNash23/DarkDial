@@ -135,6 +135,9 @@ and Lightroom are connected.
 | Double-tap, or touch and hold | Reset the selected slider to its default |
 | Hold the knob for half a second | Open time tracking; hold again to close it |
 
+Left alone for three minutes, the display shows the Darkdial logo. The next
+turn, press or touch brings it back; that first input does nothing else.
+
 Click the menu-bar icon and choose **Configure …** to pick your sliders, or
 **Time tracking …** for clients, jobs and hours. Clients are created in the
 app; on the device you choose among them.
@@ -225,8 +228,8 @@ Darkdial is licensed under the
 [GNU General Public License v3.0](LICENSE), with one additional term under its
 section 7(b), see [ADDITIONAL-TERMS.md](ADDITIONAL-TERMS.md):
 
-**The notice "powered by [meine-belichtungszeit.de](https://meine-belichtungszeit.de)"
-must be kept** in every copy and modified version: on the device at start-up,
+**The credit to [meine-belichtungszeit.de](https://meine-belichtungszeit.de)
+must be kept** in every copy and modified version: in the logo on the device,
 in the app's info section and in the Lightroom plug-in.
 
 **The name "Darkdial", the Darkdial logo and the meine-Belichtungszeit logo

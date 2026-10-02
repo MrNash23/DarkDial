@@ -30,6 +30,9 @@ class DeviceModel {
   static const Duration heartbeatTimeout = Duration(seconds: 5);
   static const Duration noticeTime = Duration(milliseconds: 1200);
 
+  /// Without input for this long the display shows the logo.
+  static const Duration idleAfter = Duration(minutes: 3);
+
   List<ConfigSlot> slots = [];
   List<SlotValue> values = [];
   DeviceMode mode = DeviceMode.select;
@@ -52,6 +55,11 @@ class DeviceModel {
   String timerLabel = '';
   int _timerBaseSeconds = 0;
   DateTime _timerBaseAt = DateTime.now();
+
+  /// True while the logo is shown because nobody used the device for
+  /// [idleAfter]. The next input only brings the display back.
+  bool idle = false;
+  Timer? _idleTimer;
 
   /// The confirmation shown briefly after start or stop, null when none.
   TimerResult? notice;
@@ -88,9 +96,24 @@ class DeviceModel {
   int get timerSeconds =>
       timerRunning ? _timerBaseSeconds + DateTime.now().difference(_timerBaseAt).inSeconds : 0;
 
+  /// Notes an input and restarts the idle countdown. True if the input was
+  /// used up by bringing the display back.
+  bool _wake() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(idleAfter, () {
+      idle = true;
+      onChanged();
+    });
+    if (!idle) return false;
+    idle = false;
+    onChanged();
+    return true;
+  }
+
   /// Turns the knob by [detents].
   void rotate(int detents) {
     if (detents == 0) return;
+    if (_wake()) return;
     if (menuOpen) {
       if (menu.isNotEmpty) menuIndex = (menuIndex + detents) % menu.length;
       onChanged();
@@ -108,6 +131,7 @@ class DeviceModel {
 
   /// Knob click or tap on the display.
   void click() {
+    if (_wake()) return;
     if (menuOpen) {
       _menuAction();
       return;
@@ -125,6 +149,7 @@ class DeviceModel {
 
   /// Double tap on the display: in edit mode, reset the slot to its default.
   void doubleTap() {
+    if (_wake()) return;
     if (menuOpen || mode != DeviceMode.edit || slots.isEmpty) return;
     emit(SlotReset(index));
   }
@@ -132,6 +157,7 @@ class DeviceModel {
   /// Long press on the knob: opens the time tracking menu from any state, or
   /// closes it without change.
   void longPress() {
+    if (_wake()) return;
     if (menuOpen) {
       menuOpen = false;
       emit(const MenuClosed());
@@ -170,7 +196,10 @@ class DeviceModel {
     onChanged();
   }
 
-  void dispose() => _noticeTimer?.cancel();
+  void dispose() {
+    _noticeTimer?.cancel();
+    _idleTimer?.cancel();
+  }
 
   /// Handles a message from the service.
   void handle(DeviceMessage message, {List<int> serial = const [0, 0, 0, 0, 0, 0]}) {

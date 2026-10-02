@@ -590,7 +590,76 @@ static void testTouchWithKnob() {
   CHECK(device.mode() == dd::Mode::Select && !device.longTouch(7000));
 }
 
+static void testIdle() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
+  // The service keeps talking; that alone does not count as use.
+  auto heartbeat = [&](uint32_t from, uint32_t to) {
+    for (uint32_t t = from; t <= to; t += 2000) {
+      feed(device, status(all), t);
+      device.tick(t);
+    }
+  };
+
+  device.rotate(1, 1000);
+  heartbeat(1000, 1000 + dd::kIdleMs - 2000);
+  CHECK(!device.idle() && device.screen() == dd::Screen::Slot);
+  feed(device, value(0, 100, true, "+1"), 100000);  // a change in Lightroom is not use either
+  uint32_t now = 1000 + dd::kIdleMs;
+  feed(device, status(all), now);
+  device.tick(now);
+  CHECK(device.idle() && device.screen() == dd::Screen::Idle);
+
+  // Turning brings the display back and does nothing else.
+  const uint8_t index = device.index();
+  host.sent.clear();
+  device.rotate(1, now + 1000);
+  CHECK(!device.idle() && device.index() == index && host.sent.empty());
+  device.rotate(1, now + 1100);
+  CHECK(device.index() == index + 1);
+
+  // A press wakes without clicking - however long it is held - and the tap
+  // that comes with it is ignored too.
+  heartbeat(now + 2000, now + 2000 + dd::kIdleMs);
+  now += 2000 + dd::kIdleMs;
+  CHECK(device.idle());
+  device.buttonDown(now);
+  CHECK(!device.idle());
+  feed(device, status(all), now + 600);
+  device.tick(now + 900);
+  CHECK(!device.tap(now + 950));
+  device.buttonUp(now + 1000);
+  CHECK(device.mode() == dd::Mode::Select && !device.menuOpen());
+  // The next press works as usual.
+  device.buttonDown(now + 3000);
+  device.buttonUp(now + 3100);
+  CHECK(device.mode() == dd::Mode::Edit);
+
+  // A tap wakes without clicking; edit mode is still there afterwards.
+  heartbeat(now + 4000, now + 4000 + dd::kIdleMs);
+  now += 4000 + dd::kIdleMs;
+  CHECK(device.idle());
+  host.sent.clear();
+  CHECK(device.tap(now));
+  CHECK(!device.idle() && device.mode() == dd::Mode::Edit && host.sent.empty());
+  CHECK(device.screen() == dd::Screen::Slot);
+
+  // A long touch wakes without resetting the slot.
+  heartbeat(now + 2000, now + 2000 + dd::kIdleMs);
+  now += 2000 + dd::kIdleMs;
+  CHECK(device.idle());
+  CHECK(device.longTouch(now) && !device.idle() && host.sent.empty());
+
+  // Holding the knob does not let the display fall asleep under the finger.
+  device.buttonDown(now + 1000);
+  feed(device, status(all), now + 1000 + dd::kIdleMs);
+  device.tick(now + 1000 + dd::kIdleMs + 10);
+  CHECK(!device.idle());
+}
+
 int main() {
+  testIdle();
   testTouchWithKnob();
   testDoubleTap();
   testLongPress();

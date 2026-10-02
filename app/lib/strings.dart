@@ -87,12 +87,14 @@ class Strings {
             'and comes with its source code.',
       );
   String get licenseCondition => _t(
-        'Zusätzliche Bedingung (GPLv3 Abschnitt 7 b): Der Hinweis „powered by meine-belichtungszeit.de“ muss '
-            'in jeder weitergegebenen oder veränderten Fassung erhalten bleiben – auf dem Gerät beim Start, '
-            'in dieser App und im Lightroom-Plugin.',
-        'Additional term (GPLv3 section 7 b): the notice "powered by meine-belichtungszeit.de" must be kept '
-            'in every version that is passed on or modified – on the device at start-up, in this app and in the '
-            'Lightroom plug-in.',
+        'Zusätzliche Bedingung (GPLv3 Abschnitt 7 b): Der Hinweis auf meine-belichtungszeit.de muss in jeder '
+            'weitergegebenen oder veränderten Fassung erhalten bleiben – auf dem Gerät im Startlogo '
+            '(„by meine-belichtungszeit.de“), in dieser App und im Lightroom-Plugin '
+            '(„powered by meine-belichtungszeit.de“).',
+        'Additional term (GPLv3 section 7 b): the credit to meine-belichtungszeit.de must be kept in every '
+            'version that is passed on or modified – on the device in the start-up logo '
+            '("by meine-belichtungszeit.de"), in this app and in the Lightroom plug-in '
+            '("powered by meine-belichtungszeit.de").',
       );
   String get licenseMarks => _t(
         'Der Name „Darkdial“, das Darkdial-Logo und das Logo von meine-Belichtungszeit stehen nicht unter der GPL. '

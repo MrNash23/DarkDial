@@ -101,6 +101,7 @@ uint16_t Device::configCrc() const {
 }
 
 Screen Device::screen() const {
+  if (idle_) return Screen::Idle;
   if (menuOpen_) return Screen::JobMenu;
   if (timerNotice_) return Screen::TimerNotice;
   if (!serviceConnected_) return Screen::Offline;
@@ -115,8 +116,18 @@ uint32_t Device::timerSeconds(uint32_t nowMs) const {
   return timerBaseSeconds_ + (nowMs - timerBaseMs_) / 1000;
 }
 
+/// Notes an input. If the logo was showing, the display comes back and the
+/// input is used up by that: returns true, and the caller does nothing else.
+bool Device::wake(uint32_t nowMs) {
+  lastInputMs_ = nowMs;
+  if (!idle_) return false;
+  idle_ = false;
+  changed();
+  return true;
+}
+
 bool Device::touchAllowed(uint32_t nowMs) const {
-  if (pressed_) return false;
+  if (knobDown_) return false;
   return !knobUsed_ || nowMs - knobMovedAtMs_ >= kTouchGuardMs;
 }
 
@@ -128,6 +139,7 @@ void Device::resetSlot() {
 bool Device::tap(uint32_t nowMs) {
   lastNowMs_ = nowMs;
   if (!touchAllowed(nowMs)) return false;
+  if (wake(nowMs)) return true;
   if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) {
     tapPending_ = false;
     click();
@@ -145,6 +157,7 @@ bool Device::tap(uint32_t nowMs) {
 
 bool Device::longTouch(uint32_t nowMs) {
   if (!touchAllowed(nowMs)) return false;
+  if (wake(nowMs)) return true;
   if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) return false;
   tapPending_ = false;
   resetSlot();
@@ -152,17 +165,27 @@ bool Device::longTouch(uint32_t nowMs) {
 }
 
 void Device::buttonDown(uint32_t nowMs) {
+  knobDown_ = true;
+  knobUsed_ = true;
+  knobMovedAtMs_ = nowMs;
+  // A press that brings the display back is neither a click nor a long press.
+  swallowPress_ = wake(nowMs);
+  if (swallowPress_) return;
   pressed_ = true;
   longFired_ = false;
   pressedAtMs_ = nowMs;
-  knobUsed_ = true;
-  knobMovedAtMs_ = nowMs;
   tapPending_ = false;  // a tap that came with this press is not a tap
 }
 
 void Device::buttonUp(uint32_t nowMs) {
   lastNowMs_ = nowMs;
   knobMovedAtMs_ = nowMs;
+  lastInputMs_ = nowMs;
+  knobDown_ = false;
+  if (swallowPress_) {
+    swallowPress_ = false;
+    return;
+  }
   if (pressed_ && !longFired_) click();
   pressed_ = false;
 }
@@ -213,6 +236,7 @@ void Device::menuAction(uint32_t nowMs) {
 
 void Device::rotate(int detents, uint32_t nowMs) {
   if (detents == 0) return;
+  if (wake(nowMs)) return;
   if (menuOpen_) {
     menuActivityMs_ = nowMs;
     if (menuCount_ == 0) return;
@@ -267,6 +291,11 @@ void Device::tick(uint32_t nowMs) {
     longPress(nowMs);
   }
   if (menuOpen_ && nowMs - menuActivityMs_ > kMenuTimeoutMs) closeMenu();
+  if (!idle_ && !knobDown_ && nowMs - lastInputMs_ >= kIdleMs) {
+    idle_ = true;
+    tapPending_ = false;
+    changed();
+  }
   if (serviceConnected_ && nowMs - lastStatusMs_ > kHeartbeatTimeoutMs) {
     serviceConnected_ = false;
     // Values are stale without the service, and nothing can be edited.

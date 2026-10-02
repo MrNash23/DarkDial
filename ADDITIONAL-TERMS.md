@@ -5,19 +5,19 @@ Darkdial is licensed under the GNU General Public License version 3
 following additional term applies to the whole of Darkdial (firmware, desktop
 app and Lightroom plug-in):
 
-**Attribution.** The notice
+**Attribution.** The credit to meine-belichtungszeit.de must be preserved in
+every conveyed copy and every modified version, in the places where Darkdial
+displays it:
 
-> powered by meine-belichtungszeit.de
-
-must be preserved in every conveyed copy and every modified version, in the
-places where Darkdial displays it:
-
-- on the device, on the screen shown at start-up,
-- in the desktop app, in its "Infos" / "About" section,
-- in the Lightroom plug-in, in the Plug-in Manager section and status dialog.
+- on the device, in the logo shown at start-up and while the device is idle:
+  "by meine-belichtungszeit.de",
+- in the desktop app, in its "Infos" / "About" section:
+  "powered by meine-belichtungszeit.de",
+- in the Lightroom plug-in, in the Plug-in Manager section and status dialog:
+  "powered by meine-belichtungszeit.de".
 
 A modified version may add its own notices next to it, but may not remove,
-hide or alter this one.
+hide or alter these.
 
 ## Not covered by the GPL
 

@@ -16,7 +16,6 @@ extern "C" {
 // Indexed by protocol icon ID; NULL where no icon exists.
 extern const lv_image_dsc_t *const dd_icons[34];
 extern const lv_image_dsc_t dd_logo;
-extern const lv_image_dsc_t dd_powered_by;
 
 #ifdef __cplusplus
 }

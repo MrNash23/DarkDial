@@ -362,6 +362,31 @@ void deviceTests() {
     expect(model.slots.single.label, 'Exposure');
   });
 
+  test('device model: after the idle time the first input only wakes the display', () async {
+    final model = DeviceModel();
+    final sent = <DeviceMessage>[];
+    model.emit = sent.add;
+    model.rotate(1);
+    expect(model.index, 1);
+
+    model.idle = true; // as the timer would set it after three minutes
+    model.rotate(1);
+    expect(model.idle, isFalse);
+    expect(model.index, 1, reason: 'the waking turn is not acted on');
+    model.rotate(1);
+    expect(model.index, 2);
+
+    model.idle = true;
+    sent.clear();
+    model.click();
+    expect(model.mode, DeviceMode.select);
+    expect(sent, isEmpty);
+    model.idle = true;
+    model.longPress();
+    expect(model.menuOpen, isFalse);
+    model.dispose();
+  });
+
   test('device model wraps around the carousel and stays on its parameter', () {
     final model = DeviceModel();
     model.rotate(-1);
