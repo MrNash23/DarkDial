@@ -46,6 +46,7 @@ tools/check.sh          # all automated checks
 | Install the plugin for development | `tools/install_plugin.sh`, then restart Lightroom |
 | Talk to the plugin directly | `tools/lr_cli.py status` |
 | Build / flash the firmware | `tools/build_firmware.sh [port]` |
+| Signed macOS release (DMG) | `tools/package_macos.sh`, with `NOTARY_PROFILE=<name>` also notarised |
 | See the device screens | `firmware/host/build.sh`, images in `firmware/host/snapshots/` |
 | Regenerate tables, icons, fonts | `tools/gen_params.py`, `tools/gen_icons.py`, `tools/gen_fonts.sh` |
 
