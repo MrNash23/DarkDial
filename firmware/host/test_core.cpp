@@ -1,6 +1,10 @@
 // Unit tests of the portable firmware core. Build and run: firmware/host/build.sh
 #include <stdio.h>
 
+#include <string>
+#include <vector>
+
+#include "../darkdial/src/core/encoder.h"
 #include "testing.h"
 
 using namespace testing;
@@ -695,7 +699,89 @@ static void testFollowLightroom() {
   CHECK(device.menuOpen() && device.index() == 1 && host.sent.empty());
 }
 
-int main() {
+// Feeds the decoder for a time with one state.
+static int hold(dd::EncoderDecoder &decoder, uint8_t state, int ms, int *wrong = nullptr, int expected = 0) {
+  int net = 0;
+  for (int i = 0; i < ms * 1000 / static_cast<int>(dd::EncoderDecoder::kSamplePeriodUs); i++) {
+    const int step = decoder.sample(state);
+    net += step;
+    if (wrong && step && step != expected) (*wrong)++;
+  }
+  return net;
+}
+
+static void testEncoder() {
+  // Clean signal: clockwise is 0 -> 2 -> 3 -> 1 -> 0, one step per rest state.
+  dd::EncoderDecoder decoder;
+  CHECK(hold(decoder, 0, 100) == 0);
+  CHECK(hold(decoder, 2, 30) == 0);
+  CHECK(hold(decoder, 3, 100) == 1);
+  CHECK(hold(decoder, 1, 30) + hold(decoder, 0, 100) == 1);
+  CHECK(hold(decoder, 1, 30) + hold(decoder, 3, 100) == -1);
+  CHECK(hold(decoder, 2, 30) + hold(decoder, 0, 100) == -1);
+
+  // A line that chatters while it settles, and dropouts at rest, add nothing.
+  int net = 0;
+  for (int i = 0; i < 20; i++) net += hold(decoder, i % 2 ? 0 : 2, 3);
+  net += hold(decoder, 2, 20);
+  for (int i = 0; i < 20; i++) net += hold(decoder, i % 2 ? 2 : 3, 3);
+  net += hold(decoder, 3, 100);
+  CHECK(net == 1);
+  net = 0;
+  for (int i = 0; i < 10; i++) net += hold(decoder, 3, 20) + hold(decoder, 1, 1) + hold(decoder, 3, 5) + hold(decoder, 2, 1);
+  CHECK(net == 0);
+  // Moving half way and back is no step.
+  CHECK(hold(decoder, 1, 60) + hold(decoder, 3, 100) == 0);
+  // Both contacts dropping out together at rest looks like a full cycle
+  // (0 -> 1 -> 3 -> 0) and must not count.
+  CHECK(hold(decoder, 1, 30) + hold(decoder, 0, 100) == 1);
+  net = 0;
+  for (int i = 0; i < 10; i++) net += hold(decoder, 1, 1) + hold(decoder, 3, 2) + hold(decoder, 2, 1) + hold(decoder, 0, 3);
+  CHECK(net + hold(decoder, 0, 100) == 0);
+}
+
+// The waveform recorded from the real knob (4 kHz, "micros state" per
+// change): four runs of about ten detents each, clockwise and counter-
+// clockwise, slow and fast. No step may go the wrong way.
+static void testEncoderRecording(const std::string &fixtures) {
+  FILE *file = fopen((fixtures + "/encoder_raw.txt").c_str(), "r");
+  CHECK(file != nullptr);
+  if (!file) return;
+  struct Change {
+    unsigned long us;
+    unsigned state;
+  };
+  std::vector<std::vector<Change>> runs(1);
+  Change change;
+  while (fscanf(file, "%lu %u", &change.us, &change.state) == 2) {
+    if (!runs.back().empty() && change.us - runs.back().back().us > 1500000) runs.emplace_back();
+    runs.back().push_back(change);
+  }
+  fclose(file);
+  CHECK(runs.size() == 4);
+  if (runs.size() != 4) return;
+  const int direction[4] = {1, -1, 1, -1};
+  const int atLeast[4] = {9, 9, 7, 8};
+  for (size_t r = 0; r < runs.size(); r++) {
+    dd::EncoderDecoder decoder;
+    const std::vector<Change> &run = runs[r];
+    size_t next = 1;
+    unsigned state = run[0].state;
+    int right = 0, wrong = 0;
+    for (unsigned long us = run[0].us; us < run.back().us + 300000; us += dd::EncoderDecoder::kSamplePeriodUs) {
+      while (next < run.size() && run[next].us <= us) state = run[next++].state;
+      const int step = decoder.sample(static_cast<uint8_t>(state));
+      if (step == direction[r]) right++;
+      else if (step) wrong++;
+    }
+    CHECK(wrong == 0);
+    CHECK(right >= atLeast[r] && right <= 11);
+  }
+}
+
+int main(int argc, char **argv) {
+  testEncoder();
+  if (argc > 1) testEncoderRecording(argv[1]);
   testFollowLightroom();
   testIdle();
   testTouchWithKnob();

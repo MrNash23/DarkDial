@@ -10,6 +10,7 @@
 #include <esp_timer.h>
 #include <lvgl.h>
 
+#include "core/encoder.h"
 #include "core/protocol.h"
 #include "panel_crowpanel.h"
 
@@ -44,7 +45,6 @@ constexpr int kLedCount = 8;
 constexpr uint8_t kTouchAddress = 0x15;  // CST816T
 // +1 or -1: which way of turning counts up. To be confirmed on the device.
 constexpr int kEncoderDirection = 1;
-constexpr uint32_t kEncoderDebounceUs = 1000;
 constexpr uint32_t kSwitchDebounceMs = 30;
 
 class Display : public lgfx::LGFX_Device {
@@ -94,42 +94,14 @@ USBMIDI midi("Darkdial");
 Preferences preferences;
 
 volatile int32_t encoderCount = 0;
-volatile int encoderLastA = HIGH;
-volatile uint32_t encoderLastEdgeUs = 0;
+dd::EncoderDecoder encoder;
 
-// The knob has a detent on every edge of phase A (half a quadrature cycle),
-// so both edges count. Phase B differs from A at the edge in one direction
-// and equals it in the other.
-void IRAM_ATTR onEncoderEdge() {
-  const uint32_t now = micros();
-  const int a = digitalRead(kPinEncoderA);
-  if (a == encoderLastA || now - encoderLastEdgeUs < kEncoderDebounceUs) return;
-  encoderLastA = a;
-  encoderLastEdgeUs = now;
-  encoderCount += (digitalRead(kPinEncoderB) != a) ? kEncoderDirection : -kEncoderDirection;
-}
-
-// Diagnostics: the raw levels of both encoder lines, sampled at 4 kHz. Every
-// change is queued with its time so the real waveform of the knob can be
-// looked at (and decoders tried against it) off the device.
-struct RawChange {
-  uint32_t us;
-  uint8_t state;  // A << 1 | B
-};
-constexpr size_t kRawQueueSize = 2048;
-RawChange rawQueue[kRawQueueSize];
-volatile size_t rawHead = 0;
-volatile size_t rawTail = 0;
-
-void sampleRaw(void *) {
-  static uint8_t last = 0xFF;
+// Runs every 500 µs on the esp_timer task; see core/encoder.h for why the
+// lines are sampled instead of counting edges.
+void sampleEncoder(void *) {
   const uint8_t state = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
-  if (state == last) return;
-  last = state;
-  const size_t next = (rawHead + 1) % kRawQueueSize;
-  if (next == rawTail) return;  // full: drop
-  rawQueue[rawHead] = {static_cast<uint32_t>(micros()), state};
-  rawHead = next;
+  const int step = encoder.sample(state);
+  if (step) encoderCount += step * kEncoderDirection;
 }
 
 void flushDisplay(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *pixels) {
@@ -202,19 +174,16 @@ void begin() {
   pinMode(kPinEncoderA, INPUT);
   pinMode(kPinEncoderB, INPUT);
   pinMode(kPinSwitch, INPUT_PULLUP);
-  encoderLastA = digitalRead(kPinEncoderA);
-  attachInterrupt(digitalPinToInterrupt(kPinEncoderA), onEncoderEdge, CHANGE);
-
-  const esp_timer_create_args_t raw = {
-      .callback = sampleRaw,
+  const esp_timer_create_args_t sampler = {
+      .callback = sampleEncoder,
       .arg = nullptr,
       .dispatch_method = ESP_TIMER_TASK,
-      .name = "encoder-raw",
+      .name = "encoder",
       .skip_unhandled_events = true,
   };
-  esp_timer_handle_t rawHandle = nullptr;
-  esp_timer_create(&raw, &rawHandle);
-  esp_timer_start_periodic(rawHandle, 250);
+  esp_timer_handle_t samplerHandle = nullptr;
+  esp_timer_create(&sampler, &samplerHandle);
+  esp_timer_start_periodic(samplerHandle, dd::EncoderDecoder::kSamplePeriodUs);
 
   lv_init();
   lv_tick_set_cb(tick);
@@ -241,14 +210,6 @@ int readDetents() {
   encoderCount = 0;
   interrupts();
   return count;
-}
-
-bool nextRawChange(uint32_t &us, uint8_t &state) {
-  if (rawTail == rawHead) return false;
-  us = rawQueue[rawTail].us;
-  state = rawQueue[rawTail].state;
-  rawTail = (rawTail + 1) % kRawQueueSize;
-  return true;
 }
 
 bool buttonPressed() {

@@ -17,8 +17,9 @@ mkdir -p "$BUILD/lvgl" "$HERE/snapshots"
 
 CXXFLAGS="-std=c++17 -O1 -Wall -Wextra"
 
-c++ $CXXFLAGS -o "$BUILD/test_core" "$HERE/test_core.cpp" "$SRC/core/protocol.cpp" "$SRC/core/device.cpp"
-"$BUILD/test_core"
+c++ $CXXFLAGS -o "$BUILD/test_core" "$HERE/test_core.cpp" "$SRC/core/protocol.cpp" "$SRC/core/device.cpp" \
+  "$SRC/core/encoder.cpp"
+"$BUILD/test_core" "$HERE/fixtures"
 c++ $CXXFLAGS -o "$BUILD/dd_sim" "$HERE/dd_sim.cpp" "$SRC/core/protocol.cpp" "$SRC/core/device.cpp"
 
 [ "$1" = "--core-only" ] && exit 0
