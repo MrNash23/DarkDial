@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolMajor = 1;
-const int protocolMinor = 3;
+const int protocolMinor = 4;
 
 const int _sysexStart = 0xF0;
 const int _sysexEnd = 0xF7;
@@ -202,6 +202,14 @@ class LibraryAction extends DeviceMessage {
   static const int toggleModule = 3;
 
   final int action;
+}
+
+/// The angle the picture is turned by, 0 … 359 degrees clockwise, and whether
+/// the knob is turning it right now.
+class DisplayAngle extends DeviceMessage {
+  const DisplayAngle(this.degrees, {this.adjusting = false});
+  final int degrees;
+  final bool adjusting;
 }
 
 /// Long press: the time tracking menu was opened.
@@ -416,6 +424,29 @@ class Library extends DeviceMessage {
       (knobToggles ? 32 : 0);
 }
 
+/// Turning the picture for a device that does not stand upright.
+class DisplayRotation extends DeviceMessage {
+  const DisplayRotation(this.mode, [this.degrees = 0]);
+
+  /// Stop adjusting, back to the stored angle.
+  static const int cancel = 0;
+
+  /// The knob turns the picture.
+  static const int begin = 1;
+
+  /// Store the angle shown and stop adjusting.
+  static const int save = 2;
+
+  /// Store [degrees].
+  static const int set = 3;
+
+  /// Just report.
+  static const int query = 4;
+
+  final int mode;
+  final int degrees;
+}
+
 class TimerResult extends DeviceMessage {
   const TimerResult(this.code, [this.text = '']);
 
@@ -530,6 +561,8 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
       TimerResult(:final code, :final text) => _frame(0x4B, [code, ..._str(text, maxLabelBytes)]),
       SlotGoto(:final slot) => _frame(0x4C, [slot]),
       LibraryAction(:final action) => _frame(0x0A, [action]),
+      DisplayAngle(:final degrees, :final adjusting) => _frame(0x0B, [..._u16(degrees % 360), adjusting ? 1 : 0]),
+      DisplayRotation(:final mode, :final degrees) => _frame(0x4E, [mode, ..._u16(degrees % 360)]),
       Library() => _frame(0x4D, [
           message.flags,
           message.rating.clamp(0, 5),
@@ -658,6 +691,10 @@ DeviceMessage? decodeMessage(List<int> bytes) {
       return p.isEmpty ? null : SlotGoto(p[0]);
     case 0x0A:
       return p.isEmpty ? null : LibraryAction(p[0]);
+    case 0x0B:
+      return p.length < 3 ? null : DisplayAngle(((p[0] << 8) | p[1]) % 360, adjusting: p[2] != 0);
+    case 0x4E:
+      return p.length < 3 ? null : DisplayRotation(p[0], ((p[1] << 8) | p[2]) % 360);
     case 0x4D:
       final name = p.length < 4 ? null : str(3);
       if (name == null) return null;

@@ -1,6 +1,7 @@
 #include "ui.h"
 
 #include <lvgl.h>
+#include <math.h>
 #include <stdio.h>
 
 #include "core/params.h"
@@ -65,6 +66,50 @@ lv_obj_t *flagText = nullptr;
 lv_obj_t *logo = nullptr;
 bool logoShown = true;
 
+// Everything but the ring and the logo is placed through this table, so the
+// whole picture can be turned for a device that does not stand upright: each
+// object is moved to its turned position and turned around its own centre.
+// Only small objects are transformed that way, which keeps drawing fast; at
+// 0 degrees nothing is transformed at all.
+struct Placed {
+  lv_obj_t *object;
+  int x;        // centre, from the centre of the display
+  int y;        // top edge from the top, or bottom edge from the bottom
+  bool bottom;
+};
+constexpr int kMaxPlaced = 16;
+Placed placed[kMaxPlaced];
+int placedCount = 0;
+float turnCos = 1;
+float turnSin = 0;
+
+void place(lv_obj_t *object, int x, int y, bool bottom = false) {
+  if (placedCount < kMaxPlaced) placed[placedCount++] = {object, x, y, bottom};
+}
+
+/// Puts every object where it belongs for a picture turned by `degrees`
+/// clockwise. Sizes follow the texts, so this runs after every change.
+void layout(int degrees) {
+  lv_obj_update_layout(lv_screen_active());
+  const float radians = static_cast<float>(degrees) * 3.14159265f / 180.0f;
+  turnCos = cosf(radians);
+  turnSin = sinf(radians);
+  for (int i = 0; i < placedCount; i++) {
+    const Placed &p = placed[i];
+    const int width = lv_obj_get_width(p.object);
+    const int height = lv_obj_get_height(p.object);
+    const float cx = static_cast<float>(p.x);
+    const float cy = (p.bottom ? kDisplaySize - p.y - height / 2.0f : p.y + height / 2.0f) - kDisplaySize / 2.0f;
+    lv_obj_align(p.object, LV_ALIGN_CENTER, static_cast<int32_t>(lroundf(cx * turnCos - cy * turnSin)),
+                 static_cast<int32_t>(lroundf(cx * turnSin + cy * turnCos)));
+    lv_obj_set_style_transform_pivot_x(p.object, width / 2, 0);
+    lv_obj_set_style_transform_pivot_y(p.object, height / 2, 0);
+    lv_obj_set_style_transform_rotation(p.object, degrees * 10, 0);
+  }
+  lv_arc_set_rotation(ring, degrees);
+  lv_image_set_rotation(logo, degrees * 10);
+}
+
 void (*tapHandler)() = nullptr;
 void (*longTouchHandler)() = nullptr;
 uint32_t bootMs = 0;
@@ -80,8 +125,10 @@ void onScreenLongPressed(lv_event_t *) {
   if (longTouchHandler) longTouchHandler();
 }
 
+// The slide runs along the turned horizontal.
 void setTranslateX(void *object, int32_t x) {
-  lv_obj_set_style_translate_x(static_cast<lv_obj_t *>(object), x, 0);
+  lv_obj_set_style_translate_x(static_cast<lv_obj_t *>(object), static_cast<int32_t>(lroundf(x * turnCos)), 0);
+  lv_obj_set_style_translate_y(static_cast<lv_obj_t *>(object), static_cast<int32_t>(lroundf(x * turnSin)), 0);
 }
 
 void setOpacity(void *object, int32_t opacity) {
@@ -243,6 +290,19 @@ void showLibrary(const dd::Device &device) {
   }
 }
 
+/// The picture is being turned with the knob: the angle, a mark on the ring
+/// where "up" is, and what to do.
+void showRotate(const dd::Device &device) {
+  char angle[8];
+  snprintf(angle, sizeof(angle), "%u", static_cast<unsigned>(device.displayAngle()));
+  showMessage(dd::ICON_COUNT, "", angle);  // no icon
+  lv_label_set_text(menuTitle, timerText(dd::TEXT_ROTATE, device.language()));
+  lv_label_set_text(infoText, timerText(dd::TEXT_ROTATEHINT, device.language()));
+  lv_arc_set_angles(ring, static_cast<lv_value_precise_t>(kRingTopDeg - 8), static_cast<lv_value_precise_t>(kRingTopDeg + 8));
+  lv_obj_set_style_arc_color(ring, lv_color_hex(kColorAccent), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_opa(ring, LV_OPA_COVER, LV_PART_INDICATOR);
+}
+
 void showSlot(const dd::Device &device) {
   const dd::Slot &slot = device.slot(device.index());
   const dd::SlotValue &current = device.value(device.index());
@@ -278,6 +338,7 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   shownIndex = -1;
   shownHold = 0;
   logoShown = true;
+  placedCount = 0;
 
   lv_obj_t *screen = lv_screen_active();
   lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
@@ -305,7 +366,7 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   iconBox = lv_obj_create(screen);
   lv_obj_remove_style_all(iconBox);
   lv_obj_set_size(iconBox, DD_ICON_SIZE, DD_ICON_SIZE);
-  lv_obj_align(iconBox, LV_ALIGN_TOP_MID, 0, kIconTop);
+  place(iconBox, 0, kIconTop);
   lv_obj_set_clickable(iconBox, false);
   lv_obj_set_scrollable(iconBox, false);
 
@@ -324,25 +385,25 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   label = lv_label_create(screen);
   lv_obj_set_style_text_font(label, &dd_font_label, 0);
   lv_obj_set_style_text_color(label, lv_color_hex(kColorLabel), 0);
-  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, kLabelTop);
+  place(label, 0, kLabelTop);
   lv_label_set_text(label, "");
 
   value = lv_label_create(screen);
   lv_obj_set_style_text_font(value, &dd_font_value, 0);
   lv_obj_set_style_text_color(value, lv_color_white(), 0);
-  lv_obj_align(value, LV_ALIGN_TOP_MID, 0, kValueTop);
+  place(value, 0, kValueTop);
   lv_label_set_text(value, "");
 
   gapTime = lv_label_create(screen);
   lv_obj_set_style_text_font(gapTime, &dd_font_small, 0);
   lv_obj_set_style_text_color(gapTime, lv_color_hex(kColorLabel), 0);
-  lv_obj_align(gapTime, LV_ALIGN_BOTTOM_MID, 0, -kGapTimeBottom);
+  place(gapTime, 0, kGapTimeBottom, true);
   lv_label_set_text(gapTime, "");
 
   menuTitle = lv_label_create(screen);
   lv_obj_set_style_text_font(menuTitle, &dd_font_small, 0);
   lv_obj_set_style_text_color(menuTitle, lv_color_hex(kColorSelect), 0);
-  lv_obj_align(menuTitle, LV_ALIGN_TOP_MID, 0, kMenuTitleTop);
+  place(menuTitle, 0, kMenuTitleTop);
   lv_label_set_text(menuTitle, "");
 
   infoText = lv_label_create(screen);
@@ -351,14 +412,14 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   lv_obj_set_style_text_align(infoText, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_width(infoText, kInfoWidth);
   lv_label_set_long_mode(infoText, LV_LABEL_LONG_MODE_WRAP);
-  lv_obj_align(infoText, LV_ALIGN_TOP_MID, 0, kInfoTop);
+  place(infoText, 0, kInfoTop);
   lv_label_set_text(infoText, "");
 
   for (int i = 0; i < 5; i++) {
     stars[i] = lv_obj_create(screen);
     lv_obj_remove_style_all(stars[i]);
     lv_obj_set_size(stars[i], kStarSize, kStarSize);
-    lv_obj_align(stars[i], LV_ALIGN_TOP_MID, (i - 2) * (kStarSize + kStarGap), kStarTop);
+    place(stars[i], (i - 2) * (kStarSize + kStarGap), kStarTop);
     lv_obj_set_style_radius(stars[i], LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(stars[i], LV_OPA_COVER, 0);
     lv_obj_set_clickable(stars[i], false);
@@ -367,7 +428,7 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   colorBar = lv_obj_create(screen);
   lv_obj_remove_style_all(colorBar);
   lv_obj_set_size(colorBar, kColorBarWidth, 8);
-  lv_obj_align(colorBar, LV_ALIGN_TOP_MID, 0, kColorBarTop);
+  place(colorBar, 0, kColorBarTop);
   lv_obj_set_style_radius(colorBar, 4, 0);
   lv_obj_set_style_bg_opa(colorBar, LV_OPA_COVER, 0);
   lv_obj_set_clickable(colorBar, false);
@@ -375,13 +436,14 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
 
   flagText = lv_label_create(screen);
   lv_obj_set_style_text_font(flagText, &dd_font_label, 0);
-  lv_obj_align(flagText, LV_ALIGN_TOP_MID, 0, kFlagTop);
+  place(flagText, 0, kFlagTop);
   lv_label_set_text(flagText, "");
 
   // The logo is created last so it covers everything while it is shown.
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
   lv_obj_center(logo);
+  layout(0);
 }
 
 void ui_update(const dd::Device &device, uint32_t nowMs) {
@@ -428,6 +490,9 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
     case dd::Screen::Library:
       showLibrary(device);
       break;
+    case dd::Screen::Rotate:
+      showRotate(device);
+      break;
     case dd::Screen::Slot:
       if (device.slotCount() == 0) {
         showStatus(dd::ICON_STATUS_OFFLINE, device.language());
@@ -456,6 +521,7 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
     dd::formatElapsed(device.timerSeconds(nowMs), time);
   }
   lv_label_set_text(gapTime, time);
+  layout(device.displayAngle());
 
   if (hold > 0) {
     lv_anim_delete(ring, setRingOpacity);

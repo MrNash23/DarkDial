@@ -196,6 +196,29 @@ int main(int argc, char **argv) {
   run(device, 1500);
   heartbeat = -1;
 
+  // A device that does not stand upright: the picture is turned from the app
+  // with the knob.
+  feed(device, displayRotation(dd::kRotationBegin), nowMs);
+  run(device, 300);
+  save("37_rotate_start");
+  device.rotate(6, nowMs);
+  run(device, 300);
+  save("38_rotate_30");
+  device.buttonDown(nowMs);
+  run(device, 100);
+  device.buttonUp(nowMs);
+  run(device, 700);
+  save("39_slot_turned_30");
+  feed(device, library(dd::kLibraryActive | dd::kLibraryPicked, 4, 4, "IMG_0042.CR3"), nowMs);
+  run(device, 300);
+  save("40_library_turned_30");
+  feed(device, library(0), nowMs);
+  feed(device, displayRotation(dd::kRotationSet, 180), nowMs);
+  run(device, 300);
+  save("41_slot_turned_180");
+  feed(device, displayRotation(dd::kRotationSet, 0), nowMs);
+  run(device, 300);
+
   // Lightroom shows the Library: stars, colour label, file name, flag.
   feed(device, library(dd::kLibraryActive | dd::kLibraryTap | dd::kLibraryPicked, 3, 3, "IMG_0042.CR3"), nowMs);
   run(device, 300);

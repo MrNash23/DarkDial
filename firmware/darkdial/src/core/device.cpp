@@ -102,6 +102,7 @@ uint16_t Device::configCrc() const {
 
 Screen Device::screen() const {
   if (idle_) return Screen::Idle;
+  if (adjusting_) return Screen::Rotate;
   if (menuOpen_) return Screen::JobMenu;
   if (timerNotice_) return Screen::TimerNotice;
   if (!serviceConnected_) return Screen::Offline;
@@ -130,6 +131,28 @@ bool Device::wake(uint32_t nowMs) {
 bool Device::touchAllowed(uint32_t nowMs) const {
   if (knobDown_) return false;
   return !knobUsed_ || nowMs - knobMovedAtMs_ >= kTouchGuardMs;
+}
+
+void Device::setRotation(uint16_t degrees) {
+  rotation_ = degrees % 360;
+  changed();
+}
+
+void Device::reportRotation() {
+  uint8_t out[kMaxSysexBytes];
+  host_.send(out, buildDisplayAngle(out, displayAngle(), adjusting_));
+}
+
+/// Leaves the adjustment, keeping the angle shown or going back to the
+/// stored one, and tells the service.
+void Device::endRotation(bool save) {
+  if (adjusting_ && save && adjustAngle_ != rotation_) {
+    rotation_ = adjustAngle_;
+    host_.saveRotation(rotation_);
+  }
+  adjusting_ = false;
+  reportRotation();
+  changed();
 }
 
 void Device::libraryAction(uint8_t action) {
@@ -163,6 +186,11 @@ bool Device::tap(uint32_t nowMs) {
   lastNowMs_ = nowMs;
   if (!touchAllowed(nowMs)) return false;
   if (wake(nowMs)) return true;
+  if (adjusting_) {
+    tapPending_ = false;
+    endRotation(true);
+    return true;
+  }
   if (tapPending_) {
     tapPending_ = false;
     if (doubleTapPossible() && nowMs - tapAtMs_ <= kDoubleTapMs) {
@@ -184,7 +212,7 @@ bool Device::tap(uint32_t nowMs) {
 bool Device::longTouch(uint32_t nowMs) {
   if (!touchAllowed(nowMs)) return false;
   if (wake(nowMs)) return true;
-  if (menuOpen_ || libraryActive() || mode_ != Mode::Edit || slotCount_ == 0) return false;
+  if (adjusting_ || menuOpen_ || libraryActive() || mode_ != Mode::Edit || slotCount_ == 0) return false;
   tapPending_ = false;
   resetSlot();
   return true;
@@ -220,6 +248,10 @@ void Device::buttonUp(uint32_t nowMs) {
 /// switches between Library and Develop; otherwise, and in the menu, it is
 /// the same click as a tap.
 void Device::knobClick(uint32_t) {
+  if (adjusting_) {
+    endRotation(true);  // pressing the knob keeps the angle
+    return;
+  }
   if (!menuOpen_ && serviceConnected_ && (libraryFlags_ & (kLibraryActive | kLibraryKnob))) {
     libraryAction(kActionToggleModule);
     return;
@@ -242,6 +274,7 @@ void Device::closeMenu() {
 
 /// Opens the time tracking menu from any state, or closes it without change.
 void Device::longPress(uint32_t nowMs) {
+  if (adjusting_) return;  // one thing at a time
   if (menuOpen_) {
     closeMenu();
     return;
@@ -274,6 +307,14 @@ void Device::menuAction(uint32_t nowMs) {
 void Device::rotate(int detents, uint32_t nowMs) {
   if (detents == 0) return;
   if (wake(nowMs)) return;
+  if (adjusting_) {
+    int next = (static_cast<int>(adjustAngle_) + detents * kRotationStepDegrees) % 360;
+    if (next < 0) next += 360;
+    adjustAngle_ = static_cast<uint16_t>(next);
+    reportRotation();
+    changed();
+    return;
+  }
   if (menuOpen_) {
     menuActivityMs_ = nowMs;
     if (menuCount_ == 0) return;
@@ -346,6 +387,7 @@ void Device::tick(uint32_t nowMs) {
     // The clock lives in the service; it tells us again when it is back.
     timerRunning_ = false;
     libraryFlags_ = 0;
+    adjusting_ = false;  // nobody is left to save or cancel
     menuCount_ = 0;
     menuIndex_ = 0;
     changed();
@@ -495,6 +537,37 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       libraryColor_ = message.libraryColor;
       memcpy(libraryName_, message.text, sizeof(libraryName_));
       changed();
+      break;
+
+    case MessageType::DisplayRotation:
+      switch (message.rotationMode) {
+        case kRotationBegin:
+          if (!adjusting_) {
+            adjusting_ = true;
+            adjustAngle_ = rotation_;
+            idle_ = false;
+            lastInputMs_ = nowMs;
+            menuOpen_ = false;
+            tapPending_ = false;
+          }
+          reportRotation();
+          changed();
+          break;
+        case kRotationSave:
+          endRotation(true);
+          break;
+        case kRotationSet:
+          adjusting_ = true;
+          adjustAngle_ = message.rotationAngle;
+          endRotation(true);
+          break;
+        case kRotationCancel:
+          endRotation(false);
+          break;
+        default:  // query, and whatever a newer service may ask
+          reportRotation();
+          break;
+      }
       break;
 
     case MessageType::TimerResult:

@@ -7,7 +7,7 @@
 namespace dd {
 
 constexpr uint8_t kProtocolMajor = 1;
-constexpr uint8_t kProtocolMinor = 3;
+constexpr uint8_t kProtocolMinor = 4;
 constexpr uint8_t kMaxSlots = 48;
 constexpr uint8_t kMaxLabelBytes = 20;
 constexpr uint8_t kMaxTextBytes = 8;
@@ -70,7 +70,15 @@ enum class MessageType : uint8_t {
   TimerResult,
   SlotGoto,
   Library,
+  DisplayRotation,
 };
+
+// What a DisplayRotation message asks for.
+constexpr uint8_t kRotationCancel = 0;  // stop adjusting, back to the stored angle
+constexpr uint8_t kRotationBegin = 1;   // the knob turns the picture
+constexpr uint8_t kRotationSave = 2;    // store the angle shown and stop adjusting
+constexpr uint8_t kRotationSet = 3;     // store the angle sent with the message
+constexpr uint8_t kRotationQuery = 4;   // just report
 
 // Flags of a Library message.
 constexpr uint8_t kLibraryActive = 1;     // Lightroom shows the Library: the knob browses
@@ -116,6 +124,9 @@ struct Message {
   uint8_t libraryFlags = 0;
   uint8_t libraryRating = 0;
   uint8_t libraryColor = 0;
+  // DisplayRotation: what to do, and the angle in degrees for kRotationSet.
+  uint8_t rotationMode = 0;
+  uint16_t rotationAngle = 0;
   char text[kMaxLabelBytes + 1] = {0};
   // Unpacked payload, needed for the configuration CRC.
   uint8_t payload[kMaxPayloadBytes] = {0};
@@ -144,6 +155,8 @@ size_t buildMenuSelect(uint8_t *out, uint8_t page, uint8_t index);
 size_t buildMenuClosed(uint8_t *out);
 size_t buildSlotReset(uint8_t *out, uint8_t slot);
 size_t buildLibraryAction(uint8_t *out, uint8_t action);
+/// The angle the picture is turned by, 0 … 359 degrees clockwise.
+size_t buildDisplayAngle(uint8_t *out, uint16_t degrees, bool adjusting);
 /// Relative CC; `delta` is clamped to -63 … 63 and must not be 0.
 size_t buildRotation(uint8_t *out, int delta);
 

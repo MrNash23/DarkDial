@@ -30,6 +30,10 @@ void serial(uint8_t out[6]);
 size_t loadConfig(uint8_t *buffer, size_t capacity);
 void saveConfig(const uint8_t *blob, size_t size);
 
+/// Angle the picture is turned by, 0 if none was stored.
+uint16_t loadRotation();
+void saveRotation(uint16_t degrees);
+
 /// Next USB-MIDI event packet from the host, false if none is waiting.
 bool midiRead(uint8_t packet[4]);
 /// Sends one complete MIDI message (control change or SysEx).

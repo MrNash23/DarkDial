@@ -69,6 +69,8 @@ enum TimerTextId : uint8_t {
   TEXT_LIBRARY,
   TEXT_PICKED,
   TEXT_REJECTED,
+  TEXT_ROTATE,
+  TEXT_ROTATEHINT,
 };
 
 struct TimerText {
@@ -88,6 +90,8 @@ static const TimerText kTimerText[] = {
   {"Bibliothek", "Library"},  // library
   {"Markiert", "Picked"},  // picked
   {"Abgelehnt", "Rejected"},  // rejected
+  {"Display drehen", "Rotate display"},  // rotate
+  {"Dr\303\274cken speichert", "Press to save"},  // rotateHint
 };
 
 // Slots shown before the service has ever sent a configuration.

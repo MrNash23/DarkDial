@@ -79,7 +79,16 @@ class EngineState {
     required this.editing,
     required this.slots,
     this.library = const Library(),
+    this.displayAngle,
+    this.displayAdjusting = false,
   });
+
+  /// Degrees the picture on the device is turned by; null if the device
+  /// cannot turn it (older firmware) or has not said yet.
+  final int? displayAngle;
+
+  /// The knob is turning the picture right now.
+  final bool displayAdjusting;
 
   /// What the device shows in the Library; inactive elsewhere.
   final Library library;
@@ -154,6 +163,9 @@ class Engine {
   int _pendingPhotos = 0;
   String? _sentLibrary;
 
+  int? _displayAngle;
+  bool _displayAdjusting = false;
+
   /// Slot of a SlotGoto the device has not answered yet.
   int? _gotoSlot;
 
@@ -185,6 +197,8 @@ class Engine {
         editing: _editing,
         slots: [for (var i = 0; i < _active.length; i++) _slotState(i)],
         library: _libraryMessage(),
+        displayAngle: _displayAngle,
+        displayAdjusting: _displayAdjusting,
       );
 
   Future<void> start() async {
@@ -250,6 +264,7 @@ class Engine {
       }
       _sendTimerState(force: true);
       _sendLibrary(force: true);
+      if (_deviceTurns) session.send(const DisplayRotation(DisplayRotation.query));
     }
     return ok;
   }
@@ -297,6 +312,8 @@ class Engine {
     _sentMenuPage = null;
     _sentLibrary = null;
     _pendingPhotos = 0;
+    _displayAngle = null;
+    _displayAdjusting = false;
     _menu?.close();
     _deviceState = DeviceLinkState.disconnected;
     _editing = false;
@@ -347,6 +364,10 @@ class Engine {
         _resetSlot(slot);
       case LibraryAction(:final action):
         _libraryAction(action);
+      case DisplayAngle(:final degrees, :final adjusting):
+        _displayAngle = degrees;
+        _displayAdjusting = adjusting;
+        _notify();
       case MenuOpen():
         _openMenu();
       case MenuSelect(:final page, :final index):
@@ -356,6 +377,24 @@ class Engine {
       default:
         break;
     }
+  }
+
+  // Rotation of the picture -----------------------------------------------------
+
+  /// Devices can turn their picture from protocol minor 4 on.
+  bool get _deviceTurns => (_session?.hello.minor ?? 0) >= 4;
+
+  /// Lets the knob turn the picture; it stays that way until [saveDisplayRotation]
+  /// or [cancelDisplayRotation], or until the knob is pressed (which saves).
+  void beginDisplayRotation() => _rotation(DisplayRotation.begin);
+  void saveDisplayRotation() => _rotation(DisplayRotation.save);
+  void cancelDisplayRotation() => _rotation(DisplayRotation.cancel);
+
+  /// Stores an angle without the knob, e.g. 0 for upright.
+  void setDisplayRotation(int degrees) => _rotation(DisplayRotation.set, degrees);
+
+  void _rotation(int mode, [int degrees = 0]) {
+    if (_deviceTurns) _session?.send(DisplayRotation(mode, degrees));
   }
 
   // Library --------------------------------------------------------------------

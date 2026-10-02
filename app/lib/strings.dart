@@ -42,6 +42,19 @@ class Strings {
         'Device jumps to the slider that is moved in Lightroom',
       );
   String get general => _t('Allgemein', 'General');
+  String get orientation => _t('Ausrichtung des Displays', 'Orientation of the display');
+  String orientationValue(int degrees) => degrees == 0 ? _t('aufrecht', 'upright') : '$degrees°';
+  String get rotateDisplay => _t('Drehen …', 'Rotate …');
+  String get rotateUpright => _t('Aufrecht', 'Upright');
+  String get rotateHint => _t(
+        'Jetzt am Drehknopf des Geräts drehen, bis das Bild gerade steht. Speichern hier oder durch '
+            'Druck auf den Knopf.',
+        'Now turn the knob of the device until the picture is level. Save here or by pressing the knob.',
+      );
+  String get rotateNeedsFirmware => _t(
+        'Braucht ein verbundenes Gerät mit Firmware 0.6 oder neuer.',
+        'Needs a connected device with firmware 0.6 or newer.',
+      );
   String get librarySection => _t('In der Bibliothek', 'In the Library');
   String get libraryIntro => _t(
         'Solange Lightroom die Bibliothek zeigt, blättert der Drehknopf durch die Fotos, und das Display '

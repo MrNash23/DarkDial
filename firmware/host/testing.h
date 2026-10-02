@@ -56,6 +56,11 @@ inline Bytes library(uint8_t flags, uint8_t rating = 0, uint8_t color = 0, const
   return frame(0x4D, p);
 }
 
+// Mode: 0 cancel, 1 begin, 2 save, 3 set to `degrees`, 4 query.
+inline Bytes displayRotation(uint8_t mode, uint16_t degrees = 0) {
+  return frame(0x4E, {mode, static_cast<uint8_t>(degrees >> 8), static_cast<uint8_t>(degrees & 0xFF)});
+}
+
 inline void appendU32(Bytes &p, uint32_t v) {
   p.push_back(static_cast<uint8_t>(v >> 24));
   p.push_back(static_cast<uint8_t>(v >> 16));
@@ -111,6 +116,12 @@ class RecordingHost : public dd::Host {
  public:
   void send(const uint8_t *bytes, size_t n) override { sent.emplace_back(bytes, bytes + n); }
   void saveConfig(const uint8_t *blob, size_t n) override { stored.assign(blob, blob + n); }
+  void saveRotation(uint16_t degrees) override {
+    rotation = degrees;
+    rotationSaves++;
+  }
+  int rotation = -1;
+  int rotationSaves = 0;
   std::vector<Bytes> sent;
   Bytes stored;
 };

@@ -61,7 +61,7 @@ def validate(params, status, timer_texts):
             assert len(s[lang]) <= MAX_LABEL_CHARS, f"label too long: {s[lang]}"
     for t in timer_texts:
         for lang in ("de", "en"):
-            # The help text is shown wrapped in the small font; everything else is one line.
+            # Help texts are shown wrapped in the small font; everything else is one line.
             limit = 80 if t["key"] == "noClient" else 20
             assert len(t[lang].encode("utf-8")) <= limit, f"menu text too long: {t[lang]}"
 

@@ -276,6 +276,71 @@ void main() {
     await tester.runAsync(controller.shutdown);
   });
 
+  testWidgets('orientation: the knob turns the picture, the app saves or cancels', (tester) async {
+    await start(tester, settings: {
+      'simulator': true,
+      'config': {
+        'language': 'de',
+        'slots': [
+          {'param': 4, 'enabled': true},
+        ],
+      },
+    });
+    await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
+    final model = controller.simulatorModel!;
+    await settle(tester, () => controller.state.displayAngle == 0, 'angle known');
+    final details =
+        find.descendant(of: find.byKey(const Key('config-details')), matching: find.byType(Scrollable)).first;
+    // Brings a widget of the details column fully into view.
+    Future<void> show(String key, [double delta = 120]) async {
+      await tester.scrollUntilVisible(find.byKey(Key(key)), delta, scrollable: details);
+      await tester.ensureVisible(find.byKey(Key(key)));
+      await tester.pump();
+    }
+
+    await show('orientation-rotate');
+    expect(find.textContaining('aufrecht'), findsOneWidget);
+    expect(find.byKey(const Key('orientation-upright')), findsNothing);
+
+    // "Drehen …" hands the knob over to the picture.
+    await tester.tap(find.byKey(const Key('orientation-rotate')));
+    await settle(tester, () => model.adjustingRotation, 'device adjusting');
+    await settle(tester, () => find.byKey(const Key('orientation-save')).evaluate().isNotEmpty, 'save offered');
+    model.rotate(6);
+    await settle(tester, () => controller.state.displayAngle == 30, '30 degrees');
+    expect(find.textContaining('30°'), findsOneWidget);
+    await show('preview-rotate', -120);
+    final turned = tester.widget<Transform>(find.byKey(const Key('preview-turned')));
+    expect(turned.transform.getRotation().entry(1, 0), closeTo(0.5, 0.001), reason: 'sin 30°');
+    await screenshot(tester, 'rotate');
+
+    // Cancel: back to upright, nothing stored.
+    await show('orientation-cancel');
+    await tester.tap(find.byKey(const Key('orientation-cancel')));
+    await settle(tester, () => !model.adjustingRotation && controller.state.displayAngle == 0, 'cancelled');
+    expect(model.rotation, 0);
+
+    // Again, and save.
+    await settle(tester, () => find.byKey(const Key('orientation-rotate')).evaluate().isNotEmpty, 'button back');
+    await show('orientation-rotate');
+    await tester.tap(find.byKey(const Key('orientation-rotate')));
+    await settle(tester, () => model.adjustingRotation, 'device adjusting');
+    model.rotate(-3);
+    await settle(tester, () => controller.state.displayAngle == 345, '345 degrees');
+    await show('orientation-save');
+    await tester.tap(find.byKey(const Key('orientation-save')));
+    await settle(tester, () => !model.adjustingRotation && model.rotation == 345, 'saved on the device');
+    await settle(tester, () => find.byKey(const Key('orientation-upright')).evaluate().isNotEmpty, 'upright offered');
+    expect(find.textContaining('345°'), findsOneWidget);
+
+    // "Aufrecht" sets it back without the knob.
+    await show('orientation-upright');
+    await tester.tap(find.byKey(const Key('orientation-upright')));
+    await settle(tester, () => model.rotation == 0 && controller.state.displayAngle == 0, 'upright again');
+
+    await tester.runAsync(controller.shutdown);
+  });
+
   testWidgets('Library: tap actions are chosen in the settings; the preview shows the photo', (tester) async {
     await start(tester, settings: {
       'simulator': true,

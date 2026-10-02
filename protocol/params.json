@@ -86,6 +86,8 @@
                          "en": "No matching client? Please create it in the desktop app."},
     {"key": "library", "de": "Bibliothek", "en": "Library"},
     {"key": "picked", "de": "Markiert", "en": "Picked"},
-    {"key": "rejected", "de": "Abgelehnt", "en": "Rejected"}
+    {"key": "rejected", "de": "Abgelehnt", "en": "Rejected"},
+    {"key": "rotate", "de": "Display drehen", "en": "Rotate display"},
+    {"key": "rotateHint", "de": "Drücken speichert", "en": "Press to save"}
   ]
 }

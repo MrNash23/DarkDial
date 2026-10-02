@@ -87,7 +87,8 @@ class _ConfigWindowState extends State<ConfigWindow> {
                             value: c.config.followLightroom,
                             onChanged: (value) => c.setConfig(c.config.copyWith(followLightroom: value)),
                           ),
-                          const SizedBox(height: 8),
+                          _OrientationRow(controller: c),
+                          const SizedBox(height: 12),
                           _sendRow(s),
                         ],
                       ),
@@ -314,6 +315,74 @@ class PreviewSection extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8),
             child: Text(s.previewHint, style: Theme.of(context).textTheme.bodySmall),
           ),
+      ],
+    );
+  }
+}
+
+/// The picture can be turned for a device that does not stand upright: a
+/// button starts it, the knob of the device turns, saving ends it.
+class _OrientationRow extends StatelessWidget {
+  const _OrientationRow({required this.controller});
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final s = c.strings;
+    final angle = c.state.displayAngle;
+    final small = Theme.of(context).textTheme.bodySmall;
+    if (angle == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(child: Text(s.orientation)),
+            Flexible(child: Text(s.rotateNeedsFirmware, style: small, textAlign: TextAlign.end)),
+          ],
+        ),
+      );
+    }
+    if (c.state.displayAdjusting) {
+      return Column(
+        key: const Key('orientation-adjusting'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('${s.orientation}: ${s.orientationValue(angle)}')),
+              TextButton(
+                key: const Key('orientation-cancel'),
+                onPressed: c.cancelDisplayRotation,
+                child: Text(s.cancel),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                key: const Key('orientation-save'),
+                onPressed: c.saveDisplayRotation,
+                child: Text(s.save),
+              ),
+            ],
+          ),
+          Padding(padding: const EdgeInsets.only(top: 4), child: Text(s.rotateHint, style: small)),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: Text('${s.orientation}: ${s.orientationValue(angle)}', key: const Key('orientation-value'))),
+        if (angle != 0)
+          TextButton(
+            key: const Key('orientation-upright'),
+            onPressed: c.resetDisplayRotation,
+            child: Text(s.rotateUpright),
+          ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          key: const Key('orientation-rotate'),
+          onPressed: c.beginDisplayRotation,
+          child: Text(s.rotateDisplay),
+        ),
       ],
     );
   }

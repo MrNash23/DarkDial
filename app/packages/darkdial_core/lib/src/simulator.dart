@@ -42,6 +42,19 @@ class DeviceModel {
   /// False until a Status arrives, and again when the heartbeat stops.
   bool serviceConnected = false;
 
+  /// Angle the picture is turned by, and the one being tried out with the knob.
+  int rotation = 0;
+  int _adjustAngle = 0;
+  bool adjustingRotation = false;
+  int get displayAngle => adjustingRotation ? _adjustAngle : rotation;
+
+  void _endRotation(bool save) {
+    if (adjustingRotation && save) rotation = _adjustAngle;
+    adjustingRotation = false;
+    emit(DisplayAngle(rotation));
+    onChanged();
+  }
+
   /// What the service said about the Library; inactive in Develop.
   Library library = const Library();
 
@@ -120,6 +133,12 @@ class DeviceModel {
   void rotate(int detents) {
     if (detents == 0) return;
     if (_wake()) return;
+    if (adjustingRotation) {
+      _adjustAngle = (_adjustAngle + detents * 5) % 360;
+      emit(DisplayAngle(_adjustAngle, adjusting: true));
+      onChanged();
+      return;
+    }
     if (menuOpen) {
       if (menu.isNotEmpty) menuIndex = (menuIndex + detents) % menu.length;
       onChanged();
@@ -142,6 +161,11 @@ class DeviceModel {
   /// Knob click. While the service offers the Library mode it switches
   /// between Library and Develop; otherwise it is the same as a tap.
   void click() {
+    if (!idle && adjustingRotation) {
+      _wake();
+      _endRotation(true);
+      return;
+    }
     if (!idle && !menuOpen && serviceConnected && (library.active || library.knobToggles)) {
       _wake();
       emit(const LibraryAction(LibraryAction.toggleModule));
@@ -153,6 +177,10 @@ class DeviceModel {
   /// A click on what is shown: selects a slot or leaves it, chooses a menu line.
   void _select() {
     if (_wake()) return;
+    if (adjustingRotation) {
+      _endRotation(true);
+      return;
+    }
     if (menuOpen) {
       _menuAction();
       return;
@@ -182,7 +210,7 @@ class DeviceModel {
   /// in the Library, the double-tap action.
   void doubleTap() {
     if (_wake()) return;
-    if (menuOpen) return;
+    if (menuOpen || adjustingRotation) return;
     if (libraryActive) {
       if (library.doubleTapEnabled) emit(const LibraryAction(LibraryAction.doubleTap));
       return;
@@ -195,6 +223,7 @@ class DeviceModel {
   /// closes it without change.
   void longPress() {
     if (_wake()) return;
+    if (adjustingRotation) return;
     if (menuOpen) {
       menuOpen = false;
       emit(const MenuClosed());
@@ -227,6 +256,7 @@ class DeviceModel {
     serviceConnected = false;
     timerRunning = false;
     library = const Library();
+    adjustingRotation = false;
     if (menuOpen) {
       menu = [];
       menuIndex = 0;
@@ -345,6 +375,27 @@ class DeviceModel {
       case Library():
         library = message;
         onChanged();
+      case DisplayRotation(:final mode, :final degrees):
+        switch (mode) {
+          case DisplayRotation.begin:
+            if (!adjustingRotation) {
+              adjustingRotation = true;
+              _adjustAngle = rotation;
+              menuOpen = false;
+            }
+            emit(DisplayAngle(_adjustAngle, adjusting: true));
+            onChanged();
+          case DisplayRotation.save:
+            _endRotation(true);
+          case DisplayRotation.set:
+            adjustingRotation = true;
+            _adjustAngle = degrees % 360;
+            _endRotation(true);
+          case DisplayRotation.cancel:
+            _endRotation(false);
+          default:
+            emit(DisplayAngle(displayAngle, adjusting: adjustingRotation));
+        }
       case TimerResult():
         // The action is done: the menu closes and the result is shown briefly.
         menuOpen = false;

@@ -1,6 +1,6 @@
 # Darkdial protocol
 
-Protocol version **1.3** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5). Two links, both bidirectional:
+Protocol version **1.4** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5; 1.4 lets the picture of the device be turned, section 1.9). Two links, both bidirectional:
 
 ```
 Device  ⇄  USB-MIDI  ⇄  Service (desktop app)  ⇄  LrSocket / TCP localhost  ⇄  Plugin
@@ -94,6 +94,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x08` | MenuClosed | – | *1.1.* The device closed the menu itself: long press, timeout, or a line with the "closes" flag. |
 | `0x09` | SlotReset | `u8 slot` | *1.1.* Double tap or long touch on the display in edit mode: reset this slot to Lightroom's default. |
 | `0x0A` | LibraryAction | `u8 action` | *1.3.* 1: the display was tapped in the Library, 2: double-tapped, 3: the knob was clicked and asks for the other module (sent while Library flag bit 0 or bit 5 is set). |
+| `0x0B` | DisplayAngle | `u16 degrees`, `u8 adjusting` | *1.4.* The angle the picture is turned by, 0 … 359 clockwise; `adjusting` 1 while the knob turns it. Answer to every DisplayRotation, and sent for every step of the knob while adjusting. |
 
 ### 1.5 Messages service → device
 
@@ -112,6 +113,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x4C` | SlotGoto | `u8 slot` | *1.2.* The slider of this slot was just moved in Lightroom: the device goes to the slot and into edit mode, and answers with SlotLeave (if it was editing another slot) and SlotSelect. Ignored while the menu is open. |
 | `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* The chosen action is done: the device closes the menu and shows the result briefly. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
 | `0x4D` | Library | `u8 flags`, `u8 rating`, `u8 color`, `str name` | *1.3.* Flags bit 0: Lightroom shows the Library, the device is in Library mode; bit 1: a tap has an action; bit 2: a double tap has an action; bit 3: the photo is flagged as pick; bit 4: as rejected; bit 5: the Library mode is on offer, a click of the knob switches the module. `rating` 0 … 5 stars. `color` 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple. `name` is the file name, ≤ 20 bytes. Sent on every change. |
+| `0x4E` | DisplayRotation | `u8 mode`, `u16 degrees` | *1.4.* Mode 0: stop adjusting, back to the stored angle; 1: begin adjusting; 2: store the angle shown and stop; 3: store `degrees`; 4: just report. The device answers with DisplayAngle. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
 final XOR) over the concatenation of the unpacked payloads of all ConfigSlot
@@ -191,6 +193,22 @@ the device only knows "tap" and "double tap".
   first. The same holds for taps outside the Library. The service marks the photo and answers with the
   new Library message.
 - The long press opens the time tracking menu as everywhere.
+
+### 1.9 Turning the picture (1.4)
+
+A device that does not stand upright (to route the cable, say) can show its
+picture turned by any angle. The angle belongs to the device and is stored
+there; the service only starts the adjustment and shows the result.
+
+- A device announces it by `minor ≥ 4` in Hello. After the configuration
+  the service sends DisplayRotation 4 to learn the angle.
+- **Adjusting.** After DisplayRotation 1 the knob turns the picture, 5
+  degrees per detent, and does nothing else; the device shows the angle and
+  sends DisplayAngle for every step. A press of the knob or a tap, or
+  DisplayRotation 2, stores the angle; DisplayRotation 0 or a lost heartbeat
+  goes back to the stored one.
+- The device draws everything turned: ring, texts, icons, logo. Touch needs
+  no change, taps count anywhere.
 
 ---
 

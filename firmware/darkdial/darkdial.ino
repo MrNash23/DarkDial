@@ -23,8 +23,16 @@ namespace {
 
 class BoardHost : public dd::Host {
  public:
-  void send(const uint8_t *bytes, size_t n) override { board::midiSend(bytes, n); }
+  void send(const uint8_t *bytes, size_t n) override {
+    board::midiSend(bytes, n);
+    // Diagnostics: which Library action a tap or a press turned into
+    // (1 tap, 2 double tap, 3 knob).
+    if (n > 7 && bytes[0] == 0xF0 && bytes[5] == 0x0A) {
+      Serial.printf("[%lu] library action %u\n", millis(), bytes[7]);
+    }
+  }
   void saveConfig(const uint8_t *blob, size_t n) override { board::saveConfig(blob, n); }
+  void saveRotation(uint16_t degrees) override { board::saveRotation(degrees); }
 };
 
 BoardHost host;
@@ -78,6 +86,7 @@ void setup() {
   static uint8_t stored[dd::kMaxStoredConfigBytes];
   const size_t size = board::loadConfig(stored, sizeof(stored));
   if (size) device->loadStored(stored, size);
+  device->setRotation(board::loadRotation());
 
   ui_init(onTap, onLongTouch, millis());
   lv_timer_handler();

@@ -22,6 +22,7 @@ constexpr uint8_t kTypeMenuSelect = 0x07;
 constexpr uint8_t kTypeMenuClosed = 0x08;
 constexpr uint8_t kTypeSlotReset = 0x09;
 constexpr uint8_t kTypeLibraryAction = 0x0A;
+constexpr uint8_t kTypeDisplayAngle = 0x0B;
 constexpr uint8_t kTypeHelloRequest = 0x41;
 constexpr uint8_t kTypeConfigBegin = 0x42;
 constexpr uint8_t kTypeConfigSlot = 0x43;
@@ -35,6 +36,7 @@ constexpr uint8_t kTypeTimerState = 0x4A;
 constexpr uint8_t kTypeTimerResult = 0x4B;
 constexpr uint8_t kTypeSlotGoto = 0x4C;
 constexpr uint8_t kTypeLibrary = 0x4D;
+constexpr uint8_t kTypeDisplayRotation = 0x4E;
 
 uint32_t readU32(const uint8_t *p) {
   return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
@@ -224,6 +226,12 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       if (!readString(p, size, 3, out.text, kMaxLabelBytes)) return false;
       out.type = MessageType::Library;
       return true;
+    case kTypeDisplayRotation:
+      if (size < 3) return false;
+      out.rotationMode = p[0];
+      out.rotationAngle = static_cast<uint16_t>(((p[1] << 8) | p[2]) % 360);
+      out.type = MessageType::DisplayRotation;
+      return true;
     case kTypeTimerResult:
       if (size < 2) return false;
       out.resultCode = p[0];
@@ -279,6 +287,12 @@ size_t buildMenuSelect(uint8_t *out, uint8_t page, uint8_t index) {
 size_t buildMenuClosed(uint8_t *out) { return frame(out, kTypeMenuClosed, nullptr, 0); }
 size_t buildSlotReset(uint8_t *out, uint8_t slot) { return frame(out, kTypeSlotReset, &slot, 1); }
 size_t buildLibraryAction(uint8_t *out, uint8_t action) { return frame(out, kTypeLibraryAction, &action, 1); }
+
+size_t buildDisplayAngle(uint8_t *out, uint16_t degrees, bool adjusting) {
+  const uint8_t p[3] = {static_cast<uint8_t>(degrees >> 8), static_cast<uint8_t>(degrees & 0xFF),
+                        static_cast<uint8_t>(adjusting ? 1 : 0)};
+  return frame(out, kTypeDisplayAngle, p, sizeof(p));
+}
 
 size_t buildRotation(uint8_t *out, int delta) {
   if (delta > 63) delta = 63;

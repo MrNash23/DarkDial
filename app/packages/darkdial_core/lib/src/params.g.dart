@@ -91,4 +91,6 @@ const Map<String, List<String>> kTimerTexts = {
   'library': ['Bibliothek', 'Library'],
   'picked': ['Markiert', 'Picked'],
   'rejected': ['Abgelehnt', 'Rejected'],
+  'rotate': ['Display drehen', 'Rotate display'],
+  'rotateHint': ['Drücken speichert', 'Press to save'],
 };

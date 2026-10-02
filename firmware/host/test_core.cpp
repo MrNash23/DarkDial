@@ -873,6 +873,92 @@ static void testLibrary() {
   CHECK(!device.libraryActive() && device.screen() == dd::Screen::Offline);
 }
 
+// The last message the device sent is a DisplayAngle with these values.
+static bool sentAngle(const RecordingHost &host, int degrees, bool adjusting) {
+  if (host.sent.empty()) return false;
+  const Bytes &m = host.sent.back();
+  uint8_t p[8];
+  return m.size() > 7 && m[5] == 0x0B && dd::unpack7(m.data() + 6, m.size() - 7, p) == 3 &&
+         ((p[0] << 8) | p[1]) == degrees && (p[2] != 0) == adjusting;
+}
+
+static void testDisplayRotation() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
+  feed(device, status(all), 0);
+  CHECK(device.displayAngle() == 0);
+
+  // The stored angle is set at start-up and reported when asked.
+  device.setRotation(90);
+  feed(device, displayRotation(dd::kRotationQuery), 100);
+  CHECK(device.displayAngle() == 90 && sentAngle(host, 90, false));
+
+  // The app starts the adjustment: the knob turns the picture in steps,
+  // around the full circle, and nothing else.
+  feed(device, displayRotation(dd::kRotationBegin), 200);
+  CHECK(device.adjustingRotation() && device.screen() == dd::Screen::Rotate && sentAngle(host, 90, true));
+  const uint8_t index = device.index();
+  host.sent.clear();
+  device.rotate(2, 300);
+  CHECK(device.displayAngle() == 100 && host.sent.size() == 1 && sentAngle(host, 100, true));
+  device.rotate(-21, 400);
+  CHECK(device.displayAngle() == 355 && sentAngle(host, 355, true));
+  device.rotate(2, 500);
+  CHECK(device.displayAngle() == 5 && device.index() == index);
+
+  // Cancelled from the app: back to the stored angle, nothing saved.
+  feed(device, displayRotation(dd::kRotationCancel), 600);
+  CHECK(!device.adjustingRotation() && device.displayAngle() == 90 && host.rotationSaves == 0);
+  CHECK(sentAngle(host, 90, false) && device.screen() == dd::Screen::Slot);
+
+  // Saved from the app.
+  feed(device, displayRotation(dd::kRotationBegin), 700);
+  device.rotate(-3, 800);
+  feed(device, displayRotation(dd::kRotationSave), 900);
+  CHECK(!device.adjustingRotation() && device.displayAngle() == 75 && host.rotation == 75 && host.rotationSaves == 1);
+  CHECK(sentAngle(host, 75, false));
+
+  // Saved by pressing the knob, or by a tap; neither selects a slot or
+  // switches the module.
+  feed(device, displayRotation(dd::kRotationBegin), 1000);
+  device.rotate(1, 1100);
+  host.sent.clear();
+  device.buttonDown(1200);
+  device.buttonUp(1250);
+  CHECK(host.rotation == 80 && host.sent.size() == 1 && sentAngle(host, 80, false) && device.mode() == dd::Mode::Select);
+  feed(device, displayRotation(dd::kRotationBegin), 2000);
+  device.rotate(1, 2100);
+  host.sent.clear();
+  CHECK(device.tap(2800));
+  device.tick(3400);
+  CHECK(host.rotation == 85 && host.sent.size() == 1 && device.mode() == dd::Mode::Select);
+
+  // An unchanged angle is not written again; the long press does nothing
+  // while adjusting.
+  feed(device, status(all), 4000);
+  feed(device, displayRotation(dd::kRotationBegin), 4000);
+  device.buttonDown(4100);
+  device.tick(4100 + dd::kLongPressMs);
+  device.buttonUp(4800);
+  CHECK(device.adjustingRotation() && !device.menuOpen());
+  feed(device, displayRotation(dd::kRotationSave), 4900);
+  CHECK(host.rotationSaves == 3);
+
+  // Set from the app (e.g. back to upright), without the knob.
+  feed(device, displayRotation(dd::kRotationSet, 0), 5000);
+  CHECK(device.displayAngle() == 0 && host.rotation == 0 && sentAngle(host, 0, false));
+  feed(device, displayRotation(dd::kRotationSet, 725), 5100);
+  CHECK(device.displayAngle() == 5);
+
+  // A lost service ends the adjustment without saving.
+  feed(device, status(all), 6000);
+  feed(device, displayRotation(dd::kRotationBegin), 6000);
+  device.rotate(4, 6100);
+  device.tick(6000 + dd::kHeartbeatTimeoutMs + 1);
+  CHECK(!device.adjustingRotation() && device.displayAngle() == 5 && host.rotation == 5);
+}
+
 // Feeds the decoder for a time with one state.
 static int hold(dd::EncoderDecoder &decoder, uint8_t state, int ms) {
   int net = 0;
@@ -964,6 +1050,7 @@ static void testEncoderRecording(const std::string &fixtures) {
 }
 
 int main(int argc, char **argv) {
+  testDisplayRotation();
   testLibrary();
   testEncoder();
   if (argc > 1) testEncoderRecording(argv[1]);

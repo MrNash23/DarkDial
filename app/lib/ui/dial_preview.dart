@@ -79,8 +79,14 @@ class DialPreview extends StatelessWidget {
     final library = state.library;
     final inLibrary = library.active && statusIcon == null && !inMenu;
 
+    // The device is asked to turn its picture with the knob.
+    final adjusting = state.displayAdjusting && !(model?.idle ?? false);
+    final angle = state.displayAngle ?? 0;
+
     Widget content;
-    if (inLibrary) {
+    if (adjusting) {
+      content = _RotateContent(size: size, degrees: angle, language: s.language);
+    } else if (inLibrary) {
       content = _LibraryContent(size: size, library: library, language: s.language);
     } else if (statusIcon != null) {
       content = _Content(
@@ -120,14 +126,36 @@ class DialPreview extends StatelessWidget {
       );
     }
 
+    // The whole picture is turned as on the device.
+    return Transform.rotate(
+      key: const Key('preview-turned'),
+      angle: angle * math.pi / 180,
+      child: _dial(context, content, slot, statusIcon != null || inLibrary || adjusting, ringColor, model, inMenu,
+          menuInfo, clock, adjusting),
+    );
+  }
+
+  Widget _dial(
+    BuildContext context,
+    Widget content,
+    SlotState? slot,
+    bool noValueRing,
+    Color ringColor,
+    DeviceModel? model,
+    bool inMenu,
+    String? menuInfo,
+    RunningClock? clock,
+    bool adjusting,
+  ) {
     return SizedBox(
       width: size,
       height: size,
       child: CustomPaint(
         painter: _RingPainter(
-          position: slot == null || statusIcon != null || inLibrary ? null : slot.position,
+          position: adjusting ? positionCentre : (slot == null || noValueRing ? null : slot.position),
           bipolar: slot?.slot.bipolar ?? true,
-          color: ringColor,
+          color: adjusting ? accentColor : ringColor,
+          marker: adjusting,
         ),
         child: Stack(
           alignment: Alignment.topCenter,
@@ -143,7 +171,7 @@ class DialPreview extends StatelessWidget {
                   ),
                 ),
               ),
-            if (inMenu && menuInfo != null)
+            if (inMenu && !adjusting && menuInfo != null)
               Positioned(
                 top: size * 178 / 360,
                 width: size * 250 / 360,
@@ -154,17 +182,17 @@ class DialPreview extends StatelessWidget {
                   style: TextStyle(color: const Color(0xFFB8B8BE), fontSize: size * 0.058, height: 1.2),
                 ),
               ),
-            if (inMenu)
+            if (inMenu && !adjusting)
               Positioned(
                 top: size * 44 / 360,
                 child: Text(
-                  model.menuTitle,
+                  model!.menuTitle,
                   key: const Key('preview-menu-title'),
                   style: TextStyle(color: ringSelectColor, fontSize: size * 0.058),
                 ),
               ),
             // The running time sits in the gap of the ring; in the menu it is shown big.
-            if (clock != null && !inMenu)
+            if (clock != null && !inMenu && !adjusting)
               Positioned(
                 bottom: size * 10 / 360,
                 child: ValueListenableBuilder<int>(
@@ -183,6 +211,47 @@ class DialPreview extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The picture is being turned with the knob: title, hint and the angle.
+class _RotateContent extends StatelessWidget {
+  const _RotateContent({required this.size, required this.degrees, required this.language});
+
+  final double size;
+  final int degrees;
+  final Language language;
+
+  @override
+  Widget build(BuildContext context) {
+    final unit = size / 360;
+    return Stack(
+      key: const Key('preview-rotate'),
+      alignment: Alignment.topCenter,
+      children: [
+        Positioned(
+          top: 44 * unit,
+          child: Text(
+            kTimerTexts['rotate']![language.index],
+            style: TextStyle(color: ringSelectColor, fontSize: size * 0.058),
+          ),
+        ),
+        Positioned(
+          top: 178 * unit,
+          child: Text(
+            kTimerTexts['rotateHint']![language.index],
+            style: TextStyle(color: const Color(0xFFB8B8BE), fontSize: size * 0.058),
+          ),
+        ),
+        Positioned(
+          top: size * 0.635,
+          child: Text(
+            '$degrees',
+            style: TextStyle(color: Colors.white, fontSize: size * 0.135, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -320,7 +389,10 @@ class _Content extends StatelessWidget {
 }
 
 class _RingPainter extends CustomPainter {
-  _RingPainter({required this.position, required this.bipolar, required this.color});
+  _RingPainter({required this.position, required this.bipolar, required this.color, this.marker = false});
+
+  /// A short mark at the top instead of a value: where "up" is.
+  final bool marker;
 
   /// Ring position 0 … 16383, null = track only.
   final int? position;
@@ -347,6 +419,10 @@ class _RingPainter extends CustomPainter {
     if (position == null) return;
     final fraction = position / positionMax;
     paint.color = color;
+    if (marker) {
+      canvas.drawArc(rect, -math.pi / 2 - 0.14, 0.28, false, paint);
+      return;
+    }
     if (bipolar) {
       // From the top to the left or right.
       final delta = (fraction - 0.5) * sweep;
@@ -362,5 +438,5 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RingPainter old) =>
-      old.position != position || old.bipolar != bipolar || old.color != color;
+      old.position != position || old.bipolar != bipolar || old.color != color || old.marker != marker;
 }

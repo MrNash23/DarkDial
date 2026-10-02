@@ -188,6 +188,12 @@ class AppController extends ChangeNotifier {
     await _engine?.updateConfig(config);
   }
 
+  // Turning the picture of a device that does not stand upright.
+  void beginDisplayRotation() => _engine?.beginDisplayRotation();
+  void saveDisplayRotation() => _engine?.saveDisplayRotation();
+  void cancelDisplayRotation() => _engine?.cancelDisplayRotation();
+  void resetDisplayRotation() => _engine?.setDisplayRotation(0);
+
   /// "Send to device": true if the device confirmed.
   Future<bool> sendToDevice() async => await _engine?.pushConfig() ?? false;
 

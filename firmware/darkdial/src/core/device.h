@@ -24,6 +24,7 @@ enum class Screen : uint8_t {
   JobMenu,      // time tracking menu, opened by a long press
   TimerNotice,  // "started" / "stopped" / an error text, shown briefly
   Library,      // Lightroom shows the Library: the knob browses, taps rate
+  Rotate,       // the knob turns the picture, started from the app
 };
 
 constexpr uint8_t kStatusLightroom = 1;
@@ -44,6 +45,8 @@ constexpr uint32_t kDoubleTapMs = 350;
 constexpr uint32_t kTapConfirmMs = 200;
 // The menu closes by itself after this long without input.
 constexpr uint32_t kMenuTimeoutMs = 20000;
+// One detent turns the picture by this many degrees while it is adjusted.
+constexpr int kRotationStepDegrees = 5;
 // Without knob or touch input for this long the display shows the logo.
 constexpr uint32_t kIdleMs = 180000;
 
@@ -63,6 +66,8 @@ class Host {
   virtual void send(const uint8_t *bytes, size_t n) = 0;
   /// Persists the configuration (see Device::loadStored).
   virtual void saveConfig(const uint8_t *blob, size_t n) = 0;
+  /// Persists the angle the picture is turned by (see Device::setRotation).
+  virtual void saveRotation(uint16_t /*degrees*/) {}
 };
 
 /// Turns raw detents into accelerated ones: slow turning gives single steps,
@@ -83,6 +88,14 @@ class Device {
   /// Loads a configuration written by Host::saveConfig. False (and defaults
   /// stay) if the blob is damaged.
   bool loadStored(const uint8_t *blob, size_t n);
+
+  /// Sets the stored angle of the picture at start-up: 0 … 359 degrees
+  /// clockwise, for a device that does not stand upright.
+  void setRotation(uint16_t degrees);
+  /// The angle to draw with: the stored one, or the one being tried out.
+  uint16_t displayAngle() const { return adjusting_ ? adjustAngle_ : rotation_; }
+  /// True while the knob turns the picture.
+  bool adjustingRotation() const { return adjusting_; }
 
   /// Knob turned by `detents` (sign = direction).
   void rotate(int detents, uint32_t nowMs);
@@ -165,6 +178,8 @@ class Device {
 
  private:
   void longPress(uint32_t nowMs);
+  void endRotation(bool save);
+  void reportRotation();
   void knobClick(uint32_t nowMs);
   bool doubleTapPossible() const;
   void singleTap();
@@ -210,6 +225,11 @@ class Device {
   bool tapPending_ = false;
   uint32_t tapAtMs_ = 0;
   uint32_t tapWaitMs_ = 0;
+
+  // Rotation of the picture.
+  uint16_t rotation_ = 0;
+  uint16_t adjustAngle_ = 0;
+  bool adjusting_ = false;
 
   // Library.
   uint8_t libraryFlags_ = 0;

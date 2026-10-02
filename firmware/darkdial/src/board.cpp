@@ -270,6 +270,9 @@ size_t loadConfig(uint8_t *buffer, size_t capacity) {
 
 void saveConfig(const uint8_t *blob, size_t size) { preferences.putBytes("config", blob, size); }
 
+uint16_t loadRotation() { return preferences.getUShort("rotation", 0) % 360; }
+void saveRotation(uint16_t degrees) { preferences.putUShort("rotation", degrees); }
+
 bool midiRead(uint8_t packet[4]) {
   midiEventPacket_t event;
   if (!midi.readPacket(&event)) return false;
