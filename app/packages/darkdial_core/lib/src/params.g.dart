@@ -74,7 +74,6 @@ const Map<String, int> kTimerIcons = {
   'stop': 31,
   'client': 32,
   'back': 33,
-  'close': 34,
 };
 
 /// Texts of the time tracking menu by key: [de, en].
@@ -83,10 +82,8 @@ const Map<String, List<String>> kTimerTexts = {
   'newJob': ['Neuer Job', 'New job'],
   'started': ['Gestartet', 'Started'],
   'stopped': ['Gestoppt', 'Stopped'],
-  'title': ['Zeiterfassung', 'Time tracking'],
-  'clients': ['Kunden', 'Clients'],
+  'title': ['Kunde wählen', 'Choose client'],
   'client': ['Kunde', 'Client'],
-  'newClient': ['Neuer Kunde', 'New client'],
   'back': ['Zurück', 'Back'],
-  'close': ['Schließen', 'Close'],
+  'noClient': ['Keinen passenden Kunden gefunden? Bitte in der Desktop-App anlegen.', 'No matching client? Please create it in the desktop app.'],
 };

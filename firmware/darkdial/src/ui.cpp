@@ -26,7 +26,9 @@ constexpr int kIconTop = 61;
 constexpr int kLabelTop = 184;
 constexpr int kValueTop = 234;
 constexpr int kGapTimeBottom = 10;
-constexpr int kMenuTitleTop = 30;   // page title of the time tracking menu  // the running time sits in the gap of the ring
+constexpr int kMenuTitleTop = 30;   // page title of the time tracking menu
+constexpr int kInfoTop = 178;       // wrapped help text below the icon
+constexpr int kInfoWidth = 250;  // the running time sits in the gap of the ring
 // The ring only starts to fill after this part of the long press, so a
 // normal click does not flash it.
 constexpr float kHoldVisibleFrom = 0.2f;
@@ -49,6 +51,7 @@ lv_obj_t *label = nullptr;
 lv_obj_t *value = nullptr;
 lv_obj_t *gapTime = nullptr;
 lv_obj_t *menuTitle = nullptr;
+lv_obj_t *infoText = nullptr;
 lv_obj_t *logo = nullptr;
 lv_obj_t *poweredBy = nullptr;
 
@@ -175,12 +178,17 @@ void showMenu(const dd::Device &device, uint32_t nowMs) {
     return;
   }
   const dd::MenuItem &item = device.menuItem(device.menuIndex());
+  if (item.info) {
+    // The help line: clients are created in the desktop app.
+    showMessage(item.icon, "");
+    lv_label_set_text(infoText, timerText(dd::TEXT_NOCLIENT, device.language()));
+  }
   char time[12] = "";
   if (item.running && device.timerRunning()) dd::formatElapsed(device.timerSeconds(nowMs), time);
   char text[dd::kMaxLabelBytes + 4];
   // "»" (Latin-1) marks a line that leads to another page.
   snprintf(text, sizeof(text), item.submenu ? "%s \xC2\xBB" : "%s", item.label);
-  showMessage(item.icon, text, time);
+  if (!item.info) showMessage(item.icon, text, time);
   if (item.highlighted) lv_obj_set_style_text_color(label, lv_color_hex(kColorAccent), 0);
 
   // Where we are in the list: one segment of the ring per line.
@@ -323,6 +331,15 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   lv_obj_align(menuTitle, LV_ALIGN_TOP_MID, 0, kMenuTitleTop);
   lv_label_set_text(menuTitle, "");
 
+  infoText = lv_label_create(screen);
+  lv_obj_set_style_text_font(infoText, &dd_font_small, 0);
+  lv_obj_set_style_text_color(infoText, lv_color_hex(kColorLabel), 0);
+  lv_obj_set_style_text_align(infoText, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_width(infoText, kInfoWidth);
+  lv_label_set_long_mode(infoText, LV_LABEL_LONG_MODE_WRAP);
+  lv_obj_align(infoText, LV_ALIGN_TOP_MID, 0, kInfoTop);
+  lv_label_set_text(infoText, "");
+
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
   lv_obj_center(logo);
@@ -349,6 +366,7 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
 
   lv_obj_set_style_text_color(label, lv_color_hex(kColorLabel), 0);
   lv_label_set_text(menuTitle, "");
+  lv_label_set_text(infoText, "");
   const dd::Screen screen = device.screen();
   // What the carousel animation compares: slots and menu entries slide, a
   // change of screen does not.

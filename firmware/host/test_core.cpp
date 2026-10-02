@@ -365,7 +365,7 @@ static void testMenu() {
            now);
   CHECK(device.menuCount() == 5 && device.menuIndex() == 0 && strcmp(device.menuTitle(), "Zeiterfassung") == 0);
   CHECK(device.menuItem(0).highlighted && !device.menuItem(0).submenu);
-  CHECK(device.menuItem(2).submenu && device.menuItem(4).closes);
+  CHECK(device.menuItem(2).submenu && device.menuItem(4).closes && !device.menuItem(4).info);
   CHECK(strcmp(device.menuItem(0).label, "M\xC3\xBCller") == 0);
 
   // Turning moves through the page, wrapping, without touching the carousel.
@@ -409,6 +409,15 @@ static void testMenu() {
   openMenu(device, now);
   sendMenu(device, 8, "Zeiterfassung", {{31, 2, "Stopp"}, {34, 8, "Schlie\xC3\x9F" "en"}}, now);
   CHECK(device.menuItem(0).running);
+  host.sent.clear();
+  device.rotate(1, now);
+  device.click();
+  CHECK(!device.menuOpen() && host.sent.size() == 1 && host.sent[0][5] == 0x08);
+
+  // The help line is flagged as such and closes on click.
+  openMenu(device, now);
+  sendMenu(device, 20, "Kunde w\xC3\xA4hlen", {{32, 4, "Verlag"}, {32, 8 | 16, ""}}, now);
+  CHECK(!device.menuItem(0).info && device.menuItem(1).info && device.menuItem(1).closes);
   host.sent.clear();
   device.rotate(1, now);
   device.click();

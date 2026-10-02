@@ -115,10 +115,6 @@ class TimeTracker {
     return start(id, origin: origin);
   }
 
-  /// Creates an unnamed client with a first unnamed job and starts its clock.
-  /// Both get their names later in the app.
-  RunningClock startNewClient({required String origin}) =>
-      startNew(origin: origin, clientId: db.insertClient(now: now));
 
   /// Stops the clock; false if none was running.
   bool stop() {
@@ -167,6 +163,16 @@ class TimeTracker {
   // Clients ----------------------------------------------------------------------
 
   List<Client> clients() => db.clients();
+
+  /// Creates a client; an existing one with that name is returned instead.
+  Client createClient(String name) {
+    final trimmed = name.trim();
+    final existing = db.clientNamed(trimmed);
+    if (existing != null) return existing;
+    final id = db.insertClient(now: now, name: trimmed);
+    _changed();
+    return db.client(id)!;
+  }
 
   /// Active jobs of a client, most recently used first.
   List<Job> jobsOf(int clientId) => db.jobs(archived: false).where((job) => job.clientId == clientId).toList();

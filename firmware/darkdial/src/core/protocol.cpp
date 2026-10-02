@@ -193,6 +193,7 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       out.item.running = (p[2] & 2) != 0;
       out.item.submenu = (p[2] & 4) != 0;
       out.item.closes = (p[2] & 8) != 0;
+      out.item.info = (p[2] & 16) != 0;
       if (!readString(p, size, 3, out.item.label, kMaxLabelBytes)) return false;
       out.type = MessageType::MenuItem;
       return true;

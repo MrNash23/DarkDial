@@ -71,10 +71,26 @@ void main() {
     await plugin.stop();
   });
 
-  test('long press opens the start page; new job starts the clock and appears unnamed', () async {
+  test('long press opens the client list; without clients there is only the help line', () async {
     await openMenu();
-    expect(model().menuTitle, 'Zeiterfassung');
-    expect(labels(), ['Neuer Job', 'Neuer Kunde', 'Schließen']);
+    expect(model().menuTitle, 'Kunde wählen');
+    expect(model().menu.single.info, isTrue);
+
+    // Clicking the help line closes the menu; nothing was started.
+    model().click();
+    expect(model().menuOpen, isFalse);
+    await pause();
+    expect(tracker.running, isNull);
+    expect(tracker.jobs(), isEmpty);
+  });
+
+  test('client, then new job: the clock runs and the job waits for its name', () async {
+    tracker.createClient('Fam. Müller');
+    await openMenu();
+    expect(labels(), ['Fam. Müller', '']);
+    await choose('Fam. Müller');
+    await until(() => model().menuTitle == 'Fam. Müller', 'jobs of the client');
+    expect(labels(), ['Neuer Job', 'Zurück']);
 
     await choose('Neuer Job');
     await until(() => tracker.running != null, 'clock');
@@ -82,12 +98,12 @@ void main() {
     expect(model().menuOpen, isFalse);
     expect(model().notice?.code, TimerResult.started);
     expect(tracker.jobs().single.unnamed, isTrue);
+    expect(tracker.jobs().single.client, 'Fam. Müller');
     expect(tracker.running!.entry.origin, 'device');
-    expect(model().timerLabel, tracker.displayLabel(tracker.jobs().single));
     expect(model().mode, DeviceMode.select, reason: 'back where the long press came from');
   });
 
-  test('client, then job on the device; switching stops the other clock in the same step', () async {
+  test('client, then existing job; switching stops the other clock in the same step', () async {
     final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
     final catalogue = tracker.createJob(name: 'Katalog', client: 'Verlag');
     await pause(5);
@@ -98,11 +114,9 @@ void main() {
     expect(labels().first, 'Stopp');
     expect(model().menu.first.running, isTrue);
 
-    await choose('Kunden');
-    await until(() => model().menuTitle == 'Kunden', 'client list');
-    expect(model().menuIndex, 0, reason: 'a new page starts at its first line');
     await choose('Fam. Müller');
     await until(() => model().menuTitle == 'Fam. Müller', 'jobs of the client');
+    expect(model().menuIndex, 0, reason: 'a new page starts at its first line');
     expect(labels(), ['Hochzeit', 'Neuer Job', 'Zurück']);
 
     await choose('Hochzeit');
@@ -114,35 +128,20 @@ void main() {
     expect(entries.firstWhere((e) => e.jobId == catalogue.id).end, entries.firstWhere((e) => e.jobId == wedding.id).start);
   });
 
-  test('back goes up one level; close and a second long press end the menu without action', () async {
+  test('back returns to the clients; a second long press ends the menu without action', () async {
     tracker.createJob(name: 'Katalog', client: 'Verlag');
     await openMenu();
-    await choose('Kunden');
-    await until(() => model().menuTitle == 'Kunden', 'client list');
+    await choose('Verlag');
+    await until(() => model().menuTitle == 'Verlag', 'jobs of the client');
     await choose('Zurück');
-    await until(() => model().menuTitle == 'Zeiterfassung', 'start page again');
+    await until(() => model().menuTitle == 'Kunde wählen', 'client list again');
 
-    await choose('Schließen');
-    expect(model().menuOpen, isFalse);
-    await pause();
-    expect(tracker.running, isNull);
-
-    await openMenu();
     model().rotate(1);
     model().longPress();
     await pause();
     expect(model().menuOpen, isFalse);
     expect(tracker.running, isNull);
     expect(tracker.jobs(), hasLength(1));
-  });
-
-  test('new client from the device: unnamed client and job, clock running', () async {
-    await openMenu();
-    await choose('Neuer Kunde');
-    await until(() => tracker.running != null, 'clock');
-    expect(tracker.clients().single.unnamed, isTrue);
-    expect(tracker.running!.job.clientId, tracker.clients().single.id);
-    await until(() => model().notice?.code == TimerResult.started, 'confirmation');
   });
 
   test('stop from the device', () async {
@@ -156,39 +155,42 @@ void main() {
   });
 
   test('the Lightroom collection in use puts its job on top, highlighted, while the menu is open', () async {
-    final wedding = tracker.createJob(name: 'Hochzeit');
-    await pause(5);
-    tracker.createJob(name: 'Anderes');
+    final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
     tracker.assignSource(wedding.id, const LrSource(kind: 'collection', key: '77', name: 'Hochzeit Auswahl'));
 
     await openMenu();
-    expect(labels().first, 'Anderes');
+    expect(labels().first, 'Fam. Müller');
     expect(model().menu.any((item) => item.highlighted), isFalse);
 
     plugin.userOpensSource('collection', 'Hochzeit Auswahl', '77');
     await until(() => model().menu.isNotEmpty && model().menu.first.highlighted, 'suggestion on the device');
     expect(labels().first, 'Hochzeit');
-    expect(labels().where((l) => l == 'Hochzeit'), hasLength(1));
     expect(tracker.currentSource!.name, 'Hochzeit Auswahl');
 
+    // One click starts it.
+    await choose('Hochzeit');
+    await until(() => tracker.running?.job.id == wedding.id, 'suggested job started');
+
     plugin.userOpensSource('folder', '2026', '/Fotos/2026');
-    await until(() => !model().menu.any((item) => item.highlighted), 'suggestion gone');
+    await openMenu();
+    await until(() => model().menu.isNotEmpty && !model().menu.any((item) => item.highlighted), 'suggestion gone');
   });
 
   test('a rename in the app reaches the open menu; a start from the app reaches the device', () async {
-    final job = tracker.createJob(name: 'Erst');
+    final client = tracker.createClient('Erst');
+    final job = tracker.createJob(name: 'Job', client: 'Erst');
     await openMenu();
     expect(labels().first, 'Erst');
-    tracker.updateJob(job.id, name: 'Erst', short: 'Kürzel', client: '', color: null);
-    await until(() => labels().first == 'Kürzel', 'new label');
+    tracker.renameClient(client.id, 'Zweit');
+    await until(() => labels().first == 'Zweit', 'new label');
 
     tracker.start(job.id, origin: 'app');
-    await until(() => model().timerRunning && model().timerLabel == 'Kürzel', 'clock from the app');
+    await until(() => model().timerRunning && model().timerLabel == 'Job', 'clock from the app');
     await until(() => labels().first == 'Stopp', 'stop line appears');
   });
 
   test('a click on a page that was replaced meanwhile is ignored', () async {
-    tracker.createJob(name: 'A');
+    tracker.createJob(name: 'A', client: 'C');
     await openMenu();
     final stalePage = MenuSelect(0, 0); // page numbers start above 0
     device.model.emit(stalePage);
@@ -198,8 +200,10 @@ void main() {
   });
 
   test('starting an archived job from a stale page reports an error', () async {
-    final job = tracker.createJob(name: 'Alt');
+    final job = tracker.createJob(name: 'Alt', client: 'C');
     await openMenu();
+    await choose('C');
+    await until(() => model().menuTitle == 'C', 'jobs of the client');
     // Archive behind the device's back: no change event, the page is stale.
     db.setArchived(job.id, true);
     await choose('Alt');

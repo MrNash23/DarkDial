@@ -153,19 +153,17 @@ int main(int argc, char **argv) {
   device.buttonUp(nowMs);
   run(device, 100);
   save("21_menu_waiting_for_page");
-  sendMenu(device, 1, "Zeiterfassung",
-           {{29, 1, "M\xC3\xBCller"}, {29, 0, "Katalog"}, {29, 0, "01.10. 14:32"}, {32, 4, "Kunden"},
-            {30, 0, "Neuer Job"}, {30, 0, "Neuer Kunde"}, {34, 8, "Schlie\xC3\x9F" "en"}},
-           nowMs);
+  sendMenu(device, 1, "Kunde w\xC3\xA4hlen",
+           {{29, 1, "Hochzeit"}, {32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {32, 8 | 16, ""}}, nowMs);
   run(device, 300);
   save("22_menu_suggested_job");
-  device.rotate(3, nowMs);
+  device.rotate(1, nowMs);
   run(device, 400);
-  save("23_menu_clients_entry");
-  device.click();
-  sendMenu(device, 2, "Kunden", {{32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {33, 0, "Zur\xC3\xBC" "ck"}}, nowMs);
-  run(device, 300);
-  save("24_menu_client_list");
+  save("23_menu_client");
+  device.rotate(2, nowMs);
+  run(device, 400);
+  save("24_menu_help_last");
+  device.rotate(-2, nowMs);
   device.click();
   sendMenu(device, 3, "Fam. M\xC3\xBCller",
            {{29, 0, "Hochzeit"}, {29, 0, "Album"}, {30, 0, "Neuer Job"}, {33, 0, "Zur\xC3\xBC" "ck"}}, nowMs);
@@ -183,9 +181,8 @@ int main(int argc, char **argv) {
   device.buttonDown(nowMs);
   run(device, 700);
   device.buttonUp(nowMs);
-  sendMenu(device, 4, "Zeiterfassung",
-           {{31, 2, "Stopp"}, {29, 2, "Hochzeit"}, {32, 4, "Kunden"}, {30, 0, "Neuer Job"},
-            {30, 0, "Neuer Kunde"}, {34, 8, "Schlie\xC3\x9F" "en"}},
+  sendMenu(device, 4, "Kunde w\xC3\xA4hlen",
+           {{31, 2, "Stopp"}, {29, 3, "Hochzeit"}, {32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {32, 8 | 16, ""}},
            nowMs);
   run(device, 300);
   save("28_menu_stop_with_time");

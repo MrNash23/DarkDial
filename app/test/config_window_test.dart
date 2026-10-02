@@ -186,16 +186,33 @@ void main() {
 
     // Long press opens the time tracking menu; a click starts a new job, and
     // the running time appears in the gap of the ring.
-    await tester.longPress(find.byType(DialPreview));
-    await settle(tester, () => find.text('Neuer Job').evaluate().isNotEmpty, 'start page of the menu');
-    expect(find.descendant(of: find.byType(DialPreview), matching: find.text('Neuer Job')), findsOneWidget);
-    expect(find.byKey(const Key('preview-menu-title')), findsOneWidget);
-    expect(find.text('Zeiterfassung'), findsOneWidget);
-    await tester.tap(find.byType(DialPreview));
+    final dial = find.byType(DialPreview);
+    await tester.longPress(dial);
+    // Without clients the menu only has the help line.
+    await settle(tester, () => find.byKey(const Key('preview-menu-info')).evaluate().isNotEmpty, 'help line');
+    expect(find.textContaining('Keinen passenden Kunden gefunden?'), findsOneWidget);
+    expect(find.text('Kunde wählen'), findsOneWidget);
+    await screenshot(tester, 'menu_help');
+    await tester.tap(dial); // closes the menu
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(controller.simulatorModel!.menuOpen, isFalse);
+    expect(controller.tracker.running, isNull);
+
+    // With a client: choose it, then "Neuer Job" starts the clock, and the
+    // running time appears in the gap of the ring.
+    controller.tracker.createClient('Verlag');
+    await sync(tester);
+    await tester.longPress(dial);
+    await settle(tester, () => find.descendant(of: dial, matching: find.text('Verlag »')).evaluate().isNotEmpty, 'client');
+    await tester.tap(dial);
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester, () => find.descendant(of: dial, matching: find.text('Neuer Job')).evaluate().isNotEmpty, 'new job');
+    await tester.tap(dial);
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, () => controller.tracker.running != null, 'clock started from the device');
     await settle(tester, () => find.byKey(const Key('preview-gap-time')).evaluate().isNotEmpty, 'time in the ring gap');
     expect(controller.unnamedJobs, hasLength(1));
+    expect(controller.unnamedJobs.single.client, 'Verlag');
     await screenshot(tester, 'clock');
     await tester.runAsync(controller.shutdown);
   });
@@ -259,6 +276,16 @@ void main() {
     expect(tracker.db.job(started.job.id)!.name, 'Hochzeit Müller, Potsdam');
     expect(tracker.displayLabel(tracker.db.job(started.job.id)!), 'Müller');
     expect(find.textContaining('unbenannter Eintrag'), findsNothing);
+
+    // A client created in the app is what the device offers to choose from.
+    await tester.tap(find.byKey(const Key('new-client')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('client-name')), 'Fam. Müller');
+    await tester.tap(find.byKey(const Key('client-save')));
+    await tester.pumpAndSettle();
+    await sync(tester);
+    expect(tracker.clients().map((client) => client.name), contains('Fam. Müller'));
+    expect(find.text('Fam. Müller'), findsOneWidget);
 
     // Jobs are grouped by client; renaming the client applies to all its jobs.
     expect(find.text('Verlag'), findsOneWidget);

@@ -117,8 +117,8 @@ void main() {
       expect([decodedItem.index, decodedItem.icon, decodedItem.label], [15, 29, 'Müller']);
       expect([decodedItem.highlighted, decodedItem.running, decodedItem.submenu, decodedItem.closes],
           [true, true, false, true]);
-      expect((decodeMessage(encodeMessage(const MenuItem(index: 0, icon: 32, label: 'Kunden', submenu: true))) as MenuItem).submenu,
-          isTrue);
+      final help = decodeMessage(encodeMessage(const MenuItem(index: 0, icon: 32, label: '', submenu: true, info: true))) as MenuItem;
+      expect([help.submenu, help.info, help.closes], [true, true, false]);
 
       const state = TimerState(running: true, jobId: 4000000000, elapsedSeconds: 360000, label: '01.10. 14:32 und länger');
       final stateBytes = encodeMessage(state);

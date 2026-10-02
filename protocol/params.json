@@ -70,19 +70,17 @@
     {"key": "plus",      "icon": 30},
     {"key": "stop",      "icon": 31},
     {"key": "client",    "icon": 32},
-    {"key": "back",      "icon": 33},
-    {"key": "close",     "icon": 34}
+    {"key": "back",      "icon": 33}
   ],
   "timerTexts": [
     {"key": "stop",    "de": "Stopp",     "en": "Stop"},
     {"key": "newJob",  "de": "Neuer Job", "en": "New job"},
     {"key": "started", "de": "Gestartet", "en": "Started"},
     {"key": "stopped", "de": "Gestoppt",  "en": "Stopped"},
-    {"key": "title",     "de": "Zeiterfassung", "en": "Time tracking"},
-    {"key": "clients",   "de": "Kunden",        "en": "Clients"},
+    {"key": "title",     "de": "Kunde wählen",  "en": "Choose client"},
     {"key": "client",    "de": "Kunde",         "en": "Client"},
-    {"key": "newClient", "de": "Neuer Kunde",   "en": "New client"},
     {"key": "back",      "de": "Zurück",        "en": "Back"},
-    {"key": "close",     "de": "Schließen",     "en": "Close"}
+    {"key": "noClient",  "de": "Keinen passenden Kunden gefunden? Bitte in der Desktop-App anlegen.",
+                         "en": "No matching client? Please create it in the desktop app."}
   ]
 }

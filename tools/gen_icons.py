@@ -127,10 +127,6 @@ def draw_status(icon_id, size):
         d.line((c - a, c, c + a, c), fill=white, width=stroke)
         d.line((c - a + n * 0.14, c - n * 0.14, c - a, c, c - a + n * 0.14, c + n * 0.14),
                fill=white, width=stroke, joint="curve")
-    elif icon_id == 34:  # close: cross
-        a = n * 0.18
-        d.line((c - a, c - a, c + a, c + a), fill=white, width=stroke)
-        d.line((c - a, c + a, c + a, c - a), fill=white, width=stroke)
     return image.resize((size, size), Image.LANCZOS)
 
 

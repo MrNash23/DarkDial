@@ -88,6 +88,11 @@ class Strings {
       );
   String get noClient => _t('Ohne Kunde', 'No client');
   String get renameClient => _t('Kunde umbenennen', 'Rename client');
+  String get newClient => _t('Neuer Kunde', 'New client');
+  String get newClientHint => _t(
+        'Am Gerät lassen sich Jobs nur für vorhandene Kunden starten.',
+        'On the device, jobs can only be started for existing clients.',
+      );
   String get renameClientHint => _t(
         'Gibt es schon einen Kunden mit diesem Namen, werden beide zusammengeführt.',
         'If a client with this name exists already, the two are merged.',
@@ -128,7 +133,10 @@ class Strings {
   String get allTime => _t('Gesamt', 'All time');
   String get total => _t('Summe', 'Total');
   String get nothingRecorded => _t('In diesem Zeitraum wurde nichts erfasst.', 'Nothing recorded in this period.');
-  String get noJobs => _t('Noch keine Jobs. Lege einen an oder starte einen am Gerät.', 'No jobs yet. Create one or start one on the device.');
+  String get noJobs => _t(
+        'Noch keine Kunden und Jobs. Lege zuerst einen Kunden an – am Gerät wählst du dann Kunde und Job.',
+        'No clients or jobs yet. Create a client first – on the device you then choose client and job.',
+      );
   String get noArchived => _t('Keine archivierten Jobs.', 'No archived jobs.');
   String get noEntries => _t('Keine Einträge.', 'No entries.');
   String get noResults => _t('Nichts gefunden.', 'Nothing found.');

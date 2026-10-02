@@ -83,7 +83,7 @@ class _ClientHeader extends StatelessWidget {
                 key: ValueKey('client-rename-${client.id}'),
                 tooltip: s.renameClient,
                 icon: const Icon(Icons.edit_outlined, size: 18),
-                onPressed: () => _showRenameClient(context, c, client),
+                onPressed: () => showClientDialog(context, c, client),
               ),
               if (empty)
                 IconButton(
@@ -209,18 +209,23 @@ void _confirmDeleteJob(BuildContext context, AppController controller, Job job) 
   );
 }
 
-void _showRenameClient(BuildContext context, AppController controller, Client client) {
+/// Creates a client ([client] null) or renames one.
+void showClientDialog(BuildContext context, AppController controller, Client? client) {
   final s = controller.strings;
-  final name = TextEditingController(text: client.name);
+  final name = TextEditingController(text: client?.name ?? '');
   void save(BuildContext context) {
-    controller.tracker.renameClient(client.id, name.text);
+    if (client == null) {
+      if (name.text.trim().isNotEmpty) controller.tracker.createClient(name.text);
+    } else {
+      controller.tracker.renameClient(client.id, name.text);
+    }
     Navigator.of(context).pop();
   }
 
   showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(s.renameClient),
+      title: Text(client == null ? s.newClient : s.renameClient),
       content: SizedBox(
         width: 380,
         child: Column(
@@ -235,7 +240,7 @@ void _showRenameClient(BuildContext context, AppController controller, Client cl
               onSubmitted: (_) => save(context),
             ),
             const SizedBox(height: 8),
-            Text(s.renameClientHint, style: Theme.of(context).textTheme.bodySmall),
+            Text(client == null ? s.newClientHint : s.renameClientHint, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),

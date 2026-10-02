@@ -50,6 +50,7 @@ struct MenuItem {
   bool running = false;      // show the running time with it
   bool submenu = false;      // leads to another page
   bool closes = false;       // choosing it closes the menu on the device
+  bool info = false;         // help line: show the built-in text instead of the label
   char label[kMaxLabelBytes + 1] = {0};
 };
 

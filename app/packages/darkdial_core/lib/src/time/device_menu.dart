@@ -41,15 +41,7 @@ class _StartJob extends _Action {
 
 class _NewJob extends _Action {
   const _NewJob(this.clientId);
-  final int? clientId;
-}
-
-class _NewClient extends _Action {
-  const _NewClient();
-}
-
-class _OpenClients extends _Action {
-  const _OpenClients();
+  final int clientId;
 }
 
 class _OpenClient extends _Action {
@@ -66,14 +58,14 @@ class _Close extends _Action {
   const _Close();
 }
 
-/// Where the menu is: the start page, the client list, or one client.
-enum _Level { root, clients, client }
+/// Where the menu is: choosing a client, or the jobs of one client.
+enum _Level { clients, client }
 
+/// A job always belongs to a client: the menu starts with the clients, then
+/// offers the jobs of the chosen one or a new job for it. Clients are created
+/// in the desktop app only.
 class DeviceMenu {
   DeviceMenu(this.tracker, this.language);
-
-  /// Jobs offered directly on the start page besides the suggestion.
-  static const int recentJobs = 3;
 
   /// Lines per page; the device holds 16.
   static const int maxItems = 16;
@@ -81,7 +73,7 @@ class DeviceMenu {
   final TimeTracker tracker;
   Language language;
 
-  _Level _level = _Level.root;
+  _Level _level = _Level.clients;
   int? _clientId;
   List<_Action> _actions = const [];
   bool open = false;
@@ -91,7 +83,7 @@ class DeviceMenu {
   /// The start page; called when the device opens the menu.
   MenuPage start() {
     open = true;
-    _level = _Level.root;
+    _level = _Level.clients;
     _clientId = null;
     return _build();
   }
@@ -116,16 +108,11 @@ class DeviceMenu {
         case _NewJob(:final clientId):
           tracker.startNew(origin: 'device', clientId: clientId);
           return _done(TimerResult.started);
-        case _NewClient():
-          tracker.startNewClient(origin: 'device');
-          return _done(TimerResult.started);
-        case _OpenClients():
-          _level = _Level.clients;
         case _OpenClient(:final clientId):
           _level = _Level.client;
           _clientId = clientId;
         case _Back():
-          _level = _level == _Level.client ? _Level.clients : _Level.root;
+          _level = _Level.clients;
         case _Close():
           open = false;
       }
@@ -150,7 +137,7 @@ class DeviceMenu {
     final items = <MenuItem>[];
     final actions = <_Action>[];
     void add(_Action action, String icon, String label,
-        {bool highlighted = false, bool running = false, bool submenu = false, bool closes = false}) {
+        {bool highlighted = false, bool running = false, bool submenu = false, bool closes = false, bool info = false}) {
       if (items.length >= maxItems) return;
       items.add(MenuItem(
         index: items.length,
@@ -160,6 +147,7 @@ class DeviceMenu {
         running: running,
         submenu: submenu,
         closes: closes,
+        info: info,
       ));
       actions.add(action);
     }
@@ -170,25 +158,19 @@ class DeviceMenu {
 
     String title;
     switch (_level) {
-      case _Level.root:
+      case _Level.clients:
         title = _text('title');
         if (runningId != null) add(const _Stop(), 'stop', _text('stop'), running: true);
+        // The job that belongs to what is open in Lightroom is one click away,
+        // if it has a client like every job started here.
         final suggested = tracker.suggestion;
-        if (suggested != null) addJob(suggested, highlighted: true);
-        for (final job in tracker.jobs().where((j) => j.id != suggested?.id).take(recentJobs)) {
-          addJob(job);
-        }
-        if (tracker.clients().isNotEmpty) add(const _OpenClients(), 'client', _text('clients'), submenu: true);
-        add(const _NewJob(null), 'plus', _text('newJob'));
-        add(const _NewClient(), 'plus', _text('newClient'));
-        add(const _Close(), 'close', _text('close'), closes: true);
-      case _Level.clients:
-        title = _text('clients');
-        // Keep room for "back".
-        for (final client in tracker.clients().take(maxItems - 1)) {
+        if (suggested != null && suggested.clientId != null) addJob(suggested, highlighted: true);
+        // Keep room for the help line.
+        for (final client in tracker.clients().take(maxItems - items.length - 1)) {
           add(_OpenClient(client.id), 'client', tracker.clientLabel(client, word: _text('client')), submenu: true);
         }
-        add(const _Back(), 'back', _text('back'));
+        // Last line: clients are created in the desktop app. Clicking it closes the menu.
+        add(const _Close(), 'client', '', closes: true, info: true);
       case _Level.client:
         final client = _clientId == null ? null : tracker.db.client(_clientId!);
         if (client == null) {

@@ -39,6 +39,9 @@ class DialPreview extends StatelessWidget {
     final clock = controller.tracker.running;
     String menuTime = '';
     var menuHighlighted = false;
+
+    /// Help text of the menu's last line, shown small and wrapped.
+    String? menuInfo;
     if (model != null && model.notice != null) {
       final notice = model.notice!;
       statusIcon = notice.code == TimerResult.started ? kTimerIcons['stopwatch'] : kTimerIcons['stop'];
@@ -55,6 +58,7 @@ class DialPreview extends StatelessWidget {
         final item = model.menu[model.menuIndex];
         statusIcon = item.icon;
         statusLabel = item.submenu ? '${item.label} »' : item.label;
+        if (item.info) menuInfo = kTimerTexts['noClient']![s.language.index];
         menuHighlighted = item.highlighted;
         if (item.running && clock != null) menuTime = formatClock(clock.elapsed(DateTime.now().toUtc()));
       }
@@ -123,6 +127,17 @@ class DialPreview extends StatelessWidget {
           alignment: Alignment.topCenter,
           children: [
             Positioned.fill(child: content),
+            if (inMenu && menuInfo != null)
+              Positioned(
+                top: size * 178 / 360,
+                width: size * 250 / 360,
+                child: Text(
+                  menuInfo,
+                  key: const Key('preview-menu-info'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: const Color(0xFFB8B8BE), fontSize: size * 0.058, height: 1.2),
+                ),
+              ),
             if (inMenu)
               Positioned(
                 top: size * 30 / 360,

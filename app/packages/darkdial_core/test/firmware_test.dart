@@ -215,14 +215,11 @@ void main() {
     await until(() async => (await firmware.timer()).menuCount > 0, 'start page');
     var timer = await firmware.timer();
     expect(timer.menuOpen, isTrue);
-    expect(timer.title, 'Zeiterfassung');
+    expect(timer.title, 'Kunde wählen');
     expect(engine.state.editing, isTrue, reason: 'the state behind the menu is untouched');
     expect(tracker.running, isNull, reason: 'the touch on release chose nothing');
 
-    // Two levels down: clients, one client, its job.
-    await turnTo('Kunden');
-    firmware.click();
-    await until(() async => (await firmware.timer()).title == 'Kunden', 'client list');
+    // Client first, then its job.
     await turnTo('Fam. Müller');
     firmware.click();
     await until(() async => (await firmware.timer()).title == 'Fam. Müller', 'jobs of the client');

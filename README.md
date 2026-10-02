@@ -8,9 +8,9 @@ Turn to pick a slider, click, turn to change it. The ring on the display shows
 the value and follows Lightroom live, also when you move a slider with the
 mouse. A double tap on the display resets the slider.
 
-A long press opens time tracking: start and stop a clock per job on the
-device, with the job that belongs to the collection open in Lightroom
-suggested first. The desktop app keeps the books (overview, entries, archive,
+A long press opens time tracking: choose a client, then one of its jobs or
+a new one, and the clock runs; the job that belongs to the collection open in
+Lightroom is offered first. Clients are created in the desktop app. The desktop app keeps the books (overview, entries, archive,
 search, CSV export); see [docs/darkdial-upgrade-zeiterfassung.md](docs/darkdial-upgrade-zeiterfassung.md).
 
 > **Status:** early development. Nothing here is released yet.

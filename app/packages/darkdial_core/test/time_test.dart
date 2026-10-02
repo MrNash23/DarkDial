@@ -116,35 +116,53 @@ void main() {
   group('device menu', () {
     List<String> labels(MenuPage page) => [for (final item in page.items) item.label];
 
-    test('start page: stop only while running, suggestion on top and not repeated, three recent jobs', () {
+    test('start page lists the clients, most recently used first, and ends with the help line', () {
       final menu = DeviceMenu(tracker, Language.de);
-      expect(labels(menu.start()), ['Neuer Job', 'Neuer Kunde', 'Schließen'], reason: 'nothing there yet');
+      var page = menu.start();
+      expect(page.title, 'Kunde wählen');
+      expect(page.items.single.info, isTrue, reason: 'no clients yet: only the help line');
+      expect(page.items.single.closes, isTrue);
 
-      final ids = <int>[];
-      for (var i = 0; i < 6; i++) {
-        clock.advance(const Duration(minutes: 1));
-        ids.add(tracker.createJob(name: 'Job $i', client: i < 2 ? 'Verlag' : '').id);
-      }
-      const source = LrSource(kind: 'collection', key: '7', name: 'Hochzeit');
-      tracker.assignSource(ids[0], source);
+      tracker.createJob(name: 'Katalog', client: 'Verlag');
+      clock.advance(const Duration(minutes: 1));
+      final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
+      tracker.createJob(name: 'Ohne Kunde');
+      clock.advance(const Duration(minutes: 1));
+      tracker.start(wedding.id, origin: 'app');
+      tracker.stop();
+
+      page = menu.start();
+      expect(labels(page), ['Fam. Müller', 'Verlag', '']);
+      expect(page.items.take(2).every((i) => i.submenu), isTrue);
+      expect(page.items.last.info, isTrue);
+      expect(labels(page), isNot(contains('Ohne Kunde')), reason: 'jobs without client are not offered');
+    });
+
+    test('stop comes first while a clock runs; the Lightroom suggestion follows if it has a client', () {
+      final menu = DeviceMenu(tracker, Language.de);
+      final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
+      final loose = tracker.createJob(name: 'Lose');
+      const source = LrSource(kind: 'collection', key: '7', name: 'Auswahl');
+      tracker.assignSource(wedding.id, source);
       tracker.currentSource = source;
 
       var page = menu.start();
-      expect(page.title, 'Zeiterfassung');
-      expect(labels(page), ['Job 0', 'Job 5', 'Job 4', 'Job 3', 'Kunden', 'Neuer Job', 'Neuer Kunde', 'Schließen']);
+      expect(labels(page), ['Hochzeit', 'Fam. Müller', '']);
       expect(page.items.first.highlighted, isTrue);
-      expect(page.items[4].submenu, isTrue);
-      expect(page.items.last.closes, isTrue);
-      expect(page.items.where((i) => i.running), isEmpty);
 
-      tracker.start(ids[5], origin: 'app');
+      tracker.start(wedding.id, origin: 'app');
       page = menu.start();
-      expect(labels(page).first, 'Stopp');
-      expect(page.items.first.running, isTrue);
-      expect(page.items.firstWhere((i) => i.label == 'Job 5').running, isTrue);
+      expect(labels(page), ['Stopp', 'Hochzeit', 'Fam. Müller', '']);
+      expect(page.items[0].running && page.items[1].running, isTrue);
+      expect(menu.select(0).result!.code, TimerResult.stopped);
+      expect(tracker.running, isNull);
+
+      // A suggestion without client is not offered: every job started here has one.
+      tracker.assignSource(loose.id, source);
+      expect(labels(menu.start()), ['Fam. Müller', '']);
     });
 
-    test('client, then job: two levels down and back', () {
+    test('client, then one of its jobs', () {
       final menu = DeviceMenu(tracker, Language.de);
       final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
       tracker.createJob(name: 'Album', client: 'Fam. Müller');
@@ -152,20 +170,16 @@ void main() {
       tracker.archive(tracker.createJob(name: 'Altes', client: 'Fam. Müller').id);
 
       var page = menu.start();
-      page = menu.select(labels(page).indexOf('Kunden')).page!;
-      expect(page.title, 'Kunden');
-      expect(labels(page), containsAll(['Fam. Müller', 'Verlag', 'Zurück']));
-      expect(labels(page).last, 'Zurück');
-
       page = menu.select(labels(page).indexOf('Fam. Müller')).page!;
       expect(page.title, 'Fam. Müller');
       expect(labels(page), containsAll(['Hochzeit', 'Album', 'Neuer Job', 'Zurück']));
+      expect(labels(page).sublist(labels(page).length - 2), ['Neuer Job', 'Zurück']);
       expect(labels(page), isNot(contains('Altes')), reason: 'archived');
       expect(labels(page), isNot(contains('Katalog')));
 
-      // Back goes up one level, not out.
+      // Back returns to the clients.
       final up = menu.select(labels(page).indexOf('Zurück')).page!;
-      expect(up.title, 'Kunden');
+      expect(up.title, 'Kunde wählen');
       page = menu.select(labels(up).indexOf('Fam. Müller')).page!;
 
       final outcome = menu.select(labels(page).indexOf('Hochzeit'));
@@ -174,50 +188,42 @@ void main() {
       expect(menu.open, isFalse);
     });
 
-    test('new job inside a client belongs to that client', () {
+    test('new job is created for the chosen client and waits for its name', () {
       final menu = DeviceMenu(tracker, Language.de);
       tracker.createJob(name: 'Katalog', client: 'Verlag');
       var page = menu.start();
-      page = menu.select(labels(page).indexOf('Kunden')).page!;
       page = menu.select(labels(page).indexOf('Verlag')).page!;
       expect(menu.select(labels(page).indexOf('Neuer Job')).result!.code, TimerResult.started);
       expect(tracker.running!.job.unnamed, isTrue);
       expect(tracker.running!.job.client, 'Verlag');
+      expect(tracker.running!.entry.origin, 'device');
     });
 
-    test('new client creates an unnamed client with a running unnamed job', () {
-      final menu = DeviceMenu(tracker, Language.de);
-      final page = menu.start();
-      expect(menu.select(labels(page).indexOf('Neuer Kunde')).result!.code, TimerResult.started);
-      final client = tracker.clients().single;
-      expect(client.unnamed, isTrue);
-      expect(tracker.clientLabel(client), 'Kunde 01.10. 12:32');
-      expect(tracker.running!.job.clientId, client.id);
-      expect(tracker.running!.job.unnamed, isTrue);
-      // The unnamed client shows up in the menu with date and time.
-      final clients = menu.select(labels(menu.start()).indexOf('Kunden')).page!;
-      expect(labels(clients).first, 'Kunde 01.10. 12:32');
-    });
-
-    test('stop, close, English, stale job', () {
+    test('a client without jobs offers a new job; English texts', () {
       final menu = DeviceMenu(tracker, Language.en);
-      final job = tracker.createJob(name: 'A');
-      tracker.start(job.id, origin: 'app');
+      tracker.createClient('Publisher');
       var page = menu.start();
-      expect(page.title, 'Time tracking');
-      expect(labels(page), ['Stop', 'A', 'New job', 'New client', 'Close']);
-      expect(menu.select(0).result!.code, TimerResult.stopped);
-      expect(tracker.running, isNull);
+      expect(page.title, 'Choose client');
+      page = menu.select(0).page!;
+      expect(labels(page), ['New job', 'Back']);
+    });
 
-      // A job archived behind the menu's back: error, menu closed.
+    test('the help line closes the menu; a stale job reports an error; a wild index shows the page again', () {
+      final menu = DeviceMenu(tracker, Language.en);
+      final job = tracker.createJob(name: 'A', client: 'C');
+      var page = menu.start();
+      expect(menu.select(page.items.length - 1).page, isNotNull);
+      expect(menu.open, isFalse);
+
+      page = menu.select(0).page!; // not open any more, but harmless
       page = menu.start();
+      page = menu.select(labels(page).indexOf('C')).page!;
       db.setArchived(job.id, true);
       final outcome = menu.select(labels(page).indexOf('A'));
       expect(outcome.result!.code, TimerResult.error);
       expect(outcome.result!.text, 'Archived');
       expect(menu.open, isFalse);
 
-      // An index outside the page just shows the page again.
       menu.start();
       expect(menu.select(99).page, isNotNull);
     });
@@ -227,11 +233,13 @@ void main() {
       for (var i = 0; i < 30; i++) {
         tracker.createJob(name: 'Job $i', client: i.isEven ? 'Kunde $i' : 'Großkunde');
       }
+      // The big client was used last, so it is among the clients shown.
+      clock.advance(const Duration(minutes: 1));
+      tracker.start(tracker.jobs().firstWhere((j) => j.client == 'Großkunde').id, origin: 'app');
       var page = menu.start();
-      expect(page.items.length, lessThanOrEqualTo(maxMenuItems));
-      page = menu.select(labels(page).indexOf('Kunden')).page!;
       expect(page.items, hasLength(maxMenuItems));
-      expect(labels(page).last, 'Zurück');
+      expect(page.items.first.label, 'Stopp');
+      expect(page.items.last.info, isTrue);
       page = menu.select(labels(page).indexOf('Großkunde')).page!;
       expect(page.items, hasLength(maxMenuItems));
       expect(labels(page).sublist(maxMenuItems - 2), ['Neuer Job', 'Zurück']);
@@ -252,9 +260,11 @@ void main() {
 
     test('renaming to an existing name merges; updateJob can keep an unnamed client', () {
       final a = tracker.createJob(name: 'A', client: 'Verlag');
-      tracker.startNewClient(origin: 'device');
-      final unnamed = tracker.clients().firstWhere((c) => c.unnamed);
-      final job = tracker.running!.job;
+      // An unnamed client, as older versions could create on the device.
+      final unnamedId = db.insertClient(now: clock.time);
+      final unnamed = db.client(unnamedId)!;
+      expect(tracker.clientLabel(unnamed), 'Kunde 01.10. 12:32');
+      final job = tracker.startNew(origin: 'device', clientId: unnamedId).job;
 
       // Naming the job must not lose its still unnamed client.
       tracker.updateJob(job.id, name: 'Titelbild', short: '', client: null, color: null);
@@ -287,7 +297,7 @@ void main() {
 
     test('wipe empties everything', () {
       tracker.createJob(name: 'A', client: 'Verlag');
-      tracker.startNewClient(origin: 'device');
+      tracker.startNew(origin: 'device', clientId: tracker.createClient('Neu').id);
       tracker.wipe();
       expect(tracker.jobs(), isEmpty);
       expect(tracker.clients(), isEmpty);

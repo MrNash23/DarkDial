@@ -320,6 +320,7 @@ class MenuItem extends DeviceMessage {
     this.running = false,
     this.submenu = false,
     this.closes = false,
+    this.info = false,
   });
   final int index;
   final int icon;
@@ -337,7 +338,12 @@ class MenuItem extends DeviceMessage {
   /// Choosing it closes the menu on the device, without asking the service.
   final bool closes;
 
-  int get flags => (highlighted ? 1 : 0) | (running ? 2 : 0) | (submenu ? 4 : 0) | (closes ? 8 : 0);
+  /// A help line: the device shows its built-in text about creating clients
+  /// in the desktop app instead of the label.
+  final bool info;
+
+  int get flags =>
+      (highlighted ? 1 : 0) | (running ? 2 : 0) | (submenu ? 4 : 0) | (closes ? 8 : 0) | (info ? 16 : 0);
 }
 
 class MenuEnd extends DeviceMessage {
@@ -573,6 +579,7 @@ DeviceMessage? decodeMessage(List<int> bytes) {
         running: p[2] & 2 != 0,
         submenu: p[2] & 4 != 0,
         closes: p[2] & 8 != 0,
+        info: p[2] & 16 != 0,
       );
     case 0x49:
       return const MenuEnd();

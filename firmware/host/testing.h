@@ -60,7 +60,7 @@ inline Bytes menuBegin(uint8_t page, uint8_t count, uint8_t selected, const std:
   return frame(0x47, p);
 }
 
-// Flags: 1 highlighted, 2 running, 4 submenu, 8 closes.
+// Flags: 1 highlighted, 2 running, 4 submenu, 8 closes, 16 help line.
 inline Bytes menuItem(uint8_t index, uint8_t icon, uint8_t flags, const std::string &label) {
   Bytes p = {index, icon, flags, static_cast<uint8_t>(label.size())};
   p.insert(p.end(), label.begin(), label.end());

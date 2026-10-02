@@ -116,12 +116,20 @@ class _TimeWindowState extends State<TimeWindow> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    if (_tab == _Tab.jobs && query.isEmpty)
+                    if (_tab == _Tab.jobs && query.isEmpty) ...[
+                      OutlinedButton.icon(
+                        key: const Key('new-client'),
+                        icon: const Icon(Icons.person_add_alt, size: 18),
+                        label: Text(s.newClient),
+                        onPressed: () => showClientDialog(context, c, null),
+                      ),
+                      const SizedBox(width: 8),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.add, size: 18),
                         label: Text(s.newJob),
                         onPressed: () => showJobDialog(context, c, null),
-                      )
+                      ),
+                    ]
                     else
                       OutlinedButton.icon(
                         icon: const Icon(Icons.download, size: 18),
