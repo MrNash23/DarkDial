@@ -129,6 +129,17 @@ void loop() {
     Serial.printf("[%lu] long touch %s\n", millis(), used ? "used: reset" : "ignored");
   }
 
+  // Diagnostics: raw activity on the encoder lines, once a second if any.
+  static uint32_t rawAt = 0, rawA = 0, rawB = 0;
+  if (now - rawAt >= 1000) {
+    uint32_t a, b;
+    board::encoderRawChanges(a, b);
+    if (a != rawA || b != rawB) Serial.printf("[%lu] raw A %+ld B %+ld\n", millis(), (long)(a - rawA), (long)(b - rawB));
+    rawAt = now;
+    rawA = a;
+    rawB = b;
+  }
+
   device->tick(now);
   reportMenu();
   ui_update(*device, now);

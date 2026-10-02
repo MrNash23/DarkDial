@@ -7,6 +7,7 @@
 #include <USBMIDI.h>
 #include <Wire.h>
 #include <esp_heap_caps.h>
+#include <esp_timer.h>
 #include <lvgl.h>
 
 #include "core/protocol.h"
@@ -43,9 +44,6 @@ constexpr int kLedCount = 8;
 constexpr uint8_t kTouchAddress = 0x15;  // CST816T
 // +1 or -1: which way of turning counts up. To be confirmed on the device.
 constexpr int kEncoderDirection = 1;
-// At rest for this long, a leftover half step is dropped so the count stays
-// aligned with the detents.
-constexpr uint32_t kEncoderRestUs = 150000;
 constexpr uint32_t kSwitchDebounceMs = 30;
 
 class Display : public lgfx::LGFX_Device {
@@ -94,30 +92,67 @@ Display display;
 USBMIDI midi("Darkdial");
 Preferences preferences;
 
-// Quadrature decoder. Both phases are watched and every transition is looked
-// up in a table, so contact bounce (a step forward and back again) cancels
-// out instead of being counted, and the direction never depends on reading
-// one phase at the right instant. The knob has a detent every two
-// transitions.
-volatile int32_t encoderCount = 0;
-volatile uint8_t encoderState = 0;
-volatile int8_t encoderSteps = 0;       // transitions not yet turned into a detent
-volatile uint32_t encoderLastEdgeUs = 0;
+// Quadrature decoder, sampled.
+//
+// The first run on hardware showed the two encoder lines to be noisy: a slow
+// turn in one direction produced bursts of steps in both directions within
+// milliseconds, far more than contact bounce explains. Edge interrupts count
+// every one of those. So the lines are sampled at a fixed rate instead and
+// each must hold its level for kDebounceSamples samples in a row before the
+// change is believed. The debounced levels go through the usual transition
+// table; the knob has a detent every two transitions.
+constexpr uint32_t kSamplePeriodUs = 500;
+constexpr int8_t kDebounceSamples = 4;  // 2 ms of a steady level
 
-void IRAM_ATTR onEncoderEdge() {
+portMUX_TYPE encoderMux = portMUX_INITIALIZER_UNLOCKED;
+int32_t encoderCount = 0;          // detents, guarded by encoderMux
+uint32_t encoderRawA = 0;          // raw level changes seen, for diagnostics
+uint32_t encoderRawB = 0;
+
+void sampleEncoder(void *) {
   // Index: previous state << 2 | new state, state = A << 1 | B.
   static const int8_t kStep[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
-  const uint8_t state = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
-  if (state == encoderState) return;
-  encoderSteps += kStep[(encoderState << 2) | state];
-  encoderState = state;
-  encoderLastEdgeUs = micros();
-  if (encoderSteps >= 2) {
-    encoderCount += kEncoderDirection;
-    encoderSteps -= 2;
-  } else if (encoderSteps <= -2) {
-    encoderCount -= kEncoderDirection;
-    encoderSteps += 2;
+  static int8_t levelA = kDebounceSamples, levelB = kDebounceSamples;  // integrators
+  static bool rawA = true, rawB = true, a = true, b = true;
+  static uint8_t state = 3;
+  static int8_t steps = 0;        // transitions not yet turned into a detent
+  static int8_t lastStep = 0;
+  static uint16_t quietSamples = 0;
+
+  const bool nowA = digitalRead(kPinEncoderA);
+  const bool nowB = digitalRead(kPinEncoderB);
+  if (nowA != rawA) { rawA = nowA; encoderRawA++; }
+  if (nowB != rawB) { rawB = nowB; encoderRawB++; }
+
+  // Integrate: a level only counts once it has been there long enough.
+  levelA = nowA ? (levelA < kDebounceSamples ? levelA + 1 : levelA) : (levelA > 0 ? levelA - 1 : 0);
+  levelB = nowB ? (levelB < kDebounceSamples ? levelB + 1 : levelB) : (levelB > 0 ? levelB - 1 : 0);
+  if (levelA == kDebounceSamples) a = true; else if (levelA == 0) a = false;
+  if (levelB == kDebounceSamples) b = true; else if (levelB == 0) b = false;
+
+  const uint8_t next = static_cast<uint8_t>((a << 1) | b);
+  if (next == state) {
+    // At rest for 150 ms a leftover half step is dropped, so counting stays
+    // aligned with the detents.
+    if (quietSamples < 300) quietSamples++; else steps = 0;
+    return;
+  }
+  int8_t step = kStep[(state << 2) | next];
+  // Both lines switched within one debounce period: a full detent, in the
+  // direction the knob was already moving.
+  if (step == 0 && quietSamples < 300) step = static_cast<int8_t>(2 * lastStep);
+  state = next;
+  quietSamples = 0;
+  if (step == 0) return;
+  lastStep = step > 0 ? 1 : -1;
+  steps += step;
+  int detents = 0;
+  while (steps >= 2) { detents += kEncoderDirection; steps -= 2; }
+  while (steps <= -2) { detents -= kEncoderDirection; steps += 2; }
+  if (detents) {
+    portENTER_CRITICAL(&encoderMux);
+    encoderCount += detents;
+    portEXIT_CRITICAL(&encoderMux);
   }
 }
 
@@ -188,12 +223,21 @@ void begin() {
   delay(50);
   Wire.begin(kPinTouchSda, kPinTouchScl, 400000);
 
-  pinMode(kPinEncoderA, INPUT);
-  pinMode(kPinEncoderB, INPUT);
+  // Internal pull-ups: harmless next to external ones, and they keep the
+  // lines from floating if the board has none.
+  pinMode(kPinEncoderA, INPUT_PULLUP);
+  pinMode(kPinEncoderB, INPUT_PULLUP);
   pinMode(kPinSwitch, INPUT_PULLUP);
-  encoderState = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
-  attachInterrupt(digitalPinToInterrupt(kPinEncoderA), onEncoderEdge, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(kPinEncoderB), onEncoderEdge, CHANGE);
+  const esp_timer_create_args_t sampler = {
+      .callback = sampleEncoder,
+      .arg = nullptr,
+      .dispatch_method = ESP_TIMER_TASK,
+      .name = "encoder",
+      .skip_unhandled_events = true,
+  };
+  esp_timer_handle_t samplerHandle = nullptr;
+  esp_timer_create(&sampler, &samplerHandle);
+  esp_timer_start_periodic(samplerHandle, kSamplePeriodUs);
 
   lv_init();
   lv_tick_set_cb(tick);
@@ -215,12 +259,16 @@ void begin() {
 }
 
 int readDetents() {
-  noInterrupts();
+  portENTER_CRITICAL(&encoderMux);
   const int32_t count = encoderCount;
   encoderCount = 0;
-  if (encoderSteps != 0 && micros() - encoderLastEdgeUs > kEncoderRestUs) encoderSteps = 0;
-  interrupts();
+  portEXIT_CRITICAL(&encoderMux);
   return count;
+}
+
+void encoderRawChanges(uint32_t &a, uint32_t &b) {
+  a = encoderRawA;
+  b = encoderRawB;
 }
 
 bool buttonPressed() {
