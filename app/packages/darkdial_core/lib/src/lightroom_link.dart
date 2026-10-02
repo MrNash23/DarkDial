@@ -4,7 +4,7 @@ import 'dart:io';
 
 const int portFromPlugin = 54770;
 const int portToPlugin = 54771;
-const String lrProtocolVersion = '1.2';
+const String lrProtocolVersion = '1.3';
 
 /// Connection to the Lightroom plugin, PROTOCOL.md section 2. Connects to the
 /// plugin's two ports and keeps trying for as long as it runs: Lightroom may
@@ -48,6 +48,9 @@ class LightroomLink {
   bool versionConflict = false;
   String? pluginVersion;
   String? lightroomVersion;
+
+  /// Minor protocol version of the plugin; newer features depend on it.
+  int pluginProtocolMinor = 0;
 
   /// Messages from the plugin except `hello` and `pong`.
   Stream<Map<String, dynamic>> get messages => _messages.stream;
@@ -154,6 +157,8 @@ class LightroomLink {
         lightroomVersion = decoded['lr'] as String?;
         final proto = decoded['proto'];
         final compatible = proto is String && proto.split('.').first == lrProtocolVersion.split('.').first;
+        final parts = proto is String ? proto.split('.') : const <String>[];
+        pluginProtocolMinor = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
         versionConflict = !compatible;
         final wasConnected = connected;
         connected = compatible;

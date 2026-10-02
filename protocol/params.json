@@ -83,6 +83,9 @@
     {"key": "client",    "de": "Kunde",         "en": "Client"},
     {"key": "back",      "de": "Zurück",        "en": "Back"},
     {"key": "noClient",  "de": "Keinen passenden Kunden gefunden? Bitte in der Desktop-App anlegen.",
-                         "en": "No matching client? Please create it in the desktop app."}
+                         "en": "No matching client? Please create it in the desktop app."},
+    {"key": "library", "de": "Bibliothek", "en": "Library"},
+    {"key": "picked", "de": "Markiert", "en": "Picked"},
+    {"key": "rejected", "de": "Abgelehnt", "en": "Rejected"}
   ]
 }

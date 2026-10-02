@@ -26,8 +26,10 @@ class Strings {
   String tooMany(int max) => _t('Das Gerät zeigt höchstens $max Regler', 'The device shows at most $max controls');
   String get preview => _t('Vorschau', 'Preview');
   String get previewHint =>
-      _t('Mausrad dreht · Klick drückt · langer Klick: Zeiterfassung · Doppelklick: zurücksetzen',
-          'Scroll turns · click presses · long click: time tracking · double click: reset');
+      _t('Mausrad dreht · Klick drückt · langer Klick: Zeiterfassung · Doppelklick: zurücksetzen · '
+              'Bibliothek: Rechtsklick tippt, Doppelklick doppeltippt',
+          'Scroll turns · click presses · long click: time tracking · double click: reset · '
+              'Library: right click taps, double click double-taps');
   String get shortWord => _t('Kurzwort', 'Short word');
   String get icon => _t('Symbol', 'Icon');
   String get step => _t('Schrittweite', 'Step size');
@@ -39,6 +41,34 @@ class Strings {
         'Gerät springt zu dem Regler, der in Lightroom bewegt wird',
         'Device jumps to the slider that is moved in Lightroom',
       );
+  String get librarySection => _t('In der Bibliothek', 'In the Library');
+  String get libraryEnabled => _t(
+        'Drehen blättert durch die Fotos',
+        'Turning browses the photos',
+      );
+  String get libraryHint => _t(
+        'Knopfdruck wechselt nach Entwickeln, Doppeldruck in Entwickeln zurück in die Bibliothek. '
+            'Dieselbe Aktion noch einmal nimmt die Markierung zurück.',
+        'A press of the knob switches to Develop, a double press in Develop back to the Library. '
+            'The same action again takes the mark back.',
+      );
+  String get libraryTap => _t('Tippen', 'Tap');
+  String get libraryDoubleTap => _t('Doppeltippen', 'Double tap');
+  String libraryMark(LibraryMark mark) => switch (mark) {
+        LibraryMark.none => _t('Aus', 'Off'),
+        LibraryMark.pick => _t('Als markiert kennzeichnen', 'Flag as pick'),
+        LibraryMark.reject => _t('Als abgelehnt kennzeichnen', 'Flag as rejected'),
+        LibraryMark.star1 => _t('1 Stern', '1 star'),
+        LibraryMark.star2 => _t('2 Sterne', '2 stars'),
+        LibraryMark.star3 => _t('3 Sterne', '3 stars'),
+        LibraryMark.star4 => _t('4 Sterne', '4 stars'),
+        LibraryMark.star5 => _t('5 Sterne', '5 stars'),
+        LibraryMark.red => _t('Farbe Rot', 'Red label'),
+        LibraryMark.yellow => _t('Farbe Gelb', 'Yellow label'),
+        LibraryMark.green => _t('Farbe Grün', 'Green label'),
+        LibraryMark.blue => _t('Farbe Blau', 'Blue label'),
+        LibraryMark.purple => _t('Farbe Lila', 'Purple label'),
+      };
   String get sendToDevice => _t('Aufs Gerät übertragen', 'Send to device');
   String get sent => _t('Übertragen', 'Sent');
   String get sendFailed => _t('Übertragung fehlgeschlagen', 'Transfer failed');

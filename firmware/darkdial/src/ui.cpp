@@ -32,6 +32,16 @@ constexpr int kInfoWidth = 250;  // the running time sits in the gap of the ring
 // The ring only starts to fill after this part of the long press, so a
 // normal click does not flash it.
 constexpr float kHoldVisibleFrom = 0.2f;
+// Library: five dots for the stars where the icon sits otherwise, the colour
+// label as a bar below them, the flag in words below the file name.
+constexpr int kStarSize = 26;
+constexpr int kStarGap = 14;
+constexpr int kStarTop = 100;
+constexpr int kColorBarTop = 144;
+constexpr int kColorBarWidth = 5 * kStarSize + 4 * kStarGap;
+constexpr int kFlagTop = 236;
+constexpr uint32_t kLibraryColors[6] = {0, 0xFA3A31, 0xF8D32D, 0x7FE530, 0x5394FC, 0xAE72F9};
+constexpr uint32_t kColorRejected = 0xE5484D;
 constexpr uint32_t kColorTrack = 0x26262B;
 constexpr uint32_t kColorSelect = 0x8A8A90;
 constexpr uint32_t kColorAccent = 0xFF9F0A;
@@ -49,6 +59,9 @@ lv_obj_t *value = nullptr;
 lv_obj_t *gapTime = nullptr;
 lv_obj_t *menuTitle = nullptr;
 lv_obj_t *infoText = nullptr;
+lv_obj_t *stars[5] = {};
+lv_obj_t *colorBar = nullptr;
+lv_obj_t *flagText = nullptr;
 lv_obj_t *logo = nullptr;
 bool logoShown = true;
 
@@ -209,6 +222,27 @@ void showTimerNotice(const dd::Device &device) {
   }
 }
 
+/// The Library: stars, colour label, file name and flag of the selected photo.
+void showLibrary(const dd::Device &device) {
+  showMessage(dd::ICON_COUNT, device.libraryName());  // no icon
+  lv_label_set_text(menuTitle, timerText(dd::TEXT_LIBRARY, device.language()));
+  for (int i = 0; i < 5; i++) {
+    lv_obj_set_style_bg_color(stars[i], lv_color_hex(i < device.libraryRating() ? kColorAccent : kColorTrack), 0);
+    lv_obj_set_hidden(stars[i], false);
+  }
+  if (device.libraryColor() >= 1 && device.libraryColor() <= 5) {
+    lv_obj_set_style_bg_color(colorBar, lv_color_hex(kLibraryColors[device.libraryColor()]), 0);
+    lv_obj_set_hidden(colorBar, false);
+  }
+  if (device.libraryPicked()) {
+    lv_obj_set_style_text_color(flagText, lv_color_white(), 0);
+    lv_label_set_text(flagText, timerText(dd::TEXT_PICKED, device.language()));
+  } else if (device.libraryRejected()) {
+    lv_obj_set_style_text_color(flagText, lv_color_hex(kColorRejected), 0);
+    lv_label_set_text(flagText, timerText(dd::TEXT_REJECTED, device.language()));
+  }
+}
+
 void showSlot(const dd::Device &device) {
   const dd::Slot &slot = device.slot(device.index());
   const dd::SlotValue &current = device.value(device.index());
@@ -320,6 +354,30 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   lv_obj_align(infoText, LV_ALIGN_TOP_MID, 0, kInfoTop);
   lv_label_set_text(infoText, "");
 
+  for (int i = 0; i < 5; i++) {
+    stars[i] = lv_obj_create(screen);
+    lv_obj_remove_style_all(stars[i]);
+    lv_obj_set_size(stars[i], kStarSize, kStarSize);
+    lv_obj_align(stars[i], LV_ALIGN_TOP_MID, (i - 2) * (kStarSize + kStarGap), kStarTop);
+    lv_obj_set_style_radius(stars[i], LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(stars[i], LV_OPA_COVER, 0);
+    lv_obj_set_clickable(stars[i], false);
+    lv_obj_set_hidden(stars[i], true);
+  }
+  colorBar = lv_obj_create(screen);
+  lv_obj_remove_style_all(colorBar);
+  lv_obj_set_size(colorBar, kColorBarWidth, 8);
+  lv_obj_align(colorBar, LV_ALIGN_TOP_MID, 0, kColorBarTop);
+  lv_obj_set_style_radius(colorBar, 4, 0);
+  lv_obj_set_style_bg_opa(colorBar, LV_OPA_COVER, 0);
+  lv_obj_set_clickable(colorBar, false);
+  lv_obj_set_hidden(colorBar, true);
+
+  flagText = lv_label_create(screen);
+  lv_obj_set_style_text_font(flagText, &dd_font_label, 0);
+  lv_obj_align(flagText, LV_ALIGN_TOP_MID, 0, kFlagTop);
+  lv_label_set_text(flagText, "");
+
   // The logo is created last so it covers everything while it is shown.
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
@@ -345,6 +403,9 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   lv_obj_set_style_text_color(label, lv_color_hex(kColorLabel), 0);
   lv_label_set_text(menuTitle, "");
   lv_label_set_text(infoText, "");
+  lv_label_set_text(flagText, "");
+  for (lv_obj_t *star : stars) lv_obj_set_hidden(star, true);
+  lv_obj_set_hidden(colorBar, true);
   const dd::Screen screen = device.screen();
   // What the carousel animation compares: slots and menu entries slide, a
   // change of screen does not.
@@ -363,6 +424,9 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
       break;
     case dd::Screen::NoPhoto:
       showStatus(dd::ICON_STATUS_NOPHOTO, device.language());
+      break;
+    case dd::Screen::Library:
+      showLibrary(device);
       break;
     case dd::Screen::Slot:
       if (device.slotCount() == 0) {

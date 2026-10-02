@@ -21,6 +21,7 @@ constexpr uint8_t kTypeMenuOpen = 0x06;
 constexpr uint8_t kTypeMenuSelect = 0x07;
 constexpr uint8_t kTypeMenuClosed = 0x08;
 constexpr uint8_t kTypeSlotReset = 0x09;
+constexpr uint8_t kTypeLibraryAction = 0x0A;
 constexpr uint8_t kTypeHelloRequest = 0x41;
 constexpr uint8_t kTypeConfigBegin = 0x42;
 constexpr uint8_t kTypeConfigSlot = 0x43;
@@ -33,6 +34,7 @@ constexpr uint8_t kTypeMenuEnd = 0x49;
 constexpr uint8_t kTypeTimerState = 0x4A;
 constexpr uint8_t kTypeTimerResult = 0x4B;
 constexpr uint8_t kTypeSlotGoto = 0x4C;
+constexpr uint8_t kTypeLibrary = 0x4D;
 
 uint32_t readU32(const uint8_t *p) {
   return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
@@ -214,6 +216,14 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       out.index = p[0];
       out.type = MessageType::SlotGoto;
       return true;
+    case kTypeLibrary:
+      if (size < 4) return false;
+      out.libraryFlags = p[0];
+      out.libraryRating = p[1] > 5 ? 5 : p[1];
+      out.libraryColor = p[2] > 5 ? 0 : p[2];
+      if (!readString(p, size, 3, out.text, kMaxLabelBytes)) return false;
+      out.type = MessageType::Library;
+      return true;
     case kTypeTimerResult:
       if (size < 2) return false;
       out.resultCode = p[0];
@@ -268,6 +278,7 @@ size_t buildMenuSelect(uint8_t *out, uint8_t page, uint8_t index) {
 
 size_t buildMenuClosed(uint8_t *out) { return frame(out, kTypeMenuClosed, nullptr, 0); }
 size_t buildSlotReset(uint8_t *out, uint8_t slot) { return frame(out, kTypeSlotReset, &slot, 1); }
+size_t buildLibraryAction(uint8_t *out, uint8_t action) { return frame(out, kTypeLibraryAction, &action, 1); }
 
 size_t buildRotation(uint8_t *out, int delta) {
   if (delta > 63) delta = 63;

@@ -700,6 +700,124 @@ static void testFollowLightroom() {
   CHECK(device.menuOpen() && device.index() == 1 && host.sent.empty());
 }
 
+// The last message the device sent is a LibraryAction with this action.
+static bool sentAction(const RecordingHost &host, uint8_t action) {
+  if (host.sent.empty()) return false;
+  const Bytes &m = host.sent.back();
+  uint8_t payload[8];
+  return m.size() > 7 && m[5] == 0x0A && dd::unpack7(m.data() + 6, m.size() - 7, payload) == 1 && payload[0] == action;
+}
+
+static void testLibrary() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  const uint8_t all = dd::kStatusLightroom | dd::kStatusPhoto;
+  feed(device, status(all), 0);
+  CHECK(device.screen() == dd::Screen::Slot);
+
+  // In Develop a double click of the knob asks for the Library; a single
+  // click is just the click, and a turn in between breaks the pair.
+  device.buttonDown(1000);
+  device.buttonUp(1050);
+  CHECK(device.mode() == dd::Mode::Edit && host.sent.size() == 1);
+  device.buttonDown(1200);
+  device.buttonUp(1250);
+  CHECK(device.mode() == dd::Mode::Select && sentAction(host, dd::kActionToggleModule));
+  host.sent.clear();
+  device.buttonDown(3000);
+  device.buttonUp(3050);
+  device.rotate(1, 3100);
+  device.buttonDown(3200);
+  device.buttonUp(3250);
+  CHECK(!sentAction(host, dd::kActionToggleModule));
+  CHECK(device.mode() == dd::Mode::Select);
+
+  // The service says Lightroom shows the Library.
+  const uint8_t both = dd::kLibraryActive | dd::kLibraryTap | dd::kLibraryDoubleTap;
+  feed(device, library(both | dd::kLibraryPicked, 3, 2, "IMG_0042.CR3"), 6000);
+  CHECK(device.screen() == dd::Screen::Library);
+  CHECK(device.libraryPicked() && !device.libraryRejected() && device.libraryRating() == 3);
+  CHECK(device.libraryColor() == 2 && strcmp(device.libraryName(), "IMG_0042.CR3") == 0);
+
+  // Turning browses: plain rotation, never accelerated, and no slot changes.
+  host.sent.clear();
+  const uint8_t index = device.index();
+  device.rotate(1, 6100);
+  device.rotate(1, 6105);
+  device.rotate(-2, 6110);
+  CHECK(host.sent.size() == 3 && host.sent[0][0] == 0xB0 && host.sent[0][2] == 65 && host.sent[1][2] == 65 &&
+        host.sent[2][2] == 62);
+  CHECK(device.index() == index && device.mode() == dd::Mode::Select);
+
+  // A click of the knob asks for Develop and is no slot click.
+  feed(device, status(all), 7000);
+  device.buttonDown(7000);
+  device.buttonUp(7050);
+  CHECK(sentAction(host, dd::kActionToggleModule) && device.mode() == dd::Mode::Select);
+
+  // A tap waits for a second one; alone it is the tap action.
+  host.sent.clear();
+  CHECK(device.tap(8000));
+  device.tick(8000 + dd::kDoubleTapMs);
+  CHECK(host.sent.empty());
+  device.tick(8001 + dd::kDoubleTapMs);
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionTap));
+  // Two taps are the double-tap action, and only that.
+  host.sent.clear();
+  feed(device, status(all), 9000);
+  device.tap(9000);
+  device.tap(9200);
+  device.tick(9200 + 2 * dd::kDoubleTapMs);
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionDoubleTap));
+  // A long touch does nothing here.
+  host.sent.clear();
+  CHECK(!device.longTouch(10000) && host.sent.empty());
+
+  // Without a double-tap action a tap acts at once; without a tap action it
+  // does nothing.
+  feed(device, status(all), 11000);
+  feed(device, library(dd::kLibraryActive | dd::kLibraryTap), 11000);
+  device.tap(11100);
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionTap));
+  host.sent.clear();
+  feed(device, library(dd::kLibraryActive | dd::kLibraryDoubleTap), 12000);
+  device.tap(12100);
+  device.tick(12100 + 2 * dd::kDoubleTapMs);
+  CHECK(host.sent.empty());
+  device.tap(13000);
+  device.tap(13100);
+  CHECK(sentAction(host, dd::kActionDoubleTap));
+  feed(device, status(all), 14000);
+  feed(device, library(dd::kLibraryActive), 14000);
+  host.sent.clear();
+  device.tap(14100);
+  device.tick(15000);
+  CHECK(host.sent.empty());
+
+  // The time tracking menu works from the Library as from anywhere.
+  feed(device, status(all), 16000);
+  feed(device, library(both), 16000);
+  device.buttonDown(16000);
+  device.tick(16000 + dd::kLongPressMs);
+  device.buttonUp(16700);
+  CHECK(device.menuOpen() && device.screen() == dd::Screen::JobMenu);
+  feed(device, status(all), 18000);
+  device.buttonDown(18000);
+  device.tick(18000 + dd::kLongPressMs);
+  device.buttonUp(18700);
+  CHECK(!device.menuOpen() && device.screen() == dd::Screen::Library);
+
+  // Back in Develop the device is where it was.
+  feed(device, status(all), 20000);
+  feed(device, library(0), 20000);
+  CHECK(device.screen() == dd::Screen::Slot && device.index() == index);
+  // A lost service ends the Library, too.
+  feed(device, library(both), 21000);
+  feed(device, status(all), 21000);
+  device.tick(21000 + dd::kHeartbeatTimeoutMs + 1);
+  CHECK(!device.libraryActive() && device.screen() == dd::Screen::Offline);
+}
+
 // Feeds the decoder for a time with one state.
 static int hold(dd::EncoderDecoder &decoder, uint8_t state, int ms) {
   int net = 0;
@@ -791,6 +909,7 @@ static void testEncoderRecording(const std::string &fixtures) {
 }
 
 int main(int argc, char **argv) {
+  testLibrary();
   testEncoder();
   if (argc > 1) testEncoderRecording(argv[1]);
   testFollowLightroom();

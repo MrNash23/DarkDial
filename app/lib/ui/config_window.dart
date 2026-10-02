@@ -69,6 +69,7 @@ class _ConfigWindowState extends State<ConfigWindow> {
                             value: c.config.followLightroom,
                             onChanged: (value) => c.setConfig(c.config.copyWith(followLightroom: value)),
                           ),
+                          _LibrarySection(controller: c),
                           const SizedBox(height: 12),
                           if (selected != null) _SlotEditor(key: ValueKey(selected.paramId), controller: c, slot: selected),
                         ],
@@ -287,6 +288,7 @@ class _PreviewSection extends StatelessWidget {
         child: GestureDetector(
           onTap: model.click,
           onDoubleTap: model.doubleTap,
+          onSecondaryTap: model.tap,
           onLongPress: model.longPress,
           child: MouseRegion(cursor: SystemMouseCursors.click, child: dial),
         ),
@@ -301,6 +303,65 @@ class _PreviewSection extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8),
             child: Text(s.previewHint, style: Theme.of(context).textTheme.bodySmall),
           ),
+      ],
+    );
+  }
+}
+
+/// What the device does while Lightroom shows the Library.
+class _LibrarySection extends StatelessWidget {
+  const _LibrarySection({required this.controller});
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final s = c.strings;
+    final library = c.config.library;
+    void update(LibrarySettings next) => c.setConfig(c.config.copyWith(library: next));
+
+    Widget action(String key, String label, LibraryMark value, void Function(LibraryMark) onChanged) => Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Row(
+            children: [
+              SizedBox(width: 120, child: Text(label)),
+              Expanded(
+                child: DropdownButton<LibraryMark>(
+                  key: Key(key),
+                  value: value,
+                  isExpanded: true,
+                  isDense: true,
+                  onChanged: library.enabled ? (mark) => onChanged(mark ?? value) : null,
+                  items: [
+                    for (final mark in LibraryMark.values)
+                      DropdownMenuItem(value: mark, child: Text(s.libraryMark(mark))),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        _SectionTitle(s.librarySection),
+        SwitchListTile(
+          key: const Key('library-enabled'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: Text(s.libraryEnabled),
+          value: library.enabled,
+          onChanged: (value) => update(library.copyWith(enabled: value)),
+        ),
+        action('library-tap', s.libraryTap, library.tap, (mark) => update(library.copyWith(tap: mark))),
+        action('library-double-tap', s.libraryDoubleTap, library.doubleTap,
+            (mark) => update(library.copyWith(doubleTap: mark))),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(s.libraryHint, style: Theme.of(context).textTheme.bodySmall),
+        ),
       ],
     );
   }

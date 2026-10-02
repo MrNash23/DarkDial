@@ -3,7 +3,7 @@ Client.lua
 Darkdial plugin main file. Translates between the line protocol of the Darkdial
 desktop service (docs/PROTOCOL.md, section 2) and the Lightroom SDK. All logic
 such as step sizes and units lives in the service; this file only reads, sets
-and reports Develop values.
+and reports Develop values, and in the Library selects and marks photos.
 
 This file is part of Darkdial. Darkdial is free software: you can redistribute
 it and/or modify it under the terms of the GNU General Public License as
@@ -19,17 +19,19 @@ local LrFileUtils         = import 'LrFileUtils'
 local LrFunctionContext   = import 'LrFunctionContext'
 local LrLogger            = import 'LrLogger'
 local LrPathUtils         = import 'LrPathUtils'
+local LrSelection         = import 'LrSelection'
 local LrSocket            = import 'LrSocket'
 local LrTasks             = import 'LrTasks'
 
 local Json = require 'Json'
 
-local PROTOCOL_VERSION = '1.2'
+local PROTOCOL_VERSION = '1.3'
 local SEND_PORT        = 54770 -- plugin -> service
 local RECEIVE_PORT     = 54771 -- service -> plugin
 local POLL_INTERVAL    = 0.25  -- seconds, module and photo changes
 local OBSERVER_INTERVAL = 0.03 -- seconds, minimum between two change scans
 local MODULE_SWITCH_TIMEOUT = 3 -- seconds
+local MAX_PHOTO_STEPS = 20     -- photos per message from the service
 
 -- Writes ~/Library/Logs/Adobe/Lightroom/LrClassicLogs/Darkdial.log. Only start-up, connection
 -- changes and errors are logged, so the file stays small.
@@ -48,7 +50,7 @@ local sendConnected = false
 local watched = {}        -- array of parameter names
 local lastValue = {}      -- name -> last reported value
 local lastRange = {}      -- name -> { min, max }
-local state = { module = nil, photoId = nil }
+local state = { module = nil, photoId = nil, name = '', rating = 0, flag = 0, label = '' }
 local lastSource = nil    -- kind .. id of the source last reported
 local applying = false    -- true while a value from the service is being set
 local lastScan = 0
@@ -66,6 +68,24 @@ end
 local function targetPhotoId()
   local photo = LrApplication.activeCatalog():getTargetPhoto()
   return photo and photo.localIdentifier or nil
+end
+
+--- What the Library display of the device shows for the target photo: file
+--- name, stars, flag (1 pick, -1 rejected, 0 none) and colour label ('' if
+--- none). Returns nil if Lightroom would not say.
+local function photoMarks()
+  local photo = LrApplication.activeCatalog():getTargetPhoto()
+  if not photo then return '', 0, 0, '' end
+  local function read()
+    return photo:getFormattedMetadata('fileName'), photo:getRawMetadata('rating'),
+      photo:getRawMetadata('pickStatus'), photo:getRawMetadata('colorNameForLabel')
+  end
+  -- Reading metadata may yield, which plain pcall cannot pass on.
+  local call = (LrTasks.canYield and LrTasks.canYield() and LrTasks.pcall) or pcall
+  local ok, name, rating, flag, label = call(read)
+  if not ok then return nil end
+  return type(name) == 'string' and name or '', tonumber(rating) or 0, tonumber(flag) or 0,
+    type(label) == 'string' and label or ''
 end
 
 local function canEdit()
@@ -139,6 +159,10 @@ local function reportStatus()
     module = state.module or '',
     photo = state.photoId ~= nil,
     photoId = state.photoId,
+    name = state.name,
+    rating = state.rating,
+    flag = state.flag,
+    label = state.label,
   }
 end
 
@@ -179,16 +203,28 @@ local function pollSource(force)
   end
 end
 
---- Sends status if module or photo changed. Returns true if it did.
+--- Sends status if module, photo or its marks changed. Returns true if
+--- module or photo did.
 local function pollStatus(force)
   local module = LrApplicationView.getCurrentModuleName()
   local photoId = targetPhotoId()
-  if force or module ~= state.module or photoId ~= state.photoId then
-    state.module, state.photoId = module, photoId
-    reportStatus()
-    return true
+  local name, rating, flag, label = photoMarks()
+  if not name then
+    -- Lightroom did not answer: keep what is known of the same photo.
+    if photoId == state.photoId then
+      name, rating, flag, label = state.name, state.rating, state.flag, state.label
+    else
+      name, rating, flag, label = '', 0, 0, ''
+    end
   end
-  return false
+  local moved = module ~= state.module or photoId ~= state.photoId
+  local marked = name ~= state.name or rating ~= state.rating or flag ~= state.flag or label ~= state.label
+  if force or moved or marked then
+    state.module, state.photoId = module, photoId
+    state.name, state.rating, state.flag, state.label = name, rating, flag, label
+    reportStatus()
+  end
+  return force or moved
 end
 
 local function applyValue(param, value, delta, seq, reset)
@@ -295,6 +331,51 @@ function handlers.track(message)
   else
     pcall(LrDevelopController.stopTracking)
   end
+end
+
+-- Library -----------------------------------------------------------------------
+-- Selection and metadata calls may yield, so these run in a task of their own.
+
+--- Selects the photo `d` places further (negative: back).
+function handlers.photo(message)
+  local steps = tonumber(message.d)
+  if not steps or steps == 0 then return end
+  local move = steps > 0 and LrSelection.nextPhoto or LrSelection.previousPhoto
+  LrTasks.startAsyncTask(function()
+    for _ = 1, math.min(math.abs(steps), MAX_PHOTO_STEPS) do move() end
+    pollStatus(false)
+  end)
+end
+
+--- Switches between the two modules the device works in.
+function handlers.module(message)
+  if message.m ~= 'library' and message.m ~= 'develop' then return end
+  LrTasks.startAsyncTask(function()
+    LrApplicationView.switchToModule(message.m)
+  end)
+end
+
+local COLOR_LABELS = { red = true, yellow = true, green = true, blue = true, purple = true, none = true }
+
+--- Marks the selected photo: k = 'flag' (v 1 pick, -1 reject, 0 none),
+--- 'rating' (v 0 … 5) or 'label' (v a colour name or 'none').
+function handlers.mark(message)
+  local kind, value = message.k, message.v
+  if not targetPhotoId() then return end
+  LrTasks.startAsyncTask(function()
+    if kind == 'flag' then
+      if value == 1 then LrSelection.flagAsPick()
+      elseif value == -1 then LrSelection.flagAsReject()
+      else LrSelection.removeFlag() end
+    elseif kind == 'rating' and type(value) == 'number' then
+      LrSelection.setRating(math.max(0, math.min(5, math.floor(value))))
+    elseif kind == 'label' and COLOR_LABELS[value] then
+      LrSelection.setColorLabel(value)
+    else
+      return
+    end
+    pollStatus(false)
+  end)
 end
 
 function handlers.ping()

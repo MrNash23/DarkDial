@@ -22,6 +22,10 @@ class FakePlugin {
   final String proto;
   final Map<String, double> values = {};
 
+  /// Library: marks per photo id, and how many photos there are to browse.
+  final Map<int, ({int rating, int flag, String label})> marks = {};
+  int photoCount = 5;
+
   /// What `reset` restores.
   final Map<String, double> defaults = {};
 
@@ -91,7 +95,21 @@ class FakePlugin {
 
   bool get _canEdit => module == 'develop' && photoId != null;
 
-  void _status() => _send({'t': 'status', 'module': module, 'photo': photoId != null, 'photoId': photoId});
+  ({int rating, int flag, String label}) get mark =>
+      marks[photoId] ?? (rating: 0, flag: 0, label: '');
+
+  void _status() => _send({
+        't': 'status',
+        'module': module,
+        'photo': photoId != null,
+        'photoId': photoId,
+        if (photoId != null) ...{
+          'name': 'IMG_${photoId.toString().padLeft(4, '0')}.CR3',
+          'rating': mark.rating,
+          'flag': mark.flag,
+          'label': mark.label,
+        },
+      });
 
   void _source() =>
       _send({'t': 'source', 'kind': source?.kind ?? '', 'name': source?.name ?? '', 'id': source?.id ?? ''});
@@ -171,6 +189,26 @@ class FakePlugin {
           _send({'t': 'range', 'p': param, 'min': ranges[param]![0], 'max': ranges[param]![1]});
           _report(param);
         }
+      case 'photo':
+        final id = photoId;
+        if (id == null) return;
+        photoId = (id + (decoded['d'] as num).toInt()).clamp(1, photoCount);
+        _status();
+        _reportAll();
+      case 'module':
+        final name = decoded['m'];
+        if (name == 'library' || name == 'develop') userSwitchesModule(name as String);
+      case 'mark':
+        final id = photoId;
+        if (id == null) return;
+        final value = decoded['v'];
+        marks[id] = switch (decoded['k']) {
+          'rating' => (rating: (value as num).toInt(), flag: mark.flag, label: mark.label),
+          'flag' => (rating: mark.rating, flag: (value as num).toInt(), label: mark.label),
+          'label' => (rating: mark.rating, flag: mark.flag, label: value == 'none' ? '' : value as String),
+          _ => mark,
+        };
+        _status();
       case 'set' || 'delta' || 'reset':
         if (param is! String || !values.containsKey(param) || photoId == null) return;
         final seq = (decoded['s'] as num?)?.toInt();

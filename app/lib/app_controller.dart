@@ -177,7 +177,9 @@ class AppController extends ChangeNotifier {
     config = next;
     notifyListeners();
     await _save();
-    await _engine?.updateConfig(next);
+    // Two changes in quick succession may finish saving in either order; the
+    // engine always gets the latest one.
+    await _engine?.updateConfig(config);
   }
 
   /// "Send to device": true if the device confirmed.

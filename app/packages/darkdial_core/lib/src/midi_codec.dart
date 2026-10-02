@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolMajor = 1;
-const int protocolMinor = 2;
+const int protocolMinor = 3;
 
 const int _sysexStart = 0xF0;
 const int _sysexEnd = 0xF7;
@@ -192,6 +192,19 @@ class SlotReset extends DeviceMessage {
   final int slot;
 }
 
+/// In the Library: the display was tapped or double-tapped, or the knob was
+/// clicked to change the module (that one also comes from Develop, on a
+/// double click).
+class LibraryAction extends DeviceMessage {
+  const LibraryAction(this.action);
+
+  static const int tap = 1;
+  static const int doubleTap = 2;
+  static const int toggleModule = 3;
+
+  final int action;
+}
+
 /// Long press: the time tracking menu was opened.
 class MenuOpen extends DeviceMessage {
   const MenuOpen();
@@ -366,6 +379,35 @@ class SlotGoto extends DeviceMessage {
   final int slot;
 }
 
+/// Lightroom shows the Library (or not): the knob browses, taps rate. Carries
+/// what the selected photo has, for the display.
+class Library extends DeviceMessage {
+  const Library({
+    this.active = false,
+    this.tapEnabled = false,
+    this.doubleTapEnabled = false,
+    this.flag = 0,
+    this.rating = 0,
+    this.color = 0,
+    this.name = '',
+  });
+
+  final bool active;
+  final bool tapEnabled;
+  final bool doubleTapEnabled;
+
+  /// 1 picked, -1 rejected, 0 neither.
+  final int flag;
+  final int rating;
+
+  /// 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple.
+  final int color;
+  final String name;
+
+  int get flags =>
+      (active ? 1 : 0) | (tapEnabled ? 2 : 0) | (doubleTapEnabled ? 4 : 0) | (flag > 0 ? 8 : 0) | (flag < 0 ? 16 : 0);
+}
+
 class TimerResult extends DeviceMessage {
   const TimerResult(this.code, [this.text = '']);
 
@@ -479,6 +521,13 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
         ]),
       TimerResult(:final code, :final text) => _frame(0x4B, [code, ..._str(text, maxLabelBytes)]),
       SlotGoto(:final slot) => _frame(0x4C, [slot]),
+      LibraryAction(:final action) => _frame(0x0A, [action]),
+      Library() => _frame(0x4D, [
+          message.flags,
+          message.rating.clamp(0, 5),
+          message.color.clamp(0, 5),
+          ..._str(message.name, maxLabelBytes),
+        ]),
     };
 
 /// Decodes one complete MIDI message. Returns null for anything that is not a
@@ -599,6 +648,20 @@ DeviceMessage? decodeMessage(List<int> bytes) {
       return text == null ? null : TimerResult(p[0], text);
     case 0x4C:
       return p.isEmpty ? null : SlotGoto(p[0]);
+    case 0x0A:
+      return p.isEmpty ? null : LibraryAction(p[0]);
+    case 0x4D:
+      final name = p.length < 4 ? null : str(3);
+      if (name == null) return null;
+      return Library(
+        active: p[0] & 1 != 0,
+        tapEnabled: p[0] & 2 != 0,
+        doubleTapEnabled: p[0] & 4 != 0,
+        flag: p[0] & 8 != 0 ? 1 : (p[0] & 16 != 0 ? -1 : 0),
+        rating: p[1].clamp(0, 5),
+        color: p[2] > 5 ? 0 : p[2],
+        name: name,
+      );
   }
   return null;
 }

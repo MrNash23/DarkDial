@@ -42,6 +42,12 @@ class DeviceModel {
   /// False until a Status arrives, and again when the heartbeat stops.
   bool serviceConnected = false;
 
+  /// What the service said about the Library; inactive in Develop.
+  Library library = const Library();
+
+  /// True while Lightroom shows the Library and the knob browses the photos.
+  bool get libraryActive => serviceConnected && library.active;
+
   // Time tracking.
   bool menuOpen = false;
   int menuIndex = 0;
@@ -119,6 +125,10 @@ class DeviceModel {
       onChanged();
       return;
     }
+    if (libraryActive) {
+      emit(Rotation(detents.clamp(-63, 63)));
+      return;
+    }
     if (slots.isEmpty) return;
     if (mode == DeviceMode.select) {
       index = (index + detents) % slots.length;
@@ -129,11 +139,15 @@ class DeviceModel {
     }
   }
 
-  /// Knob click or tap on the display.
+  /// Knob click. In the Library it asks for Develop.
   void click() {
     if (_wake()) return;
     if (menuOpen) {
       _menuAction();
+      return;
+    }
+    if (libraryActive) {
+      emit(const LibraryAction(LibraryAction.toggleModule));
       return;
     }
     if (slots.isEmpty) return;
@@ -147,10 +161,38 @@ class DeviceModel {
     onChanged();
   }
 
-  /// Double tap on the display: in edit mode, reset the slot to its default.
+  /// Two clicks of the knob in a row: from Develop to the Library. The clicks
+  /// themselves happen as usual.
+  void doubleClick() {
+    if (idle || menuOpen || libraryActive) {
+      click();
+      return;
+    }
+    click();
+    click();
+    emit(const LibraryAction(LibraryAction.toggleModule));
+  }
+
+  /// Tap on the display: the tap action in the Library, otherwise a click.
+  void tap() {
+    if (!libraryActive || menuOpen || idle) {
+      click();
+      return;
+    }
+    _wake();
+    if (library.tapEnabled) emit(const LibraryAction(LibraryAction.tap));
+  }
+
+  /// Double tap on the display: in edit mode, reset the slot to its default;
+  /// in the Library, the double-tap action.
   void doubleTap() {
     if (_wake()) return;
-    if (menuOpen || mode != DeviceMode.edit || slots.isEmpty) return;
+    if (menuOpen) return;
+    if (libraryActive) {
+      if (library.doubleTapEnabled) emit(const LibraryAction(LibraryAction.doubleTap));
+      return;
+    }
+    if (mode != DeviceMode.edit || slots.isEmpty) return;
     emit(SlotReset(index));
   }
 
@@ -189,6 +231,7 @@ class DeviceModel {
   void heartbeatLost() {
     serviceConnected = false;
     timerRunning = false;
+    library = const Library();
     if (menuOpen) {
       menu = [];
       menuIndex = 0;
@@ -303,6 +346,9 @@ class DeviceModel {
         index = slot;
         mode = DeviceMode.edit;
         emit(SlotSelect(index));
+        onChanged();
+      case Library():
+        library = message;
         onChanged();
       case TimerResult():
         // The action is done: the menu closes and the result is shown briefly.

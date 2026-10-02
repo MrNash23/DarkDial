@@ -1,5 +1,6 @@
-// State machine of the device: carousel, edit mode, configuration transfer,
-// heartbeat, and the time tracking menu behind the long press. Portable C++;
+// State machine of the device: carousel, edit mode, browsing in the Library,
+// configuration transfer, heartbeat, and the time tracking menu behind the
+// long press. Portable C++;
 // the Dart twin is DeviceModel in
 // app/packages/darkdial_core/lib/src/simulator.dart - keep both in sync.
 #pragma once
@@ -22,6 +23,7 @@ enum class Screen : uint8_t {
   Slot,
   JobMenu,      // time tracking menu, opened by a long press
   TimerNotice,  // "started" / "stopped" / an error text, shown briefly
+  Library,      // Lightroom shows the Library: the knob browses, taps rate
 };
 
 constexpr uint8_t kStatusLightroom = 1;
@@ -36,6 +38,8 @@ constexpr uint32_t kLongPressMs = 500;
 constexpr uint32_t kTouchGuardMs = 500;
 constexpr uint32_t kTimerNoticeMs = 1200;
 constexpr uint32_t kDoubleTapMs = 350;
+// Two clicks of the knob within this time switch from Develop to the Library.
+constexpr uint32_t kDoubleClickMs = 400;
 // The menu closes by itself after this long without input.
 constexpr uint32_t kMenuTimeoutMs = 20000;
 // Without knob or touch input for this long the display shows the logo.
@@ -84,8 +88,9 @@ class Device {
   void click();
   /// The display was tapped. A tap is a click, except in edit mode, where two
   /// taps within kDoubleTapMs reset the slot to its default; a single tap
-  /// there becomes a click once that time has passed. Returns false if the
-  /// tap was ignored because it came with a press of the knob.
+  /// there becomes a click once that time has passed. In the Library a tap
+  /// and a double tap are the two actions chosen in the app. Returns false if
+  /// the tap was ignored because it came with a press of the knob.
   bool tap(uint32_t nowMs);
   /// The display was touched and held: in edit mode, reset the slot to its
   /// default. Returns false if ignored.
@@ -121,6 +126,16 @@ class Device {
   /// Direction of the last carousel move: -1, 0 or +1, for the slide animation.
   int lastMove() const { return lastMove_; }
 
+  // Library --------------------------------------------------------------------
+  /// True while Lightroom shows the Library and the knob browses the photos.
+  bool libraryActive() const { return serviceConnected_ && (libraryFlags_ & kLibraryActive) != 0; }
+  bool libraryPicked() const { return (libraryFlags_ & kLibraryPicked) != 0; }
+  bool libraryRejected() const { return (libraryFlags_ & kLibraryRejected) != 0; }
+  uint8_t libraryRating() const { return libraryRating_; }
+  /// 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple.
+  uint8_t libraryColor() const { return libraryColor_; }
+  const char *libraryName() const { return libraryName_; }
+
   // Time tracking -------------------------------------------------------------
   // The menu is a page sent by the service; the device shows one line at a
   // time and reports which one was chosen.
@@ -142,6 +157,8 @@ class Device {
 
  private:
   void longPress(uint32_t nowMs);
+  void knobClick(uint32_t nowMs);
+  void libraryAction(uint8_t action);
   void menuAction(uint32_t nowMs);
   void closeMenu();
   bool touchAllowed(uint32_t nowMs) const;
@@ -182,6 +199,14 @@ class Device {
   // Display taps.
   bool tapPending_ = false;
   uint32_t tapAtMs_ = 0;
+
+  // Library.
+  uint8_t libraryFlags_ = 0;
+  uint8_t libraryRating_ = 0;
+  uint8_t libraryColor_ = 0;
+  char libraryName_[kMaxLabelBytes + 1] = {0};
+  bool knobClicked_ = false;
+  uint32_t knobClickAtMs_ = 0;
 
   // Idle logo.
   bool idle_ = false;

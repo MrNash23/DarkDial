@@ -1,6 +1,6 @@
 # Darkdial protocol
 
-Protocol version **1.2** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom). Two links, both bidirectional:
+Protocol version **1.3** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5). Two links, both bidirectional:
 
 ```
 Device  ⇄  USB-MIDI  ⇄  Service (desktop app)  ⇄  LrSocket / TCP localhost  ⇄  Plugin
@@ -27,7 +27,7 @@ The device is a USB-MIDI device with the product name `Darkdial`.
 
 ### 1.1 Rotation (device → service)
 
-Rotation in edit mode is sent as a relative Control Change:
+Rotation in edit mode, and in the Library (1.3, there never accelerated), is sent as a relative Control Change:
 
 | Byte | Value |
 | --- | --- |
@@ -93,6 +93,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x07` | MenuSelect | `u8 page`, `u8 index` | *1.1.* The line `index` of page `page` was clicked. Service answers with another page or a TimerResult. |
 | `0x08` | MenuClosed | – | *1.1.* The device closed the menu itself: long press, timeout, or a line with the "closes" flag. |
 | `0x09` | SlotReset | `u8 slot` | *1.1.* Double tap or long touch on the display in edit mode: reset this slot to Lightroom's default. |
+| `0x0A` | LibraryAction | `u8 action` | *1.3.* 1: the display was tapped in the Library, 2: double-tapped, 3: the knob asks for the other module (a click in the Library, a double click in Develop). |
 
 ### 1.5 Messages service → device
 
@@ -110,6 +111,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x4A` | TimerState | `u8 running`, `u32 jobId`, `u32 elapsedSeconds`, `str label` | *1.1.* State of the clock. `elapsedSeconds` is the time of the running entry so far; the device counts on from there. |
 | `0x4C` | SlotGoto | `u8 slot` | *1.2.* The slider of this slot was just moved in Lightroom: the device goes to the slot and into edit mode, and answers with SlotLeave (if it was editing another slot) and SlotSelect. Ignored while the menu is open. |
 | `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* The chosen action is done: the device closes the menu and shows the result briefly. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
+| `0x4D` | Library | `u8 flags`, `u8 rating`, `u8 color`, `str name` | *1.3.* Flags bit 0: Lightroom shows the Library, the device is in Library mode; bit 1: a tap has an action; bit 2: a double tap has an action; bit 3: the photo is flagged as pick; bit 4: as rejected. `rating` 0 … 5 stars. `color` 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple. `name` is the file name, ≤ 20 bytes. Sent on every change. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
 final XOR) over the concatenation of the unpacked payloads of all ConfigSlot
@@ -162,6 +164,28 @@ displays and selects.
   it moved.
 - `u32` is four bytes, big-endian.
 
+### 1.8 Library mode (1.3)
+
+While Lightroom shows the Library, the knob browses the photos and the
+display marks them. The service decides when that is and what a tap means;
+the device only knows "tap" and "double tap".
+
+- A device announces the Library mode by `minor ≥ 3` in Hello. The service
+  sends Library only to such devices, and only if the plugin speaks 1.3 too.
+- **Entering and leaving.** Library with flag bit 0 puts the device into
+  Library mode, without it back to where it was (slot and mode are kept).
+  A lost heartbeat ends it.
+- **Turning** sends the relative Control Change of 1.1, one per detent
+  without acceleration. The service selects the next or previous photos.
+- **The knob** toggles the module: a click in Library mode, and a double
+  click (two clicks within 400 ms) outside it, send LibraryAction 3. The two
+  clicks of a double click act as usual before that.
+- **Taps.** With flag bit 2 a tap waits 350 ms for a second one; two taps
+  send action 2, one sends action 1 if bit 1 is set. Without bit 2 a tap
+  sends action 1 at once. The service marks the photo and answers with the
+  new Library message.
+- The long press opens the time tracking menu as everywhere.
+
 ---
 
 ## 2. Service ⇄ Plugin (LrSocket)
@@ -189,6 +213,9 @@ holds the message type. Parameters are identified by their Lightroom SDK name
 | `get` | `p` | Plugin answers `value`. |
 | `reset` | `p`, `s` (optional) | *1.1.* Reset the parameter to Lightroom's default (for white balance: as shot); otherwise like `set`. |
 | `track` | `p` (name, or `""` to stop) | Calls `startTracking` / `stopTracking` for smoother continuous changes. |
+| `photo` | `d` (number of photos, negative = back) | *1.3.* Select the photo `d` places further; at most 20 per message. Plugin answers `status`. |
+| `module` | `m` (`"library"` or `"develop"`) | *1.3.* Switch to that module. |
+| `mark` | `k`, `v` | *1.3.* Mark the selected photo. `k` `"flag"`: `v` 1 pick, -1 reject, 0 none. `k` `"rating"`: `v` 0 … 5. `k` `"label"`: `v` `"red"`, `"yellow"`, `"green"`, `"blue"`, `"purple"` or `"none"`. Plugin answers `status`. |
 | `ping` | – | Plugin answers `pong`. |
 
 If `set`, `delta` or `reset` arrives outside the Develop module, the plugin switches to
@@ -199,7 +226,7 @@ Develop first, sends `status`, then applies the change.
 | `t` | Keys | Meaning |
 | --- | --- | --- |
 | `hello` | `plugin` (version string), `proto`, `lr` (Lightroom version string) | Answer to `hello`. |
-| `status` | `module` (string), `photo` (bool), `photoId` (number, optional) | Sent on connect and whenever module or target photo changes. |
+| `status` | `module` (string), `photo` (bool), `photoId` (number, optional); *1.3:* `name` (file name), `rating` (0 … 5), `flag` (1 pick, -1 rejected, 0 none), `label` (colour label name, `""` if none) | Sent on connect and whenever module, target photo or, from 1.3, its marks change. |
 | `range` | `p`, `min`, `max` | Range for the current photo. Sent after `watch` and after a photo change (Temperature differs between raw and JPEG). |
 | `value` | `p`, `v`, `s` (only when answering `set`/`delta`) | Current value. Without `s`: the value changed inside Lightroom (mouse, keyboard, preset, photo change). |
 | `pong` | – | Answer to `ping`. |
@@ -221,3 +248,9 @@ Develop first, sends `status`, then applies the change.
 
 The plugin only reports `source`. Matching a source to a job, and everything
 else about time tracking, happens in the service.
+
+### 2.5 Library mode (1.3)
+
+The plugin selects and marks photos when told to and reports what the target
+photo has. Which mark a tap sets, and that the same mark again takes it back,
+is decided in the service.

@@ -196,6 +196,19 @@ int main(int argc, char **argv) {
   run(device, 1500);
   heartbeat = -1;
 
+  // Lightroom shows the Library: stars, colour label, file name, flag.
+  feed(device, library(dd::kLibraryActive | dd::kLibraryTap | dd::kLibraryPicked, 3, 3, "IMG_0042.CR3"), nowMs);
+  run(device, 300);
+  save("34_library_picked");
+  feed(device, library(dd::kLibraryActive | dd::kLibraryRejected, 0, 0, "IMG_0043.CR3"), nowMs);
+  run(device, 300);
+  save("35_library_rejected");
+  feed(device, library(dd::kLibraryActive, 5, 1, "Hochzeit_M\xC3\xBCller_0815"), nowMs);
+  run(device, 300);
+  save("36_library_stars");
+  feed(device, library(0), nowMs);
+  run(device, 300);
+
   feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop), nowMs);
   run(device, 300);
   save("13_no_photo");

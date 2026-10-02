@@ -7,7 +7,7 @@
 namespace dd {
 
 constexpr uint8_t kProtocolMajor = 1;
-constexpr uint8_t kProtocolMinor = 2;
+constexpr uint8_t kProtocolMinor = 3;
 constexpr uint8_t kMaxSlots = 48;
 constexpr uint8_t kMaxLabelBytes = 20;
 constexpr uint8_t kMaxTextBytes = 8;
@@ -69,7 +69,20 @@ enum class MessageType : uint8_t {
   TimerState,
   TimerResult,
   SlotGoto,
+  Library,
 };
+
+// Flags of a Library message.
+constexpr uint8_t kLibraryActive = 1;     // Lightroom shows the Library: the knob browses
+constexpr uint8_t kLibraryTap = 2;        // a tap has an action
+constexpr uint8_t kLibraryDoubleTap = 4;  // a double tap has an action
+constexpr uint8_t kLibraryPicked = 8;     // the photo is flagged as pick
+constexpr uint8_t kLibraryRejected = 16;  // … as rejected
+
+// What the user did in the Library, sent as LibraryAction.
+constexpr uint8_t kActionTap = 1;
+constexpr uint8_t kActionDoubleTap = 2;
+constexpr uint8_t kActionToggleModule = 3;  // also sent from Develop, on a double click
 
 /// A decoded message from the service. Only the fields of `type` are set.
 struct Message {
@@ -98,6 +111,10 @@ struct Message {
   uint32_t timerJobId = 0;
   uint32_t timerElapsed = 0;
   uint8_t resultCode = 0;
+  // Library: flags, stars 0 … 5, colour label 0 (none) … 5; `text` is the file name.
+  uint8_t libraryFlags = 0;
+  uint8_t libraryRating = 0;
+  uint8_t libraryColor = 0;
   char text[kMaxLabelBytes + 1] = {0};
   // Unpacked payload, needed for the configuration CRC.
   uint8_t payload[kMaxPayloadBytes] = {0};
@@ -125,6 +142,7 @@ size_t buildMenuOpen(uint8_t *out);
 size_t buildMenuSelect(uint8_t *out, uint8_t page, uint8_t index);
 size_t buildMenuClosed(uint8_t *out);
 size_t buildSlotReset(uint8_t *out, uint8_t slot);
+size_t buildLibraryAction(uint8_t *out, uint8_t action);
 /// Relative CC; `delta` is clamped to -63 … 63 and must not be 0.
 size_t buildRotation(uint8_t *out, int delta);
 

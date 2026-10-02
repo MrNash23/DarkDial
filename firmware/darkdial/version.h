@@ -1,5 +1,5 @@
 // Firmware version, reported in the identity reply and in Hello.
 #pragma once
 #define DD_FW_MAJOR 0
-#define DD_FW_MINOR 4
-#define DD_FW_PATCH 7
+#define DD_FW_MINOR 5
+#define DD_FW_PATCH 0

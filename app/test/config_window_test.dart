@@ -267,6 +267,72 @@ void main() {
     await tester.runAsync(controller.shutdown);
   });
 
+  testWidgets('Library: tap actions are chosen in the settings; the preview shows the photo', (tester) async {
+    await start(tester, settings: {
+      'simulator': true,
+      'config': {
+        'language': 'de',
+        'slots': [
+          {'param': 4, 'enabled': true},
+        ],
+      },
+    });
+    await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
+    await settle(tester, () => controller.state.lightroomConnected, 'lightroom');
+    final model = controller.simulatorModel!;
+    expect(controller.config.library.enabled, isTrue);
+    expect(controller.config.library.tap, LibraryMark.pick);
+
+    // Choose "3 Sterne" for the double tap and switch the tap off.
+    Future<void> choose(String key, String label) async {
+      await tester.ensureVisible(find.byKey(Key(key)));
+      await tester.pump();
+      await tester.tap(find.byKey(Key(key)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    await choose('library-double-tap', '3 Sterne');
+    await choose('library-tap', 'Aus');
+    expect(controller.config.library.doubleTap, LibraryMark.star3);
+    expect(controller.config.library.tap, LibraryMark.none);
+    await settle(
+      tester,
+      () {
+        final saved = File(p.join(temp.path, 'settings.json')).readAsStringSync();
+        return saved.contains('"doubleTap": "star3"') && saved.contains('"tap": "none"');
+      },
+      'settings saved',
+    );
+
+    // Lightroom shows the Library: the preview shows the photo, turning browses.
+    plugin.userSwitchesModule('library');
+    await settle(tester, () => model.libraryActive && !model.library.tapEnabled, 'library on the device');
+    expect(model.library.doubleTapEnabled, isTrue);
+    expect(find.byKey(const Key('preview-library')), findsOneWidget);
+    expect(find.text('IMG_0001.CR3'), findsOneWidget);
+    model.rotate(1);
+    await settle(tester, () => plugin.photoId == 2, 'next photo');
+    await settle(tester, () => find.text('IMG_0002.CR3').evaluate().isNotEmpty, 'name in the preview');
+
+    model.doubleTap();
+    await settle(tester, () => plugin.mark.rating == 3, 'three stars in Lightroom');
+    model.tap();
+    await sync(tester);
+    expect(plugin.mark.flag, 0, reason: 'the tap is switched off');
+    await screenshot(tester, 'library');
+
+    // Switched off, the device leaves the Library mode.
+    await tester.ensureVisible(find.byKey(const Key('library-enabled')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('library-enabled')));
+    await settle(tester, () => !model.libraryActive, 'library mode off');
+    expect(find.byKey(const Key('preview-library')), findsNothing);
+
+    await tester.runAsync(controller.shutdown);
+  });
+
   testWidgets('time tracking window: name a job, stop, edit an entry, overview, export', (tester) async {
     await start(tester, settings: simulatorSettings, timeWindow: true);
     final tracker = controller.tracker;

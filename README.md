@@ -35,8 +35,8 @@ Darkdial is free and open source. It is powered by
   knob (this can be switched off).
 - **Double-tap** the display, or hold a finger on it, to reset the selected
   slider to its default.
-- Turn the knob while you are in the Library and Lightroom switches to
-  Develop by itself.
+- **Double-press** the knob to go to the Library, press it there to come
+  back to Develop.
 
 <!-- Screenshot: the device screens for a few sliders (firmware/host/snapshots) -->
 
@@ -55,6 +55,19 @@ name, icon, step size and sensitivity. 46 are available:
 | HSL | Hue, Saturation and Luminance for each of the eight colours |
 
 The first thirteen are on by default. Short names come in German and English.
+
+### Cull in the Library
+
+- While Lightroom shows the Library, **turning** goes through the photos, one
+  per click of the knob.
+- The display shows the file name, the stars, the colour label and the flag
+  of the photo.
+- **Tap** and **double-tap** the display to mark it. What each of the two
+  does is chosen in the app: flag as pick or rejected, one to five stars, a
+  colour label, or nothing. The same action again takes the mark back.
+- **Press** the knob to switch to Develop with the photo you are on.
+
+<!-- Photo: the device showing the Library screen -->
 
 ### Track your time per job
 
@@ -136,12 +149,20 @@ and Lightroom are connected.
 | Turn | Move through the sliders; in edit mode, change the value |
 | Press, or tap the display | Select a slider, or leave it again |
 | Double-tap, or touch and hold | Reset the selected slider to its default |
+| Press twice | Switch Lightroom to the Library |
 | Hold the knob for half a second | Open time tracking; hold again to close it |
+
+| In the Library | Does |
+| --- | --- |
+| Turn | Next or previous photo |
+| Tap, double-tap | Mark the photo as chosen in the app |
+| Press | Switch Lightroom to Develop |
 
 Left alone for three minutes, the display shows the Darkdial logo. The next
 turn, press or touch brings it back; that first input does nothing else.
 
-Click the menu-bar icon and choose **Configure …** to pick your sliders, or
+Click the menu-bar icon and choose **Configure …** to pick your sliders and
+what the taps do in the Library, or
 **Time tracking …** for clients, jobs and hours. Clients are created in the
 app; on the device you choose among them.
 

@@ -105,6 +105,7 @@ Screen Device::screen() const {
   if (menuOpen_) return Screen::JobMenu;
   if (timerNotice_) return Screen::TimerNotice;
   if (!serviceConnected_) return Screen::Offline;
+  if (libraryActive()) return Screen::Library;
   if (notice_ == 1) return Screen::Switching;
   if (loadedNotice_) return Screen::Loaded;
   if (lightroomConnected() && !photoSelected()) return Screen::NoPhoto;
@@ -131,6 +132,11 @@ bool Device::touchAllowed(uint32_t nowMs) const {
   return !knobUsed_ || nowMs - knobMovedAtMs_ >= kTouchGuardMs;
 }
 
+void Device::libraryAction(uint8_t action) {
+  uint8_t out[kMaxSysexBytes];
+  host_.send(out, buildLibraryAction(out, action));
+}
+
 void Device::resetSlot() {
   uint8_t out[kMaxSysexBytes];
   host_.send(out, buildSlotReset(out, index_));
@@ -140,14 +146,25 @@ bool Device::tap(uint32_t nowMs) {
   lastNowMs_ = nowMs;
   if (!touchAllowed(nowMs)) return false;
   if (wake(nowMs)) return true;
-  if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) {
+  const bool library = libraryActive() && !menuOpen_;
+  if (library && !(libraryFlags_ & kLibraryDoubleTap)) {
+    // No double tap to wait for: the tap acts at once.
+    tapPending_ = false;
+    if (libraryFlags_ & kLibraryTap) libraryAction(kActionTap);
+    return true;
+  }
+  if (!library && (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0)) {
     tapPending_ = false;
     click();
     return true;
   }
   if (tapPending_ && nowMs - tapAtMs_ <= kDoubleTapMs) {
     tapPending_ = false;
-    resetSlot();
+    if (library) {
+      libraryAction(kActionDoubleTap);
+    } else {
+      resetSlot();
+    }
     return true;
   }
   tapPending_ = true;
@@ -158,7 +175,7 @@ bool Device::tap(uint32_t nowMs) {
 bool Device::longTouch(uint32_t nowMs) {
   if (!touchAllowed(nowMs)) return false;
   if (wake(nowMs)) return true;
-  if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) return false;
+  if (menuOpen_ || libraryActive() || mode_ != Mode::Edit || slotCount_ == 0) return false;
   tapPending_ = false;
   resetSlot();
   return true;
@@ -186,8 +203,31 @@ void Device::buttonUp(uint32_t nowMs) {
     swallowPress_ = false;
     return;
   }
-  if (pressed_ && !longFired_) click();
+  if (pressed_ && !longFired_) knobClick(nowMs);
   pressed_ = false;
+}
+
+/// A click of the knob itself. In the Library it switches to Develop; in
+/// Develop it is the normal click, and a second one right after it switches
+/// to the Library.
+void Device::knobClick(uint32_t nowMs) {
+  if (menuOpen_) {
+    click();
+    return;
+  }
+  if (libraryActive()) {
+    knobClicked_ = false;
+    libraryAction(kActionToggleModule);
+    return;
+  }
+  click();
+  if (knobClicked_ && nowMs - knobClickAtMs_ <= kDoubleClickMs) {
+    knobClicked_ = false;
+    libraryAction(kActionToggleModule);
+  } else {
+    knobClicked_ = true;
+    knobClickAtMs_ = nowMs;
+  }
 }
 
 float Device::holdProgress(uint32_t nowMs) const {
@@ -247,8 +287,15 @@ void Device::rotate(int detents, uint32_t nowMs) {
     changed();
     return;
   }
-  if (slotCount_ == 0) return;
   uint8_t out[kMaxSysexBytes];
+  if (libraryActive()) {
+    // One photo per detent; the service asks Lightroom for it.
+    knobClicked_ = false;
+    host_.send(out, buildRotation(out, detents));
+    return;
+  }
+  if (slotCount_ == 0) return;
+  knobClicked_ = false;
   if (mode_ == Mode::Select) {
     // One slot per detent, wrapping around; no acceleration in the carousel.
     int next = (static_cast<int>(index_) + detents) % slotCount_;
@@ -284,7 +331,12 @@ void Device::tick(uint32_t nowMs) {
   lastNowMs_ = nowMs;
   if (tapPending_ && nowMs - tapAtMs_ > kDoubleTapMs) {
     tapPending_ = false;
-    click();  // it stayed a single tap
+    // It stayed a single tap.
+    if (libraryActive() && !menuOpen_) {
+      if (libraryFlags_ & kLibraryTap) libraryAction(kActionTap);
+    } else {
+      click();
+    }
   }
   if (pressed_ && !longFired_ && nowMs - pressedAtMs_ >= kLongPressMs) {
     longFired_ = true;
@@ -303,6 +355,7 @@ void Device::tick(uint32_t nowMs) {
     mode_ = Mode::Select;
     // The clock lives in the service; it tells us again when it is back.
     timerRunning_ = false;
+    libraryFlags_ = 0;
     menuCount_ = 0;
     menuIndex_ = 0;
     changed();
@@ -443,6 +496,14 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       tapPending_ = false;
       lastMove_ = 0;
       host_.send(out, buildSlotSelect(out, index_));
+      changed();
+      break;
+
+    case MessageType::Library:
+      libraryFlags_ = message.libraryFlags;
+      libraryRating_ = message.libraryRating;
+      libraryColor_ = message.libraryColor;
+      memcpy(libraryName_, message.text, sizeof(libraryName_));
       changed();
       break;
 

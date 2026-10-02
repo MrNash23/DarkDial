@@ -75,8 +75,14 @@ class DialPreview extends StatelessWidget {
     final iconSize = size * 112 / 360;
     final dot = controller.hslDot;
 
+    // The Library replaces the slot, as on the device.
+    final library = state.library;
+    final inLibrary = library.active && statusIcon == null && !inMenu;
+
     Widget content;
-    if (statusIcon != null) {
+    if (inLibrary) {
+      content = _LibraryContent(size: size, library: library, language: s.language);
+    } else if (statusIcon != null) {
       content = _Content(
         size: size,
         icon: Image.asset('assets/icons/icon_$statusIcon.png', width: iconSize, height: iconSize),
@@ -119,7 +125,7 @@ class DialPreview extends StatelessWidget {
       height: size,
       child: CustomPaint(
         painter: _RingPainter(
-          position: slot == null || statusIcon != null ? null : slot.position,
+          position: slot == null || statusIcon != null || inLibrary ? null : slot.position,
           bipolar: slot?.slot.bipolar ?? true,
           color: ringColor,
         ),
@@ -177,6 +183,93 @@ class DialPreview extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Colour labels of Lightroom, index 1 … 5 as in the protocol.
+const List<Color> _labelColors = [
+  Colors.transparent,
+  Color(0xFFFA3A31),
+  Color(0xFFF8D32D),
+  Color(0xFF7FE530),
+  Color(0xFF5394FC),
+  Color(0xFFAE72F9),
+];
+
+/// The Library screen: stars as dots, colour label, file name, flag.
+class _LibraryContent extends StatelessWidget {
+  const _LibraryContent({required this.size, required this.library, required this.language});
+
+  final double size;
+  final Library library;
+  final Language language;
+
+  @override
+  Widget build(BuildContext context) {
+    final unit = size / 360;
+    final flag = library.flag > 0 ? 'picked' : (library.flag < 0 ? 'rejected' : null);
+    return Stack(
+      key: const Key('preview-library'),
+      alignment: Alignment.topCenter,
+      children: [
+        Positioned(
+          top: 44 * unit,
+          child: Text(
+            kTimerTexts['library']![language.index],
+            style: TextStyle(color: ringSelectColor, fontSize: size * 0.058),
+          ),
+        ),
+        Positioned(
+          top: 100 * unit,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < 5; i++)
+                Container(
+                  width: 26 * unit,
+                  height: 26 * unit,
+                  margin: EdgeInsets.symmetric(horizontal: 7 * unit),
+                  decoration: BoxDecoration(
+                    color: i < library.rating ? accentColor : ringTrackColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (library.color >= 1 && library.color <= 5)
+          Positioned(
+            top: 144 * unit,
+            child: Container(
+              width: 186 * unit,
+              height: 8 * unit,
+              decoration: BoxDecoration(
+                color: _labelColors[library.color],
+                borderRadius: BorderRadius.circular(4 * unit),
+              ),
+            ),
+          ),
+        Positioned(
+          top: size * 0.535,
+          child: Text(
+            library.name,
+            style: TextStyle(color: const Color(0xFFB8B8BE), fontSize: size * 0.075, letterSpacing: 0.3),
+          ),
+        ),
+        if (flag != null)
+          Positioned(
+            top: 236 * unit,
+            child: Text(
+              kTimerTexts[flag]![language.index],
+              key: const Key('preview-library-flag'),
+              style: TextStyle(
+                color: library.flag > 0 ? Colors.white : const Color(0xFFE5484D),
+                fontSize: size * 0.075,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

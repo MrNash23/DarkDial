@@ -108,7 +108,7 @@ def gen_h(data, params):
         lines.append(f"  {{{s['icon']}, {c_str(s['de'])}, {c_str(s['en'])}}},  // {s['key']}")
     lines += ["};", ""]
 
-    lines += ["// Texts of the time tracking menu, indexed by TimerTextId.", "enum TimerTextId : uint8_t {"]
+    lines += ["// Texts the device shows by itself (time tracking menu, Library), indexed by TimerTextId.", "enum TimerTextId : uint8_t {"]
     for t in data["timerTexts"]:
         lines.append(f"  TEXT_{t['key'].upper()},")
     lines += ["};", "", "struct TimerText {", "  const char *de;", "  const char *en;", "};", "",

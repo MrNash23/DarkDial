@@ -56,7 +56,7 @@ static const StatusText kStatusText[] = {
   {28, "Entwickeln", "Develop"},  // develop
 };
 
-// Texts of the time tracking menu, indexed by TimerTextId.
+// Texts the device shows by itself (time tracking menu, Library), indexed by TimerTextId.
 enum TimerTextId : uint8_t {
   TEXT_STOP,
   TEXT_NEWJOB,
@@ -66,6 +66,9 @@ enum TimerTextId : uint8_t {
   TEXT_CLIENT,
   TEXT_BACK,
   TEXT_NOCLIENT,
+  TEXT_LIBRARY,
+  TEXT_PICKED,
+  TEXT_REJECTED,
 };
 
 struct TimerText {
@@ -82,6 +85,9 @@ static const TimerText kTimerText[] = {
   {"Kunde", "Client"},  // client
   {"Zur\303\274ck", "Back"},  // back
   {"Keinen passenden Kunden gefunden? Bitte in der Desktop-App anlegen.", "No matching client? Please create it in the desktop app."},  // noClient
+  {"Bibliothek", "Library"},  // library
+  {"Markiert", "Picked"},  // picked
+  {"Abgelehnt", "Rejected"},  // rejected
 };
 
 // Slots shown before the service has ever sent a configuration.

@@ -71,16 +71,85 @@ class SlotSettings {
   }
 }
 
+/// What a tap or a double tap does to the selected photo in the Library.
+/// Doing the same again takes it back (flag, colour) or sets no stars.
+enum LibraryMark {
+  none,
+  pick,
+  reject,
+  star1,
+  star2,
+  star3,
+  star4,
+  star5,
+  red,
+  yellow,
+  green,
+  blue,
+  purple;
+
+  /// Stars this action sets, 0 if it is not a rating.
+  int get stars => index >= star1.index && index <= star5.index ? index - star1.index + 1 : 0;
+
+  /// Lightroom's name of the colour label, null if it is not one.
+  String? get colorLabel => index >= red.index ? name : null;
+
+  static LibraryMark parse(Object? value, LibraryMark fallback) {
+    for (final mark in values) {
+      if (mark.name == value) return mark;
+    }
+    return fallback;
+  }
+}
+
+/// Lightroom's colour labels in the order of the protocol (1 … 5).
+const List<String> kColorLabels = ['red', 'yellow', 'green', 'blue', 'purple'];
+
+/// The Library mode: while Lightroom shows the Library, the knob browses the
+/// photos and taps on the display mark them.
+class LibrarySettings {
+  const LibrarySettings({this.enabled = true, this.tap = LibraryMark.pick, this.doubleTap = LibraryMark.star1});
+
+  final bool enabled;
+  final LibraryMark tap;
+  final LibraryMark doubleTap;
+
+  LibrarySettings copyWith({bool? enabled, LibraryMark? tap, LibraryMark? doubleTap}) => LibrarySettings(
+        enabled: enabled ?? this.enabled,
+        tap: tap ?? this.tap,
+        doubleTap: doubleTap ?? this.doubleTap,
+      );
+
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'tap': tap.name, 'doubleTap': doubleTap.name};
+
+  factory LibrarySettings.fromJson(Object? json) {
+    const defaults = LibrarySettings();
+    if (json is! Map<String, dynamic>) return defaults;
+    return LibrarySettings(
+      enabled: json['enabled'] != false,
+      tap: LibraryMark.parse(json['tap'], defaults.tap),
+      doubleTap: LibraryMark.parse(json['doubleTap'], defaults.doubleTap),
+    );
+  }
+}
+
 /// The configuration edited in the app: every known slider in display order,
 /// each enabled or not.
 class AppConfig {
-  const AppConfig({required this.language, required this.slots, this.followLightroom = true});
+  const AppConfig({
+    required this.language,
+    required this.slots,
+    this.followLightroom = true,
+    this.library = const LibrarySettings(),
+  });
 
   final Language language;
   final List<SlotSettings> slots;
 
   /// The device jumps to the slider that was just moved in Lightroom.
   final bool followLightroom;
+
+  final LibrarySettings library;
 
   factory AppConfig.defaults([Language language = Language.de]) => AppConfig(
         language: language,
@@ -90,10 +159,17 @@ class AppConfig {
   /// Enabled sliders in order, capped at what the device can hold.
   List<SlotSettings> get activeSlots => slots.where((s) => s.enabled).take(maxSlots).toList();
 
-  AppConfig copyWith({Language? language, List<SlotSettings>? slots, bool? followLightroom}) => AppConfig(
+  AppConfig copyWith({
+    Language? language,
+    List<SlotSettings>? slots,
+    bool? followLightroom,
+    LibrarySettings? library,
+  }) =>
+      AppConfig(
         language: language ?? this.language,
         slots: slots ?? this.slots,
         followLightroom: followLightroom ?? this.followLightroom,
+        library: library ?? this.library,
       );
 
   /// What is sent to the device for the active slots.
@@ -116,6 +192,7 @@ class AppConfig {
         'version': 1,
         'language': language.name,
         'follow': followLightroom,
+        'library': library.toJson(),
         'slots': [for (final s in slots) s.toJson()],
       };
 
@@ -137,6 +214,11 @@ class AppConfig {
     for (final p in kParams) {
       if (!seen.contains(p.id)) slots.add(SlotSettings(paramId: p.id));
     }
-    return AppConfig(language: language, slots: slots, followLightroom: json['follow'] != false);
+    return AppConfig(
+      language: language,
+      slots: slots,
+      followLightroom: json['follow'] != false,
+      library: LibrarySettings.fromJson(json['library']),
+    );
   }
 }

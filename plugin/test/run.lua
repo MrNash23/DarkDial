@@ -72,10 +72,16 @@ local lr = {
   observer = nil,
   sources = nil,           -- what catalog:getActiveSources() returns
   photoPath = '/Fotos/2026/Hochzeit/IMG_0001.dng',
+  marks = {},              -- photo id -> { rating, pickStatus, colorNameForLabel }
   sockets = {},
   sent = {},
   tasks = {},
 }
+
+function lr.mark(key, value)
+  lr.marks[lr.photoId] = lr.marks[lr.photoId] or {}
+  lr.marks[lr.photoId][key] = value
+end
 
 local function startTask(fn)
   local task = coroutine.create(fn)
@@ -103,7 +109,13 @@ local sdk = {
           if not lr.photoId then return nil end
           return {
             localIdentifier = lr.photoId,
-            getRawMetadata = function(_, key) return key == 'path' and lr.photoPath or nil end,
+            getRawMetadata = function(_, key)
+              if key == 'path' then return lr.photoPath end
+              return (lr.marks[lr.photoId] or {})[key]
+            end,
+            getFormattedMetadata = function(_, key)
+              return key == 'fileName' and ('IMG_00' .. lr.photoId .. '.dng') or nil
+            end,
           }
         end,
         getActiveSources = function() return lr.sources or { 'all_photographs' } end,
@@ -114,6 +126,15 @@ local sdk = {
   LrApplicationView = {
     getCurrentModuleName = function() return lr.module end,
     switchToModule = function(name) lr.module = name end,
+  },
+  LrSelection = {
+    nextPhoto = function() lr.photoId = lr.photoId + 1 end,
+    previousPhoto = function() lr.photoId = lr.photoId - 1 end,
+    flagAsPick = function() lr.mark('pickStatus', 1) end,
+    flagAsReject = function() lr.mark('pickStatus', -1) end,
+    removeFlag = function() lr.mark('pickStatus', 0) end,
+    setRating = function(n) lr.mark('rating', n) end,
+    setColorLabel = function(name) lr.mark('colorNameForLabel', name == 'none' and '' or name) end,
   },
   LrDate = { currentTime = function() return lr.time end },
   LrDevelopController = {
@@ -151,7 +172,7 @@ local sdk = {
   },
   LrFileUtils = {
     exists = function() return false end,
-    readFile = function() return '0.3.1\n' end,
+    readFile = function() return '0.4.0\n' end,
   },
   LrFunctionContext = {
     callWithContext = function(_, fn) return fn({ addFailureHandler = function() end }) end,
@@ -177,6 +198,8 @@ local sdk = {
   LrTasks = {
     startAsyncTask = startTask,
     sleep = function() coroutine.yield() end,
+    canYield = function() return coroutine.running() ~= nil end,
+    pcall = pcall,
   },
 }
 
@@ -226,8 +249,8 @@ receive { t = 'hello', app = 'test', proto = '1.0' }
 do
   local messages = drain()
   local hello = find(messages, 'hello')
-  equal(hello and hello.plugin, '0.3.1', 'hello carries plugin version')
-  equal(hello and hello.proto, '1.2', 'hello carries protocol version')
+  equal(hello and hello.plugin, '0.4.0', 'hello carries plugin version')
+  equal(hello and hello.proto, '1.3', 'hello carries protocol version')
   equal(hello and hello.lr, '15.2', 'hello carries Lightroom version')
   local status = find(messages, 'status')
   equal(status and status.module, 'library', 'status module')
@@ -400,6 +423,70 @@ do
   equal(find(messages, 'range', 'Temperature').max, 50000, 'range follows the photo')
   equal(find(messages, 'value', 'Temperature').v, 6000, 'value follows the photo')
 end
+
+-- Library: the status carries what the device shows of the photo.
+lr.module = 'library'
+step()
+do
+  local status = find(drain(), 'status')
+  equal(status.module, 'library', 'library reported')
+  equal(status.name, 'IMG_0013.dng', 'file name in status')
+  equal(status.rating, 0, 'no stars yet')
+  equal(status.flag, 0, 'no flag yet')
+  equal(status.label, '', 'no colour label yet')
+end
+-- Browsing: so many photos on or back, answered with the new status.
+receive { t = 'photo', d = 2 }
+do
+  local status = find(drain(), 'status')
+  equal(lr.photoId, 15, 'two photos on')
+  equal(status.photoId, 15, 'browsing reported')
+  equal(status.name, 'IMG_0015.dng', 'name follows')
+end
+receive { t = 'photo', d = -1 }
+equal(find(drain(), 'status').photoId, 14, 'one photo back')
+receive { t = 'photo', d = 500 }
+equal(lr.photoId, 34, 'steps per message are limited')
+drain()
+receive { t = 'photo', d = 0 }
+receive { t = 'photo' }
+equal(#drain(), 0, 'no step, no answer')
+-- Marks: flag, stars, colour label; each answered with the status.
+receive { t = 'mark', k = 'flag', v = 1 }
+equal(find(drain(), 'status').flag, 1, 'picked')
+receive { t = 'mark', k = 'flag', v = -1 }
+equal(find(drain(), 'status').flag, -1, 'rejected')
+receive { t = 'mark', k = 'flag', v = 0 }
+equal(find(drain(), 'status').flag, 0, 'flag removed')
+receive { t = 'mark', k = 'rating', v = 3 }
+equal(find(drain(), 'status').rating, 3, 'three stars')
+receive { t = 'mark', k = 'rating', v = 9 }
+equal(find(drain(), 'status').rating, 5, 'stars are limited to five')
+receive { t = 'mark', k = 'label', v = 'green' }
+equal(find(drain(), 'status').label, 'green', 'green label')
+receive { t = 'mark', k = 'label', v = 'none' }
+equal(find(drain(), 'status').label, '', 'label removed')
+receive { t = 'mark', k = 'label', v = 'pink' }
+receive { t = 'mark', k = 'nonsense', v = 1 }
+equal(#drain(), 0, 'unknown marks are ignored')
+-- A mark set in Lightroom itself is noticed by the poll.
+lr.mark('rating', 2)
+step()
+equal(find(drain(), 'status').rating, 2, 'rating changed in Lightroom is reported')
+step()
+equal(#drain(), 0, 'and only once')
+-- Module switch asked for by the knob.
+receive { t = 'module', m = 'develop' }
+equal(lr.module, 'develop', 'switched to develop')
+receive { t = 'module', m = 'map' }
+equal(lr.module, 'develop', 'other modules are not switched to')
+receive { t = 'module', m = 'library' }
+equal(lr.module, 'library', 'switched to the library')
+lr.module = 'develop'
+lr.photoId = 13
+step()
+step()
+drain()
 
 -- No photo: status says so and set is ignored.
 lr.photoId = nil

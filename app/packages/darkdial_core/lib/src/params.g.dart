@@ -88,4 +88,7 @@ const Map<String, List<String>> kTimerTexts = {
   'client': ['Kunde', 'Client'],
   'back': ['Zurück', 'Back'],
   'noClient': ['Keinen passenden Kunden gefunden? Bitte in der Desktop-App anlegen.', 'No matching client? Please create it in the desktop app.'],
+  'library': ['Bibliothek', 'Library'],
+  'picked': ['Markiert', 'Picked'],
+  'rejected': ['Abgelehnt', 'Rejected'],
 };

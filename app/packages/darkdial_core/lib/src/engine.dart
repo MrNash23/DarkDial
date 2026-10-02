@@ -78,7 +78,11 @@ class EngineState {
     required this.activeSlot,
     required this.editing,
     required this.slots,
+    this.library = const Library(),
   });
+
+  /// What the device shows in the Library; inactive elsewhere.
+  final Library library;
 
   final DeviceLinkState device;
   final String? firmwareVersion;
@@ -142,6 +146,14 @@ class Engine {
   double _pendingDetents = 0;
   DateTime _deviceUsedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // The photo selected in Lightroom, as far as the Library display needs it.
+  String _photoName = '';
+  int _rating = 0;
+  int _flag = 0;
+  String _colorLabel = '';
+  int _pendingPhotos = 0;
+  String? _sentLibrary;
+
   /// Slot of a SlotGoto the device has not answered yet.
   int? _gotoSlot;
 
@@ -172,6 +184,7 @@ class Engine {
         activeSlot: _activeSlot,
         editing: _editing,
         slots: [for (var i = 0; i < _active.length; i++) _slotState(i)],
+        library: _libraryMessage(),
       );
 
   Future<void> start() async {
@@ -236,6 +249,7 @@ class Engine {
         _sendValue(i);
       }
       _sendTimerState(force: true);
+      _sendLibrary(force: true);
     }
     return ok;
   }
@@ -281,6 +295,8 @@ class Engine {
     _session = null;
     _sentTimerState = null;
     _sentMenuPage = null;
+    _sentLibrary = null;
+    _pendingPhotos = 0;
     _menu?.close();
     _deviceState = DeviceLinkState.disconnected;
     _editing = false;
@@ -298,13 +314,16 @@ class Engine {
         message is SlotSelect ||
         message is SlotLeave ||
         message is SlotReset ||
+        message is LibraryAction ||
         message is MenuOpen ||
         message is MenuSelect;
     if (input && !answerToGoto) _deviceUsedAt = DateTime.now();
     if (message is SlotSelect) _gotoSlot = null;
     switch (message) {
       case Rotation(:final delta):
-        if (_editing && _activeSlot < _active.length) {
+        if (_libraryActive) {
+          _pendingPhotos += delta;
+        } else if (_editing && _activeSlot < _active.length) {
           _pendingDetents += delta * _active[_activeSlot].sensitivity;
         }
       case SlotSelect(:final slot):
@@ -326,6 +345,8 @@ class Engine {
         _notify();
       case SlotReset(:final slot):
         _resetSlot(slot);
+      case LibraryAction(:final action):
+        _libraryAction(action);
       case MenuOpen():
         _openMenu();
       case MenuSelect(:final page, :final index):
@@ -337,8 +358,85 @@ class Engine {
     }
   }
 
-  /// Turns the detents collected since the last flush into one `set`.
+  // Library --------------------------------------------------------------------
+
+  /// Devices know the Library mode from protocol minor 3 on.
+  bool get _deviceBrowses => (_session?.hello.minor ?? 0) >= 3;
+
+  /// Lightroom shows the Library and the knob browses instead of editing.
+  /// Needs a device and a plugin that know how (protocol minor 3 each).
+  bool get _libraryActive =>
+      _config.library.enabled &&
+      _deviceBrowses &&
+      lightroom.connected &&
+      lightroom.pluginProtocolMinor >= 3 &&
+      _module == 'library';
+
+  Library _libraryMessage() {
+    if (!_libraryActive) return const Library();
+    final settings = _config.library;
+    return Library(
+      active: true,
+      tapEnabled: settings.tap != LibraryMark.none,
+      doubleTapEnabled: settings.doubleTap != LibraryMark.none,
+      flag: _photo ? _flag : 0,
+      rating: _photo ? _rating : 0,
+      color: _photo ? kColorLabels.indexOf(_colorLabel) + 1 : 0,
+      name: _photo ? _photoName : '',
+    );
+  }
+
+  void _sendLibrary({bool force = false}) {
+    final session = _session;
+    if (session == null || !_deviceBrowses) return;
+    final message = _libraryMessage();
+    final signature = '${message.flags}|${message.rating}|${message.color}|${message.name}';
+    if (!force && signature == _sentLibrary) return;
+    _sentLibrary = signature;
+    session.send(message);
+  }
+
+  void _libraryAction(int action) {
+    if (!_config.library.enabled || !lightroom.connected || lightroom.pluginProtocolMinor < 3) return;
+    switch (action) {
+      case LibraryAction.toggleModule:
+        // The knob switches between the two modules it works in.
+        lightroom.send({'t': 'module', 'm': _module == 'library' ? 'develop' : 'library'});
+      case LibraryAction.tap:
+        _mark(_config.library.tap);
+      case LibraryAction.doubleTap:
+        _mark(_config.library.doubleTap);
+    }
+  }
+
+  /// Applies a mark to the selected photo; the same mark again takes it back.
+  /// The display changes at once, Lightroom's status confirms it.
+  void _mark(LibraryMark mark) {
+    if (!_libraryActive || !_photo || mark == LibraryMark.none) return;
+    final color = mark.colorLabel;
+    if (mark == LibraryMark.pick || mark == LibraryMark.reject) {
+      final wanted = mark == LibraryMark.pick ? 1 : -1;
+      _flag = _flag == wanted ? 0 : wanted;
+      lightroom.send({'t': 'mark', 'k': 'flag', 'v': _flag});
+    } else if (mark.stars > 0) {
+      _rating = _rating == mark.stars ? 0 : mark.stars;
+      lightroom.send({'t': 'mark', 'k': 'rating', 'v': _rating});
+    } else if (color != null) {
+      _colorLabel = _colorLabel == color ? '' : color;
+      lightroom.send({'t': 'mark', 'k': 'label', 'v': _colorLabel.isEmpty ? 'none' : _colorLabel});
+    }
+    _sendLibrary();
+    _notify();
+  }
+
+  /// Turns the detents collected since the last flush into one `set`, or in
+  /// the Library into one step through the photos.
   void _flush() {
+    if (_pendingPhotos != 0) {
+      final steps = _pendingPhotos;
+      _pendingPhotos = 0;
+      if (_libraryActive) lightroom.send({'t': 'photo', 'd': steps});
+    }
     final detents = _pendingDetents.truncate();
     if (detents == 0) return;
     _pendingDetents -= detents;
@@ -453,6 +551,7 @@ class Engine {
       photoSelected: _photo,
       notice: _switchingToDevelop ? 1 : 0,
     ));
+    _sendLibrary();
   }
 
   void _sendValue(int index) {
@@ -477,6 +576,10 @@ class Engine {
       _unanswered.clear();
       _module = '';
       _photo = false;
+      _photoName = '';
+      _rating = 0;
+      _flag = 0;
+      _colorLabel = '';
       _switchingToDevelop = false;
       timeTracker?.currentSource = null;
       for (var i = 0; i < _active.length; i++) {
@@ -501,6 +604,14 @@ class Engine {
         final module = message['module'];
         _module = module is String ? module : '';
         _photo = message['photo'] == true;
+        final photoName = message['name'];
+        final rating = message['rating'];
+        final flag = message['flag'];
+        final colorLabel = message['label'];
+        _photoName = photoName is String ? photoName : '';
+        _rating = rating is num ? rating.toInt().clamp(0, 5) : 0;
+        _flag = flag is num ? flag.toInt().sign : 0;
+        _colorLabel = colorLabel is String ? colorLabel : '';
         if (_module == 'develop') _switchingToDevelop = false;
         if (!_photo) {
           _values.clear();

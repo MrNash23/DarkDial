@@ -285,11 +285,13 @@ void engineTests() {
     expect(rig.model.status.developActive, isTrue);
   });
 
-  test('first turn outside Develop switches the module and shows the notice', () async {
+  test('first turn outside Develop and Library switches the module and shows the notice', () async {
     await rig.start();
     await rig.ready();
-    rig.plugin.userSwitchesModule('library');
-    await until(() => !rig.model.status.developActive, 'library on device');
+    // In the Library the knob browses (engine_library_test.dart); elsewhere
+    // turning a slider brings Develop up.
+    rig.plugin.userSwitchesModule('map');
+    await until(() => !rig.model.status.developActive, 'map on device');
     rig.plugin.setDelay = const Duration(milliseconds: 80);
     await rig.edit('Contrast');
 

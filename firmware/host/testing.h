@@ -48,6 +48,13 @@ inline Bytes value(uint8_t slot, uint16_t position, bool valid, const std::strin
 inline Bytes status(uint8_t flags, uint8_t notice = 0) { return frame(0x46, {flags, notice}); }
 inline Bytes slotGoto(uint8_t slot) { return frame(0x4C, {slot}); }
 
+// Flags: 1 active, 2 tap has an action, 4 double tap has one, 8 picked, 16 rejected.
+inline Bytes library(uint8_t flags, uint8_t rating = 0, uint8_t color = 0, const std::string &name = "") {
+  Bytes p = {flags, rating, color, static_cast<uint8_t>(name.size())};
+  p.insert(p.end(), name.begin(), name.end());
+  return frame(0x4D, p);
+}
+
 inline void appendU32(Bytes &p, uint32_t v) {
   p.push_back(static_cast<uint8_t>(v >> 24));
   p.push_back(static_cast<uint8_t>(v >> 16));
