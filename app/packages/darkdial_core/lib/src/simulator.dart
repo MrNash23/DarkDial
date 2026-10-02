@@ -20,17 +20,6 @@ class SlotValue {
   final String text;
 }
 
-enum MenuKind { stop, newJob, job }
-
-/// One line of the time tracking menu.
-class MenuLine {
-  const MenuLine(this.kind, [this.job]);
-  final MenuKind kind;
-
-  /// Only for [MenuKind.job].
-  final JobItem? job;
-}
-
 /// State machine of the device: carousel, edit mode, configuration transfer,
 /// and the time tracking menu behind the long press.
 class DeviceModel {
@@ -53,7 +42,11 @@ class DeviceModel {
   // Time tracking.
   bool menuOpen = false;
   int menuIndex = 0;
-  List<JobItem> jobs = [];
+
+  /// The page shown; empty until the service has sent one.
+  String menuTitle = '';
+  List<MenuItem> menu = [];
+  int _menuPage = 0;
   bool timerRunning = false;
   int timerJobId = 0;
   String timerLabel = '';
@@ -66,8 +59,8 @@ class DeviceModel {
 
   List<ConfigSlot>? _incoming;
   int _incomingCount = 0;
-  List<JobItem>? _incomingJobs;
-  int _incomingJobCount = 0;
+  List<MenuItem>? _incomingItems;
+  MenuBegin? _incomingMenu;
 
   /// Messages the device wants to send; set by the owner.
   void Function(DeviceMessage message) emit = (_) {};
@@ -91,13 +84,6 @@ class DeviceModel {
     values = List.filled(slots.length, const SlotValue());
   }
 
-  /// The menu as shown: "Stop" only while a clock runs, "New job", the jobs.
-  List<MenuLine> get menu => [
-        if (timerRunning) const MenuLine(MenuKind.stop),
-        const MenuLine(MenuKind.newJob),
-        for (final job in jobs) MenuLine(MenuKind.job, job),
-      ];
-
   /// Seconds of the running entry, counted on since the last TimerState.
   int get timerSeconds =>
       timerRunning ? _timerBaseSeconds + DateTime.now().difference(_timerBaseAt).inSeconds : 0;
@@ -106,7 +92,7 @@ class DeviceModel {
   void rotate(int detents) {
     if (detents == 0) return;
     if (menuOpen) {
-      menuIndex = (menuIndex + detents) % menu.length;
+      if (menu.isNotEmpty) menuIndex = (menuIndex + detents) % menu.length;
       onChanged();
       return;
     }
@@ -148,34 +134,39 @@ class DeviceModel {
   void longPress() {
     if (menuOpen) {
       menuOpen = false;
+      emit(const MenuClosed());
     } else {
       menuOpen = true;
       menuIndex = 0;
+      menuTitle = '';
+      menu = [];
       notice = null;
-      emit(const JobListRequest());
+      emit(const MenuOpen());
     }
     onChanged();
   }
 
+  /// Click in the menu: the service decides what the line does and answers
+  /// with another page or a result. Only "close" is handled here.
   void _menuAction() {
-    if (!serviceConnected) return;
-    final line = menu[menuIndex];
-    switch (line.kind) {
-      case MenuKind.stop:
-        emit(const TimerStop());
-      case MenuKind.newJob:
-        emit(const TimerStart(newJobId));
-      case MenuKind.job:
-        emit(TimerStart(line.job!.id));
+    if (!serviceConnected || menu.isEmpty) return;
+    final item = menu[menuIndex];
+    if (item.closes) {
+      menuOpen = false;
+      emit(const MenuClosed());
+      onChanged();
+    } else {
+      emit(MenuSelect(_menuPage, menuIndex));
     }
-    menuOpen = false;
-    onChanged();
   }
 
   void heartbeatLost() {
     serviceConnected = false;
     timerRunning = false;
-    if (menuOpen) menuIndex = 0;
+    if (menuOpen) {
+      menu = [];
+      menuIndex = 0;
+    }
     onChanged();
   }
 
@@ -243,38 +234,42 @@ class DeviceModel {
         status = message;
         serviceConnected = true;
         onChanged();
-      case JobListBegin(:final count):
-        _incomingJobs = count <= maxDeviceJobs ? [] : null;
-        _incomingJobCount = count;
-      case JobItem():
-        final incoming = _incomingJobs;
-        if (incoming == null) return;
-        if (message.index != incoming.length || incoming.length >= _incomingJobCount) {
-          _incomingJobs = null;
+      case MenuBegin():
+        _incomingMenu = message.count <= maxMenuItems ? message : null;
+        _incomingItems = [];
+      case MenuItem():
+        final begin = _incomingMenu;
+        final incoming = _incomingItems;
+        if (begin == null || incoming == null) return;
+        if (message.index != incoming.length || incoming.length >= begin.count) {
+          _incomingMenu = null;
         } else {
           incoming.add(message);
         }
-      case JobListEnd():
-        final incoming = _incomingJobs;
-        _incomingJobs = null;
-        if (incoming == null || incoming.length != _incomingJobCount) return; // keep the previous list
-        jobs = incoming;
+      case MenuEnd():
+        final begin = _incomingMenu;
+        final incoming = _incomingItems;
+        _incomingMenu = null;
+        if (begin == null || incoming == null || incoming.length != begin.count) return; // keep the page shown
+        if (!menuOpen) return;
+        // A refreshed page of the same title keeps the line; a new page starts where it says.
+        final samePage = begin.title == menuTitle && menu.isNotEmpty;
+        _menuPage = begin.page;
+        menuTitle = begin.title;
+        menu = incoming;
+        if (!samePage) menuIndex = begin.selected;
         if (menuIndex >= menu.length) menuIndex = 0;
         onChanged();
       case TimerState():
-        // "Stop" appears or disappears in front of the list; stay on the same line.
-        final wasRunning = timerRunning;
         timerRunning = message.running;
         timerJobId = message.jobId;
         timerLabel = message.label;
         _timerBaseSeconds = message.elapsedSeconds;
         _timerBaseAt = DateTime.now();
-        if (menuOpen && wasRunning != timerRunning) {
-          menuIndex += timerRunning ? 1 : (menuIndex > 0 ? -1 : 0);
-          if (menuIndex >= menu.length) menuIndex = 0;
-        }
         onChanged();
       case TimerResult():
+        // The action is done: the menu closes and the result is shown briefly.
+        menuOpen = false;
         notice = message;
         _noticeTimer?.cancel();
         _noticeTimer = Timer(noticeTime, () {

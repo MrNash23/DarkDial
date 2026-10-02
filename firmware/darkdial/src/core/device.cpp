@@ -110,22 +110,6 @@ Screen Device::screen() const {
   return Screen::Slot;
 }
 
-uint8_t Device::menuCount() const { return static_cast<uint8_t>((timerRunning_ ? 2 : 1) + jobCount_); }
-
-MenuEntry Device::menuEntry(uint8_t i) const {
-  MenuEntry entry;
-  const uint8_t fixed = timerRunning_ ? 2 : 1;
-  if (timerRunning_ && i == 0) {
-    entry.kind = MenuKind::Stop;
-  } else if (i < fixed) {
-    entry.kind = MenuKind::NewJob;
-  } else {
-    entry.kind = MenuKind::Job;
-    entry.job = &jobs_[i - fixed];
-  }
-  return entry;
-}
-
 uint32_t Device::timerSeconds(uint32_t nowMs) const {
   if (!timerRunning_) return 0;
   return timerBaseSeconds_ + (nowMs - timerBaseMs_) / 1000;
@@ -142,6 +126,7 @@ void Device::resetSlot() {
 }
 
 bool Device::tap(uint32_t nowMs) {
+  lastNowMs_ = nowMs;
   if (!touchAllowed(nowMs)) return false;
   if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) {
     tapPending_ = false;
@@ -176,6 +161,7 @@ void Device::buttonDown(uint32_t nowMs) {
 }
 
 void Device::buttonUp(uint32_t nowMs) {
+  lastNowMs_ = nowMs;
   knobMovedAtMs_ = nowMs;
   if (pressed_ && !longFired_) click();
   pressed_ = false;
@@ -187,47 +173,51 @@ float Device::holdProgress(uint32_t nowMs) const {
   return held >= kLongPressMs ? 1.0f : static_cast<float>(held) / kLongPressMs;
 }
 
-/// Opens the time tracking menu from any state, or closes it without change.
-void Device::longPress() {
-  if (menuOpen_) {
-    menuOpen_ = false;
-  } else {
-    menuOpen_ = true;
-    menuIndex_ = 0;
-    timerNotice_ = false;
-    lastMove_ = 0;
-    // The list from last time is shown at once; a fresh one replaces it.
-    uint8_t out[kMaxSysexBytes];
-    host_.send(out, buildJobListRequest(out));
-  }
+void Device::closeMenu() {
+  menuOpen_ = false;
+  uint8_t out[kMaxSysexBytes];
+  host_.send(out, buildMenuClosed(out));
   changed();
 }
 
-/// Click in the menu: start, switch or stop, then back to where we came from.
-void Device::menuAction() {
-  if (!serviceConnected_) return;  // the service keeps the books; nothing to do without it
-  uint8_t out[kMaxSysexBytes];
-  const MenuEntry entry = menuEntry(menuIndex_);
-  switch (entry.kind) {
-    case MenuKind::Stop:
-      host_.send(out, buildTimerStop(out));
-      break;
-    case MenuKind::NewJob:
-      host_.send(out, buildTimerStart(out, kNewJobId));
-      break;
-    case MenuKind::Job:
-      host_.send(out, buildTimerStart(out, entry.job->id));
-      break;
+/// Opens the time tracking menu from any state, or closes it without change.
+void Device::longPress(uint32_t nowMs) {
+  if (menuOpen_) {
+    closeMenu();
+    return;
   }
-  menuOpen_ = false;
+  menuOpen_ = true;
+  menuIndex_ = 0;
+  menuCount_ = 0;  // the page comes from the service
+  menuTitle_[0] = 0;
+  menuActivityMs_ = nowMs;
+  timerNotice_ = false;
+  lastMove_ = 0;
+  uint8_t out[kMaxSysexBytes];
+  host_.send(out, buildMenuOpen(out));
   changed();
+}
+
+/// Click in the menu. What a line does is decided by the service, which
+/// answers with another page or with a result; only "close" is handled here.
+void Device::menuAction(uint32_t nowMs) {
+  if (!serviceConnected_ || menuCount_ == 0) return;
+  menuActivityMs_ = nowMs;
+  if (menuItems_[menuIndex_].closes) {
+    closeMenu();
+    return;
+  }
+  uint8_t out[kMaxSysexBytes];
+  host_.send(out, buildMenuSelect(out, menuPage_, menuIndex_));
 }
 
 void Device::rotate(int detents, uint32_t nowMs) {
   if (detents == 0) return;
   if (menuOpen_) {
-    int next = (static_cast<int>(menuIndex_) + detents) % menuCount();
-    if (next < 0) next += menuCount();
+    menuActivityMs_ = nowMs;
+    if (menuCount_ == 0) return;
+    int next = (static_cast<int>(menuIndex_) + detents) % menuCount_;
+    if (next < 0) next += menuCount_;
     menuIndex_ = static_cast<uint8_t>(next);
     lastMove_ = detents > 0 ? 1 : -1;
     changed();
@@ -250,7 +240,7 @@ void Device::rotate(int detents, uint32_t nowMs) {
 
 void Device::click() {
   if (menuOpen_) {
-    menuAction();
+    menuAction(lastNowMs_);
     return;
   }
   if (slotCount_ == 0) return;
@@ -267,14 +257,16 @@ void Device::click() {
 }
 
 void Device::tick(uint32_t nowMs) {
+  lastNowMs_ = nowMs;
   if (tapPending_ && nowMs - tapAtMs_ > kDoubleTapMs) {
     tapPending_ = false;
     click();  // it stayed a single tap
   }
   if (pressed_ && !longFired_ && nowMs - pressedAtMs_ >= kLongPressMs) {
     longFired_ = true;
-    longPress();
+    longPress(nowMs);
   }
+  if (menuOpen_ && nowMs - menuActivityMs_ > kMenuTimeoutMs) closeMenu();
   if (serviceConnected_ && nowMs - lastStatusMs_ > kHeartbeatTimeoutMs) {
     serviceConnected_ = false;
     // Values are stale without the service, and nothing can be edited.
@@ -282,7 +274,8 @@ void Device::tick(uint32_t nowMs) {
     mode_ = Mode::Select;
     // The clock lives in the service; it tells us again when it is back.
     timerRunning_ = false;
-    if (menuOpen_) menuIndex_ = 0;
+    menuCount_ = 0;
+    menuIndex_ = 0;
     changed();
   }
   if (timerRunning_) {
@@ -303,6 +296,7 @@ void Device::tick(uint32_t nowMs) {
 }
 
 void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
+  lastNowMs_ = nowMs;
   static Message message;  // too large for the stack of a small task
   if (!decodeMessage(bytes, n, message)) return;
   uint8_t out[kMaxSysexBytes];
@@ -359,54 +353,59 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       changed();
       break;
 
-    case MessageType::JobListBegin:
-      receivingJobs_ = message.jobCount <= kMaxJobs;
-      incomingJobCount_ = 0;
-      incomingJobExpected_ = message.jobCount;
+    case MessageType::MenuBegin:
+      receivingMenu_ = message.menuCount <= kMaxMenuItems;
+      incomingItemCount_ = 0;
+      incomingItemExpected_ = message.menuCount;
+      incomingPage_ = message.menuPage;
+      incomingSelected_ = message.menuSelected;
+      memcpy(incomingTitle_, message.text, sizeof(incomingTitle_));
       break;
 
-    case MessageType::JobItem:
-      if (!receivingJobs_) break;
-      if (message.index != incomingJobCount_ || incomingJobCount_ >= incomingJobExpected_) {
-        receivingJobs_ = false;
+    case MessageType::MenuItem:
+      if (!receivingMenu_) break;
+      if (message.index != incomingItemCount_ || incomingItemCount_ >= incomingItemExpected_) {
+        receivingMenu_ = false;
       } else {
-        incomingJobs_[incomingJobCount_++] = message.job;
+        incomingItems_[incomingItemCount_++] = message.item;
       }
       break;
 
-    case MessageType::JobListEnd: {
-      const bool complete = receivingJobs_ && incomingJobCount_ == incomingJobExpected_;
-      receivingJobs_ = false;
-      if (!complete) break;  // keep the previous list
-      for (uint8_t i = 0; i < incomingJobCount_; i++) jobs_[i] = incomingJobs_[i];
-      jobCount_ = incomingJobCount_;
-      if (menuIndex_ >= menuCount()) menuIndex_ = 0;
+    case MessageType::MenuEnd: {
+      const bool complete = receivingMenu_ && incomingItemCount_ == incomingItemExpected_;
+      receivingMenu_ = false;
+      if (!complete || !menuOpen_) break;  // keep what is shown
+      // The same page sent again (something changed underneath) keeps the
+      // line; a different page starts where the service says.
+      const bool samePage = menuCount_ > 0 && strcmp(menuTitle_, incomingTitle_) == 0;
+      for (uint8_t i = 0; i < incomingItemCount_; i++) menuItems_[i] = incomingItems_[i];
+      menuCount_ = incomingItemCount_;
+      menuPage_ = incomingPage_;
+      memcpy(menuTitle_, incomingTitle_, sizeof(menuTitle_));
+      if (!samePage) {
+        menuIndex_ = incomingSelected_;
+        lastMove_ = 0;
+      }
+      if (menuIndex_ >= menuCount_) menuIndex_ = 0;
+      menuActivityMs_ = nowMs;
       changed();
       break;
     }
 
     case MessageType::TimerState: {
-      // "Stop" appears or disappears in front of the list; stay on the same line.
-      const bool wasRunning = timerRunning_;
       timerRunning_ = message.timerRunning;
       timerJobId_ = message.timerJobId;
       timerBaseSeconds_ = message.timerElapsed;
       timerBaseMs_ = nowMs;
       timerShownSeconds_ = message.timerElapsed;
       memcpy(timerLabel_, message.text, sizeof(timerLabel_));
-      if (menuOpen_ && wasRunning != timerRunning_) {
-        if (timerRunning_) {
-          menuIndex_++;
-        } else if (menuIndex_ > 0) {
-          menuIndex_--;
-        }
-        if (menuIndex_ >= menuCount()) menuIndex_ = 0;
-      }
       changed();
       break;
     }
 
     case MessageType::TimerResult:
+      // The action is done: the menu closes and the result is shown briefly.
+      menuOpen_ = false;
       noticeCode_ = message.resultCode;
       memcpy(noticeText_, message.text, sizeof(noticeText_));
       timerNotice_ = true;

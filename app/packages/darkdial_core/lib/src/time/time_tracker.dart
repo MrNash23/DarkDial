@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import '../midi_codec.dart' show maxDeviceJobs;
 import 'database.dart';
 
 /// The clock as it is now.
@@ -10,15 +9,6 @@ class RunningClock {
   final TimeEntry entry;
 
   Duration elapsed(DateTime now) => entry.duration(now);
-}
-
-/// One job as offered on the device.
-class DeviceJob {
-  const DeviceJob(this.job, {required this.label, required this.suggested, required this.running});
-  final Job job;
-  final String label;
-  final bool suggested;
-  final bool running;
 }
 
 /// A clock was still running when the app last ended.
@@ -114,15 +104,21 @@ class TimeTracker {
     if (current != null) db.closeEntry(current.entry.id, at, at.timeZoneOffset.inMinutes);
     db.insertEntry(jobId: jobId, start: at, startOffset: at.timeZoneOffset.inMinutes, origin: origin);
     db.touchJob(jobId, at);
+    if (job.clientId != null) db.touchClient(job.clientId!, at);
     _changed();
     return running!;
   }
 
-  /// Creates an unnamed job and starts its clock.
-  RunningClock startNew({required String origin}) {
-    final id = db.insertJob(now: now);
+  /// Creates an unnamed job, optionally for [clientId], and starts its clock.
+  RunningClock startNew({required String origin, int? clientId}) {
+    final id = db.insertJob(now: now, clientId: clientId);
     return start(id, origin: origin);
   }
+
+  /// Creates an unnamed client with a first unnamed job and starts its clock.
+  /// Both get their names later in the app.
+  RunningClock startNewClient({required String origin}) =>
+      startNew(origin: origin, clientId: db.insertClient(now: now));
 
   /// Stops the clock; false if none was running.
   bool stop() {
@@ -139,14 +135,80 @@ class TimeTracker {
 
   List<Job> jobs({bool archived = false}) => db.jobs(archived: archived);
 
+  /// [client] is a name: an existing client with that name is used, a new
+  /// name creates one, empty means no client.
   Job createJob({required String name, String short = '', String client = '', int? color}) {
-    final id = db.insertJob(now: now, name: name.trim(), short: _short(short), client: client.trim(), color: color);
+    final id = db.insertJob(now: now, name: name.trim(), short: _short(short), clientId: _clientIdFor(client), color: color);
     _changed();
     return db.job(id)!;
   }
 
-  void updateJob(int id, {required String name, required String short, required String client, required int? color}) {
-    db.updateJob(id, name: name.trim(), short: _short(short), client: client.trim(), color: color);
+  /// Changes a job. [client] is a name as in [createJob]; null keeps the
+  /// client the job has (which may be an unnamed one).
+  void updateJob(int id, {required String name, required String short, required String? client, required int? color}) {
+    final clientId = client == null ? db.job(id)?.clientId : _clientIdFor(client);
+    db.updateJob(id, name: name.trim(), short: _short(short), clientId: clientId, color: color);
+    _changed();
+  }
+
+  int? _clientIdFor(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    return db.clientNamed(trimmed)?.id ?? db.insertClient(now: now, name: trimmed);
+  }
+
+  /// Deletes a job with all its time entries. Not possible while its clock runs.
+  void deleteJob(int id) {
+    if (running?.job.id == id) throw const TimeTrackingError('running');
+    db.deleteJob(id);
+    _changed();
+  }
+
+  // Clients ----------------------------------------------------------------------
+
+  List<Client> clients() => db.clients();
+
+  /// Active jobs of a client, most recently used first.
+  List<Job> jobsOf(int clientId) => db.jobs(archived: false).where((job) => job.clientId == clientId).toList();
+
+  /// Renames a client. If another client already has that name, the two
+  /// become one.
+  void renameClient(int id, String name) {
+    final trimmed = name.trim();
+    final existing = db.clientNamed(trimmed);
+    if (existing != null && existing.id != id) {
+      db.mergeClients(from: id, into: existing.id);
+    } else {
+      db.renameClient(id, trimmed);
+    }
+    _changed();
+  }
+
+  /// Deletes a client; its jobs stay, without client.
+  void deleteClient(int id) {
+    db.deleteClient(id);
+    _changed();
+  }
+
+  /// Name of a client for narrow places; unnamed ones show [word] with date
+  /// and time of creation, e.g. `Kunde 01.10. 14:32`.
+  String clientLabel(Client client, {String word = 'Kunde'}) {
+    if (client.name.isNotEmpty) return client.name;
+    return '$word ${_stamp(client.createdAt, client.createdOffset)}';
+  }
+
+  static String _stamp(DateTime utc, int offsetMinutes) {
+    final local = utc.add(Duration(minutes: offsetMinutes));
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(local.day)}.${two(local.month)}. ${two(local.hour)}:${two(local.minute)}';
+  }
+
+  /// Removes all jobs, clients and entries (factory reset).
+  void wipe() {
+    db.wipe();
+    pendingRecovery = null;
+    pendingPause = null;
+    beat();
     _changed();
   }
 
@@ -179,9 +241,7 @@ class TimeTracker {
   String displayLabel(Job job) {
     if (job.short.isNotEmpty) return job.short;
     if (job.name.isNotEmpty) return _short(job.name);
-    final local = job.createdAt.add(Duration(minutes: job.createdOffset));
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${two(local.day)}.${two(local.month)}. ${two(local.hour)}:${two(local.minute)}';
+    return _stamp(job.createdAt, job.createdOffset);
   }
 
   // Lightroom sources ------------------------------------------------------------
@@ -212,22 +272,6 @@ class TimeTracker {
   void removeSource(int jobId, LrSource source) {
     db.removeSource(source, jobId: jobId);
     _changed();
-  }
-
-  /// The jobs for the device menu: the suggestion first, then most recently
-  /// used, at most [maxDeviceJobs].
-  List<DeviceJob> deviceJobs() {
-    final suggested = suggestion;
-    final runningId = running?.job.id;
-    final ordered = [
-      ?suggested,
-      for (final job in db.jobs(archived: false))
-        if (job.id != suggested?.id) job,
-    ];
-    return [
-      for (final job in ordered.take(maxDeviceJobs))
-        DeviceJob(job, label: displayLabel(job), suggested: job.id == suggested?.id, running: job.id == runningId),
-    ];
   }
 
   // Entries ----------------------------------------------------------------------

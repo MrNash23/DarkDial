@@ -54,16 +54,26 @@ inline void appendU32(Bytes &p, uint32_t v) {
   p.push_back(static_cast<uint8_t>(v));
 }
 
-inline Bytes jobListBegin(uint8_t count) { return frame(0x47, {count}); }
-inline Bytes jobItem(uint8_t index, uint32_t id, bool suggested, bool running, const std::string &label) {
-  Bytes p = {index};
-  appendU32(p, id);
-  p.push_back(static_cast<uint8_t>((suggested ? 1 : 0) | (running ? 2 : 0)));
-  p.push_back(static_cast<uint8_t>(label.size()));
+inline Bytes menuBegin(uint8_t page, uint8_t count, uint8_t selected, const std::string &title) {
+  Bytes p = {page, count, selected, static_cast<uint8_t>(title.size())};
+  p.insert(p.end(), title.begin(), title.end());
+  return frame(0x47, p);
+}
+
+// Flags: 1 highlighted, 2 running, 4 submenu, 8 closes.
+inline Bytes menuItem(uint8_t index, uint8_t icon, uint8_t flags, const std::string &label) {
+  Bytes p = {index, icon, flags, static_cast<uint8_t>(label.size())};
   p.insert(p.end(), label.begin(), label.end());
   return frame(0x48, p);
 }
-inline Bytes jobListEnd() { return frame(0x49, {}); }
+
+inline Bytes menuEnd() { return frame(0x49, {}); }
+
+struct MenuLine {
+  uint8_t icon;
+  uint8_t flags;
+  std::string label;
+};
 
 inline Bytes timerState(bool running, uint32_t jobId, uint32_t elapsed, const std::string &label) {
   Bytes p = {static_cast<uint8_t>(running ? 1 : 0)};
@@ -98,6 +108,16 @@ class RecordingHost : public dd::Host {
 
 inline void feed(dd::Device &device, const Bytes &message, uint32_t nowMs) {
   device.onMessage(message.data(), message.size(), nowMs);
+}
+
+/// Sends a complete menu page.
+inline void sendMenu(dd::Device &device, uint8_t page, const std::string &title, const std::vector<MenuLine> &lines,
+                     uint32_t nowMs, uint8_t selected = 0) {
+  feed(device, menuBegin(page, static_cast<uint8_t>(lines.size()), selected, title), nowMs);
+  for (size_t i = 0; i < lines.size(); i++) {
+    feed(device, menuItem(static_cast<uint8_t>(i), lines[i].icon, lines[i].flags, lines[i].label), nowMs);
+  }
+  feed(device, menuEnd(), nowMs);
 }
 
 /// Transfers a complete configuration.

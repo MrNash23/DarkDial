@@ -37,7 +37,10 @@ enum IconId : uint8_t {
   ICON_TIMER_STOPWATCH = 29,
   ICON_TIMER_PLUS = 30,
   ICON_TIMER_STOP = 31,
-  ICON_COUNT = 32
+  ICON_TIMER_CLIENT = 32,
+  ICON_TIMER_BACK = 33,
+  ICON_TIMER_CLOSE = 34,
+  ICON_COUNT = 35
 };
 
 struct StatusText {
@@ -59,6 +62,12 @@ enum TimerTextId : uint8_t {
   TEXT_NEWJOB,
   TEXT_STARTED,
   TEXT_STOPPED,
+  TEXT_TITLE,
+  TEXT_CLIENTS,
+  TEXT_CLIENT,
+  TEXT_NEWCLIENT,
+  TEXT_BACK,
+  TEXT_CLOSE,
 };
 
 struct TimerText {
@@ -71,6 +80,12 @@ static const TimerText kTimerText[] = {
   {"Neuer Job", "New job"},  // newJob
   {"Gestartet", "Started"},  // started
   {"Gestoppt", "Stopped"},  // stopped
+  {"Zeiterfassung", "Time tracking"},  // title
+  {"Kunden", "Clients"},  // clients
+  {"Kunde", "Client"},  // client
+  {"Neuer Kunde", "New client"},  // newClient
+  {"Zur\303\274ck", "Back"},  // back
+  {"Schlie\303\237en", "Close"},  // close
 };
 
 // Slots shown before the service has ever sent a configuration.

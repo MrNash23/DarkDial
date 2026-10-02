@@ -14,10 +14,8 @@ constexpr uint8_t kMaxTextBytes = 8;
 constexpr size_t kMaxSysexBytes = 64;
 // Longest unpacked payload: a TimerState with a full label.
 constexpr size_t kMaxPayloadBytes = 10 + kMaxLabelBytes;
-// Jobs in one job list; "Stop" and "New job" are added by the device.
-constexpr uint8_t kMaxJobs = 13;
-// TimerStart with this id creates a new, unnamed job.
-constexpr uint32_t kNewJobId = 0xFFFFFFFF;
+// Lines in one page of the time tracking menu.
+constexpr uint8_t kMaxMenuItems = 16;
 constexpr uint16_t kPositionMax = 16383;
 constexpr uint16_t kPositionCentre = 8192;
 constexpr uint8_t kRotationController = 0x10;
@@ -45,10 +43,13 @@ struct SlotValue {
   char text[kMaxTextBytes + 1] = {0};
 };
 
-struct Job {
-  uint32_t id = 0;
-  bool suggested = false;  // matches what is open in Lightroom
-  bool running = false;
+/// One line of a menu page. The service decides what it does.
+struct MenuItem {
+  uint8_t icon = 0;
+  bool highlighted = false;  // stands out, e.g. the job matching Lightroom
+  bool running = false;      // show the running time with it
+  bool submenu = false;      // leads to another page
+  bool closes = false;       // choosing it closes the menu on the device
   char label[kMaxLabelBytes + 1] = {0};
 };
 
@@ -61,9 +62,9 @@ enum class MessageType : uint8_t {
   ConfigEnd,
   Value,
   Status,
-  JobListBegin,
-  JobItem,
-  JobListEnd,
+  MenuBegin,
+  MenuItem,
+  MenuEnd,
   TimerState,
   TimerResult,
 };
@@ -84,10 +85,12 @@ struct Message {
   // Status
   uint8_t statusFlags = 0;
   uint8_t notice = 0;
-  // JobListBegin
-  uint8_t jobCount = 0;
-  // JobItem (with `index`)
-  Job job;
+  // MenuBegin: `text` is the title.
+  uint8_t menuPage = 0;
+  uint8_t menuCount = 0;
+  uint8_t menuSelected = 0;
+  // MenuItem (with `index`)
+  MenuItem item;
   // TimerState: `text` is the job label. TimerResult: `text` is the error text.
   bool timerRunning = false;
   uint32_t timerJobId = 0;
@@ -116,9 +119,9 @@ size_t buildSlotSelect(uint8_t *out, uint8_t slot);
 size_t buildSlotLeave(uint8_t *out, uint8_t slot);
 size_t buildSlotFocus(uint8_t *out, uint8_t slot);
 size_t buildConfigAck(uint8_t *out, uint8_t result, uint16_t crc);
-size_t buildJobListRequest(uint8_t *out);
-size_t buildTimerStart(uint8_t *out, uint32_t jobId);
-size_t buildTimerStop(uint8_t *out);
+size_t buildMenuOpen(uint8_t *out);
+size_t buildMenuSelect(uint8_t *out, uint8_t page, uint8_t index);
+size_t buildMenuClosed(uint8_t *out);
 size_t buildSlotReset(uint8_t *out, uint8_t slot);
 /// Relative CC; `delta` is clamped to -63 … 63 and must not be 0.
 size_t buildRotation(uint8_t *out, int delta);

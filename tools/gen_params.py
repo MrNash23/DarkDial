@@ -61,7 +61,7 @@ def validate(params, status, timer_texts):
             assert len(s[lang]) <= MAX_LABEL_CHARS, f"label too long: {s[lang]}"
     for t in timer_texts:
         for lang in ("de", "en"):
-            assert len(t[lang]) <= MAX_LABEL_CHARS, f"label too long: {t[lang]}"
+            assert len(t[lang].encode("utf-8")) <= 20, f"menu text too long: {t[lang]}"
 
 
 def c_str(s):

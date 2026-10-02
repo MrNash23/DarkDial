@@ -10,6 +10,7 @@ export 'src/param_def.dart';
 export 'src/params.g.dart';
 export 'src/simulator.dart';
 export 'src/time/database.dart';
+export 'src/time/device_menu.dart';
 export 'src/time/reports.dart';
 export 'src/time/time_tracker.dart';
 export 'src/value_mapping.dart';

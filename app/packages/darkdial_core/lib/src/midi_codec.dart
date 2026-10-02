@@ -19,11 +19,8 @@ const int maxValueTextBytes = 8;
 const int positionMax = 16383;
 const int positionCentre = 8192;
 
-/// Jobs in one job list (the device adds "Stop" and "New job" itself).
-const int maxDeviceJobs = 13;
-
-/// TimerStart with this id creates a new, unnamed job.
-const int newJobId = 0xFFFFFFFF;
+/// Lines in one menu page.
+const int maxMenuItems = 16;
 
 /// Packs 8-bit bytes into 7-bit bytes: per group of up to 7 bytes one byte
 /// with the MSBs, then the bytes without their MSB.
@@ -195,20 +192,24 @@ class SlotReset extends DeviceMessage {
   final int slot;
 }
 
-/// The job menu was opened.
-class JobListRequest extends DeviceMessage {
-  const JobListRequest();
+/// Long press: the time tracking menu was opened.
+class MenuOpen extends DeviceMessage {
+  const MenuOpen();
 }
 
-class TimerStart extends DeviceMessage {
-  const TimerStart(this.jobId);
+/// A line of the menu was clicked.
+class MenuSelect extends DeviceMessage {
+  const MenuSelect(this.page, this.index);
 
-  /// [newJobId] creates a new job.
-  final int jobId;
+  /// Page number from MenuBegin, so a click on a replaced page is not
+  /// mistaken for one on the new page.
+  final int page;
+  final int index;
 }
 
-class TimerStop extends DeviceMessage {
-  const TimerStop();
+/// The device closed the menu itself (long press, timeout, "close" line).
+class MenuClosed extends DeviceMessage {
+  const MenuClosed();
 }
 
 // Service -> device ------------------------------------------------------------
@@ -300,30 +301,47 @@ class Status extends DeviceMessage {
   int get flags => (lightroomConnected ? 1 : 0) | (developActive ? 2 : 0) | (photoSelected ? 4 : 0);
 }
 
-class JobListBegin extends DeviceMessage {
-  const JobListBegin(this.count);
+class MenuBegin extends DeviceMessage {
+  const MenuBegin({required this.page, required this.count, this.selected = 0, required this.title});
+  final int page;
   final int count;
+
+  /// Line to start on.
+  final int selected;
+  final String title;
 }
 
-class JobItem extends DeviceMessage {
-  const JobItem({
+class MenuItem extends DeviceMessage {
+  const MenuItem({
     required this.index,
-    required this.id,
-    required this.suggested,
-    required this.running,
+    required this.icon,
     required this.label,
+    this.highlighted = false,
+    this.running = false,
+    this.submenu = false,
+    this.closes = false,
   });
   final int index;
-  final int id;
-
-  /// Matches what is open in Lightroom.
-  final bool suggested;
-  final bool running;
+  final int icon;
   final String label;
+
+  /// Stands out, e.g. the job that matches what is open in Lightroom.
+  final bool highlighted;
+
+  /// Show the running time with this line.
+  final bool running;
+
+  /// Leads to another page.
+  final bool submenu;
+
+  /// Choosing it closes the menu on the device, without asking the service.
+  final bool closes;
+
+  int get flags => (highlighted ? 1 : 0) | (running ? 2 : 0) | (submenu ? 4 : 0) | (closes ? 8 : 0);
 }
 
-class JobListEnd extends DeviceMessage {
-  const JobListEnd();
+class MenuEnd extends DeviceMessage {
+  const MenuEnd();
 }
 
 class TimerState extends DeviceMessage {
@@ -424,18 +442,23 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
           ]);
         }(),
       Status() => _frame(0x46, [message.flags, message.notice]),
-      JobListRequest() => _frame(0x06, const []),
-      TimerStart(:final jobId) => _frame(0x07, _u32(jobId)),
-      TimerStop() => _frame(0x08, const []),
+      MenuOpen() => _frame(0x06, const []),
+      MenuSelect(:final page, :final index) => _frame(0x07, [page, index]),
+      MenuClosed() => _frame(0x08, const []),
       SlotReset(:final slot) => _frame(0x09, [slot]),
-      JobListBegin(:final count) => _frame(0x47, [count]),
-      JobItem() => _frame(0x48, [
+      MenuBegin() => _frame(0x47, [
+          message.page,
+          message.count,
+          message.selected,
+          ..._str(message.title, maxLabelBytes),
+        ]),
+      MenuItem() => _frame(0x48, [
           message.index,
-          ..._u32(message.id),
-          (message.suggested ? 1 : 0) | (message.running ? 2 : 0),
+          message.icon,
+          message.flags,
           ..._str(message.label, maxLabelBytes),
         ]),
-      JobListEnd() => _frame(0x49, const []),
+      MenuEnd() => _frame(0x49, const []),
       TimerState() => _frame(0x4A, [
           message.running ? 1 : 0,
           ..._u32(message.jobId),
@@ -528,21 +551,31 @@ DeviceMessage? decodeMessage(List<int> bytes) {
         notice: p[1],
       );
     case 0x06:
-      return const JobListRequest();
+      return const MenuOpen();
     case 0x07:
-      return p.length < 4 ? null : TimerStart(u32(0));
+      return p.length < 2 ? null : MenuSelect(p[0], p[1]);
     case 0x08:
-      return const TimerStop();
+      return const MenuClosed();
     case 0x09:
       return p.isEmpty ? null : SlotReset(p[0]);
     case 0x47:
-      return p.isEmpty ? null : JobListBegin(p[0]);
+      final title = p.length < 4 ? null : str(3);
+      if (title == null) return null;
+      return MenuBegin(page: p[0], count: p[1], selected: p[2], title: title);
     case 0x48:
-      final label = p.length < 7 ? null : str(6);
+      final label = p.length < 4 ? null : str(3);
       if (label == null) return null;
-      return JobItem(index: p[0], id: u32(1), suggested: p[5] & 1 != 0, running: p[5] & 2 != 0, label: label);
+      return MenuItem(
+        index: p[0],
+        icon: p[1],
+        label: label,
+        highlighted: p[2] & 1 != 0,
+        running: p[2] & 2 != 0,
+        submenu: p[2] & 4 != 0,
+        closes: p[2] & 8 != 0,
+      );
     case 0x49:
-      return const JobListEnd();
+      return const MenuEnd();
     case 0x4A:
       final label = p.length < 10 ? null : str(9);
       if (label == null) return null;

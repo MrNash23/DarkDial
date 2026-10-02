@@ -326,14 +326,7 @@ static void testLongPress() {
   device.tick(7000 + dd::kLongPressMs);
   device.buttonUp(8000);
   CHECK(!device.menuOpen() && device.screen() == dd::Screen::Slot && device.mode() == dd::Mode::Edit);
-  CHECK(host.sent.size() == 1);
-}
-
-static uint32_t startedJob(const Bytes &message) {
-  uint8_t p[8];
-  dd::unpack7(message.data() + 6, message.size() - 7, p);
-  return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
-         (static_cast<uint32_t>(p[2]) << 8) | p[3];
+  CHECK(host.sent.size() == 2 && host.sent[1][5] == 0x08);  // it only says that it closed
 }
 
 static void openMenu(dd::Device &device, uint32_t &now) {
@@ -343,77 +336,131 @@ static void openMenu(dd::Device &device, uint32_t &now) {
   device.buttonUp(now);
 }
 
-static void testJobMenu() {
+// Page and index of a MenuSelect message.
+static void selected(const Bytes &message, uint8_t &page, uint8_t &index) {
+  uint8_t p[4];
+  dd::unpack7(message.data() + 6, message.size() - 7, p);
+  page = p[0];
+  index = p[1];
+}
+
+static void testMenu() {
   RecordingHost host;
   dd::Device device(host, 0, 1, 0, kSerial);
   uint32_t now = 1000;
-  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), now);
-  feed(device, timerState(false, 0, 0, ""), now);
+  const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
+  feed(device, status(all), now);
 
+  // Long press: MenuOpen goes out; the menu is open but empty until the page arrives.
   openMenu(device, now);
-  CHECK(device.menuCount() == 1 && device.menuEntry(0).kind == dd::MenuKind::NewJob);
-
-  // The list arrives: suggestion first, as the service ordered it.
-  feed(device, jobListBegin(2), now);
-  feed(device, jobItem(0, 70000, true, false, "M\xC3\xBCller"), now);
-  feed(device, jobItem(1, 3, false, false, "01.10. 14:32"), now);
-  feed(device, jobListEnd(), now);
-  CHECK(device.menuCount() == 3);
-  CHECK(device.menuEntry(1).kind == dd::MenuKind::Job && device.menuEntry(1).job->id == 70000);
-  CHECK(device.menuEntry(1).job->suggested && strcmp(device.menuEntry(2).job->label, "01.10. 14:32") == 0);
-
-  // Turning moves through the menu, wrapping, without touching the carousel.
-  const uint8_t slotIndex = device.index();
+  CHECK(device.menuOpen() && device.menuCount() == 0);
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x06);
   host.sent.clear();
-  device.rotate(-1, now);
-  CHECK(device.menuIndex() == 2);
-  device.rotate(2, now);
-  CHECK(device.menuIndex() == 1 && device.index() == slotIndex && host.sent.empty());
-
-  // Click starts the job and closes the menu; the confirmation follows.
   device.click();
-  CHECK(!device.menuOpen() && host.sent.size() == 1 && host.sent[0][5] == 0x07);
-  CHECK(startedJob(host.sent[0]) == 70000);
+  device.rotate(1, now);
+  CHECK(host.sent.empty() && device.menuOpen());  // nothing to choose yet
+
+  sendMenu(device, 5, "Zeiterfassung",
+           {{29, 1, "M\xC3\xBCller"}, {29, 0, "Katalog"}, {32, 4, "Kunden"}, {30, 0, "Neuer Job"}, {34, 8, "Schlie\xC3\x9F" "en"}},
+           now);
+  CHECK(device.menuCount() == 5 && device.menuIndex() == 0 && strcmp(device.menuTitle(), "Zeiterfassung") == 0);
+  CHECK(device.menuItem(0).highlighted && !device.menuItem(0).submenu);
+  CHECK(device.menuItem(2).submenu && device.menuItem(4).closes);
+  CHECK(strcmp(device.menuItem(0).label, "M\xC3\xBCller") == 0);
+
+  // Turning moves through the page, wrapping, without touching the carousel.
+  const uint8_t slotIndex = device.index();
+  device.rotate(-1, now);
+  CHECK(device.menuIndex() == 4);
+  device.rotate(3, now);
+  CHECK(device.menuIndex() == 2 && device.index() == slotIndex && host.sent.empty());
+
+  // Click reports page and line; the menu stays open and waits for the answer.
+  device.click();
+  uint8_t page = 0, index = 0;
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x07);
+  selected(host.sent[0], page, index);
+  CHECK(page == 5 && index == 2 && device.menuOpen());
+
+  // The answer is another page: it starts at the line the service names.
+  sendMenu(device, 6, "Kunden", {{32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {33, 0, "Zur\xC3\xBC" "ck"}}, now, 1);
+  CHECK(device.menuCount() == 3 && device.menuIndex() == 1 && strcmp(device.menuTitle(), "Kunden") == 0);
+
+  // The same page sent again (a rename underneath) keeps the line.
+  device.rotate(1, now);
+  sendMenu(device, 7, "Kunden", {{32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag GmbH"}, {33, 0, "Zur\xC3\xBC" "ck"}}, now);
+  CHECK(device.menuIndex() == 2 && strcmp(device.menuItem(1).label, "Verlag GmbH") == 0);
+  host.sent.clear();
+  device.click();
+  selected(host.sent[0], page, index);
+  CHECK(page == 7 && index == 2);
+
+  // A result ends the menu and shows the confirmation; the slider state is as before.
   feed(device, timerResult(0), now);
   feed(device, timerState(true, 70000, 0, "M\xC3\xBCller"), now);
-  CHECK(device.screen() == dd::Screen::TimerNotice && device.noticeCode() == 0);
+  CHECK(!device.menuOpen() && device.screen() == dd::Screen::TimerNotice && device.noticeCode() == 0);
   now += dd::kTimerNoticeMs + 1;
   device.tick(now);
   CHECK(device.screen() == dd::Screen::Slot && device.mode() == dd::Mode::Select);
   CHECK(device.timerRunning() && strcmp(device.timerLabel(), "M\xC3\xBCller") == 0);
 
-  // With a running clock "Stop" comes first, then "New job".
+  // "Close" is handled by the device: the menu closes and says so.
+  feed(device, status(all), now);
   openMenu(device, now);
-  CHECK(device.menuCount() == 4 && device.menuIndex() == 0);
-  CHECK(device.menuEntry(0).kind == dd::MenuKind::Stop && device.menuEntry(1).kind == dd::MenuKind::NewJob);
+  sendMenu(device, 8, "Zeiterfassung", {{31, 2, "Stopp"}, {34, 8, "Schlie\xC3\x9F" "en"}}, now);
+  CHECK(device.menuItem(0).running);
   host.sent.clear();
   device.rotate(1, now);
   device.click();
-  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x07 && startedJob(host.sent[0]) == dd::kNewJobId);
+  CHECK(!device.menuOpen() && host.sent.size() == 1 && host.sent[0][5] == 0x08);
 
+  // A second long press closes too.
   openMenu(device, now);
+  sendMenu(device, 9, "Zeiterfassung", {{31, 2, "Stopp"}}, now);
   host.sent.clear();
-  device.click();  // "Stop"
-  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x08 && !device.menuOpen());
-  feed(device, timerResult(1), now);
-  feed(device, timerState(false, 0, 0, ""), now);
-  CHECK(device.noticeCode() == 1 && !device.timerRunning());
+  openMenu(device, now);
+  CHECK(!device.menuOpen() && host.sent.size() == 1 && host.sent[0][5] == 0x08);
+
+  // A page that arrives while the menu is closed is not shown later.
+  sendMenu(device, 10, "Sp\xC3\xA4t", {{29, 0, "x"}}, now);
+  feed(device, status(all), now);
+  openMenu(device, now);
+  CHECK(device.menuOpen() && device.menuCount() == 0);
+
+  // A broken page (line missing) keeps what is shown.
+  sendMenu(device, 11, "Zeiterfassung", {{30, 0, "Neuer Job"}}, now);
+  feed(device, menuBegin(12, 3, 0, "Kaputt"), now);
+  feed(device, menuItem(0, 29, 0, "x"), now);
+  feed(device, menuEnd(), now);
+  CHECK(device.menuCount() == 1 && strcmp(device.menuTitle(), "Zeiterfassung") == 0);
 
   // An error from the service is shown with its text.
   feed(device, timerResult(2, "Archiviert"), now);
-  CHECK(device.screen() == dd::Screen::TimerNotice && strcmp(device.noticeText(), "Archiviert") == 0);
+  CHECK(!device.menuOpen() && device.screen() == dd::Screen::TimerNotice && strcmp(device.noticeText(), "Archiviert") == 0);
 
-  // A broken list keeps the previous one.
-  feed(device, jobListBegin(3), now);
-  feed(device, jobItem(0, 9, false, false, "x"), now);
-  feed(device, jobListEnd(), now);
-  CHECK(device.menuCount() == 3);
+  // Left alone, the menu closes after the timeout; input keeps it open.
+  now += 2000;
+  feed(device, status(all), now);
+  openMenu(device, now);
+  sendMenu(device, 13, "Zeiterfassung", {{30, 0, "Neuer Job"}, {34, 8, "x"}}, now);
+  now += dd::kMenuTimeoutMs - 1000;
+  feed(device, status(all), now);
+  device.rotate(1, now);
+  now += dd::kMenuTimeoutMs - 1000;
+  feed(device, status(all), now);
+  device.tick(now);
+  CHECK(device.menuOpen());
+  host.sent.clear();
+  now += 2000;
+  feed(device, status(all), now);
+  device.tick(now);
+  CHECK(!device.menuOpen() && host.sent.size() == 1 && host.sent[0][5] == 0x08);
 
-  // Without service the menu opens but allows no action.
+  // Without service the menu opens but has nothing to choose.
   now += dd::kHeartbeatTimeoutMs + 1;
   device.tick(now);
   openMenu(device, now);
-  CHECK(device.menuOpen() && !device.serviceConnected());
+  CHECK(device.menuOpen() && !device.serviceConnected() && device.menuCount() == 0);
   host.sent.clear();
   device.click();
   CHECK(device.menuOpen() && host.sent.empty());
@@ -516,11 +563,14 @@ static void testTouchWithKnob() {
   CHECK(!device.tap(3950));
   CHECK(!device.longTouch(3950));
   device.tick(4100);
-  CHECK(device.menuOpen() && host.sent.size() == 1);  // only the job list request
+  CHECK(device.menuOpen() && host.sent.size() == 1);  // only MenuOpen
+  sendMenu(device, 1, "Zeiterfassung", {{30, 0, "Neuer Job"}, {34, 8, "Schlie\xC3\x9F"}}, 4100);
 
   // Once the knob has been left alone, a tap selects as before.
   CHECK(device.tap(3900 + dd::kTouchGuardMs));
-  CHECK(!device.menuOpen() && host.sent.size() == 2 && host.sent[1][5] == 0x07);
+  CHECK(device.menuOpen() && host.sent.size() == 2 && host.sent[1][5] == 0x07);
+  feed(device, timerResult(0), 4500);
+  CHECK(!device.menuOpen());
 
   // Long touch in edit mode resets the slot; elsewhere it does nothing.
   host.sent.clear();
@@ -535,7 +585,7 @@ int main() {
   testTouchWithKnob();
   testDoubleTap();
   testLongPress();
-  testJobMenu();
+  testMenu();
   testClock();
   testCodec();
   testDecode();

@@ -22,11 +22,33 @@ class LrSource {
   int get hashCode => Object.hash(kind, key);
 }
 
+/// Who a job is for. Created in the app, or unnamed on the device.
+class Client {
+  const Client({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.createdOffset,
+    required this.lastUsedAt,
+  });
+
+  final int id;
+
+  /// Empty for a client created on the device and not named yet.
+  final String name;
+  final DateTime createdAt;
+  final int createdOffset;
+  final DateTime lastUsedAt;
+
+  bool get unnamed => name.isEmpty;
+}
+
 class Job {
   const Job({
     required this.id,
     required this.name,
     required this.short,
+    required this.clientId,
     required this.client,
     required this.color,
     required this.archived,
@@ -43,6 +65,9 @@ class Job {
 
   /// Optional short name for the display, at most 10 characters.
   final String short;
+  final int? clientId;
+
+  /// Name of the client, empty if the job has none or the client is unnamed.
   final String client;
 
   /// `0xRRGGBB` for overview and charts, null = none.
@@ -116,7 +141,7 @@ class TimeDatabase {
   factory TimeDatabase.open(String path) => TimeDatabase._(sqlite3.open(path));
   factory TimeDatabase.inMemory() => TimeDatabase._(sqlite3.openInMemory());
 
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   final Database _db;
 
@@ -169,6 +194,50 @@ class TimeDatabase {
       _db.execute('PRAGMA user_version = 1');
       _db.execute('COMMIT');
     }
+    if (version < 2) _migrateToClients();
+  }
+
+  /// Version 2: clients become a table of their own instead of a text on the
+  /// job, so they can be picked on the device and renamed in one place.
+  void _migrateToClients() {
+    _db.execute('BEGIN');
+    _db.execute('''
+      CREATE TABLE clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL DEFAULT '',
+        created_utc INTEGER NOT NULL,
+        created_offset INTEGER NOT NULL,
+        last_used_utc INTEGER NOT NULL
+      )''');
+    _db.execute('ALTER TABLE jobs ADD COLUMN client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL');
+    // One client per distinct text, ignoring case and surrounding spaces;
+    // the spelling of the oldest job wins.
+    final ids = <String, int>{};
+    for (final row in _db.select('SELECT id, client, created_utc, created_offset, last_used_utc FROM jobs ORDER BY created_utc')) {
+      final name = (row['client'] as String).trim();
+      if (name.isEmpty) continue;
+      final id = ids.putIfAbsent(name.toLowerCase(), () {
+        _db.execute('INSERT INTO clients(name, created_utc, created_offset, last_used_utc) VALUES (?, ?, ?, ?)',
+            [name, row['created_utc'], row['created_offset'], row['last_used_utc']]);
+        return _db.lastInsertRowId;
+      });
+      _db.execute('UPDATE jobs SET client_id = ? WHERE id = ?', [id, row['id']]);
+      _db.execute('UPDATE clients SET last_used_utc = MAX(last_used_utc, ?) WHERE id = ?', [row['last_used_utc'], id]);
+    }
+    _db.execute('ALTER TABLE jobs DROP COLUMN client');
+    _db.execute('PRAGMA user_version = 2');
+    _db.execute('COMMIT');
+  }
+
+  /// Removes every job, client and entry (factory reset).
+  void wipe() {
+    _db.execute('BEGIN');
+    _db.execute('DELETE FROM time_entries');
+    _db.execute('DELETE FROM job_sources');
+    _db.execute('DELETE FROM jobs');
+    _db.execute('DELETE FROM clients');
+    _db.execute('DELETE FROM meta');
+    _db.execute('COMMIT');
   }
 
   // Meta -------------------------------------------------------------------------
@@ -183,13 +252,67 @@ class TimeDatabase {
         [key, value]);
   }
 
+  // Clients ----------------------------------------------------------------------
+
+  Client _client(Row row) => Client(
+        id: row['id'] as int,
+        name: row['name'] as String,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_utc'] as int, isUtc: true),
+        createdOffset: row['created_offset'] as int,
+        lastUsedAt: DateTime.fromMillisecondsSinceEpoch(row['last_used_utc'] as int, isUtc: true),
+      );
+
+  int insertClient({required DateTime now, String name = ''}) {
+    final at = now.toUtc().millisecondsSinceEpoch;
+    _db.execute('INSERT INTO clients(name, created_utc, created_offset, last_used_utc) VALUES (?, ?, ?, ?)',
+        [name, at, now.timeZoneOffset.inMinutes, at]);
+    return _db.lastInsertRowId;
+  }
+
+  Client? client(int id) {
+    final rows = _db.select('SELECT * FROM clients WHERE id = ?', [id]);
+    return rows.isEmpty ? null : _client(rows.first);
+  }
+
+  /// Clients, most recently used first.
+  List<Client> clients() =>
+      [for (final row in _db.select('SELECT * FROM clients ORDER BY last_used_utc DESC, id DESC')) _client(row)];
+
+  /// The client with this name, ignoring case; unnamed clients never match.
+  Client? clientNamed(String name) {
+    if (name.isEmpty) return null;
+    final rows = _db.select('SELECT * FROM clients WHERE LOWER(name) = LOWER(?) LIMIT 1', [name]);
+    return rows.isEmpty ? null : _client(rows.first);
+  }
+
+  void renameClient(int id, String name) => _db.execute('UPDATE clients SET name = ? WHERE id = ?', [name, id]);
+
+  void touchClient(int id, DateTime now) {
+    _db.execute('UPDATE clients SET last_used_utc = ? WHERE id = ?', [now.toUtc().millisecondsSinceEpoch, id]);
+  }
+
+  /// Moves the jobs of [from] to [into] and deletes [from].
+  void mergeClients({required int from, required int into}) {
+    _db.execute('BEGIN');
+    _db.execute('UPDATE jobs SET client_id = ? WHERE client_id = ?', [into, from]);
+    _db.execute('DELETE FROM clients WHERE id = ?', [from]);
+    _db.execute('COMMIT');
+  }
+
+  /// Deletes a client; its jobs stay, without client.
+  void deleteClient(int id) => _db.execute('DELETE FROM clients WHERE id = ?', [id]);
+
   // Jobs -------------------------------------------------------------------------
+
+  static const String _jobSelect =
+      'SELECT jobs.*, COALESCE(clients.name, \'\') AS client_name FROM jobs LEFT JOIN clients ON clients.id = jobs.client_id';
 
   Job _job(Row row) => Job(
         id: row['id'] as int,
         name: row['name'] as String,
         short: row['short'] as String,
-        client: row['client'] as String,
+        clientId: row['client_id'] as int?,
+        client: row['client_name'] as String,
         color: row['color'] as int?,
         archived: row['archived'] == 1,
         createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_utc'] as int, isUtc: true),
@@ -201,27 +324,28 @@ class TimeDatabase {
         ],
       );
 
-  int insertJob({required DateTime now, String name = '', String short = '', String client = '', int? color}) {
+  int insertJob({required DateTime now, String name = '', String short = '', int? clientId, int? color}) {
     _db.execute(
-      'INSERT INTO jobs(name, short, client, color, created_utc, created_offset, last_used_utc) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, short, client, color, now.toUtc().millisecondsSinceEpoch, now.timeZoneOffset.inMinutes, now.toUtc().millisecondsSinceEpoch],
+      'INSERT INTO jobs(name, short, client_id, color, created_utc, created_offset, last_used_utc) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, short, clientId, color, now.toUtc().millisecondsSinceEpoch, now.timeZoneOffset.inMinutes, now.toUtc().millisecondsSinceEpoch],
     );
     return _db.lastInsertRowId;
   }
 
   Job? job(int id) {
-    final rows = _db.select('SELECT * FROM jobs WHERE id = ?', [id]);
+    final rows = _db.select('$_jobSelect WHERE jobs.id = ?', [id]);
     return rows.isEmpty ? null : _job(rows.first);
   }
 
   /// Jobs, most recently used first.
   List<Job> jobs({required bool archived}) => [
-        for (final row in _db.select('SELECT * FROM jobs WHERE archived = ? ORDER BY last_used_utc DESC, id DESC', [archived ? 1 : 0]))
+        for (final row in _db.select(
+            '$_jobSelect WHERE jobs.archived = ? ORDER BY jobs.last_used_utc DESC, jobs.id DESC', [archived ? 1 : 0]))
           _job(row),
       ];
 
-  void updateJob(int id, {required String name, required String short, required String client, required int? color}) {
-    _db.execute('UPDATE jobs SET name = ?, short = ?, client = ?, color = ? WHERE id = ?', [name, short, client, color, id]);
+  void updateJob(int id, {required String name, required String short, required int? clientId, required int? color}) {
+    _db.execute('UPDATE jobs SET name = ?, short = ?, client_id = ?, color = ? WHERE id = ?', [name, short, clientId, color, id]);
   }
 
   void setArchived(int id, bool archived) {
@@ -237,7 +361,7 @@ class TimeDatabase {
   /// Active job that owns [source], if any.
   Job? jobForSource(LrSource source) {
     final rows = _db.select(
-      'SELECT jobs.* FROM jobs JOIN job_sources ON job_sources.job_id = jobs.id '
+      '$_jobSelect JOIN job_sources ON job_sources.job_id = jobs.id '
       'WHERE jobs.archived = 0 AND job_sources.kind = ? AND job_sources.key = ? LIMIT 1',
       [source.kind, source.key],
     );
@@ -357,8 +481,8 @@ class TimeDatabase {
     final pattern = '%${_escapeLike(text)}%';
     return [
       for (final row in _db.select(
-          "SELECT * FROM jobs WHERE name LIKE ? ESCAPE '\\' OR short LIKE ? ESCAPE '\\' OR client LIKE ? ESCAPE '\\' "
-          'ORDER BY last_used_utc DESC',
+          "$_jobSelect WHERE jobs.name LIKE ? ESCAPE '\\' OR jobs.short LIKE ? ESCAPE '\\' "
+          "OR clients.name LIKE ? ESCAPE '\\' ORDER BY jobs.last_used_utc DESC",
           [pattern, pattern, pattern]))
         _job(row),
     ];

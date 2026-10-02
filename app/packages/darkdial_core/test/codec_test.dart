@@ -98,31 +98,37 @@ void main() {
           [true, false, true, 1]);
     });
 
-    test('time tracking messages round-trip within the size limit', () {
-      final start = decodeMessage(encodeMessage(const TimerStart(newJobId))) as TimerStart;
-      expect(start.jobId, newJobId);
-      expect(decodeMessage(encodeMessage(const TimerStart(70000))), isA<TimerStart>().having((m) => m.jobId, 'id', 70000));
-      expect(decodeMessage(encodeMessage(const TimerStop())), isA<TimerStop>());
-      expect(decodeMessage(encodeMessage(const JobListRequest())), isA<JobListRequest>());
-      expect((decodeMessage(encodeMessage(const JobListBegin(13))) as JobListBegin).count, 13);
-      expect(decodeMessage(encodeMessage(const JobListEnd())), isA<JobListEnd>());
+    test('menu and timer messages round-trip within the size limit', () {
+      expect(decodeMessage(encodeMessage(const MenuOpen())), isA<MenuOpen>());
+      expect(decodeMessage(encodeMessage(const MenuClosed())), isA<MenuClosed>());
+      expect(decodeMessage(encodeMessage(const MenuEnd())), isA<MenuEnd>());
+      final select = decodeMessage(encodeMessage(const MenuSelect(127, 15))) as MenuSelect;
+      expect([select.page, select.index], [127, 15]);
 
-      const item = JobItem(index: 2, id: 4000000000, suggested: true, running: false, label: 'Müller Hochzeit 2026 Potsdam');
-      final itemBytes = encodeMessage(item);
-      expect(itemBytes.length, lessThanOrEqualTo(64));
-      final decodedItem = decodeMessage(itemBytes) as JobItem;
-      expect([decodedItem.index, decodedItem.id, decodedItem.suggested, decodedItem.running],
-          [2, 4000000000, true, false]);
-      expect(decodedItem.label, 'Müller Hochzeit 202', reason: 'cut to 20 bytes; ü takes two');
+      const begin = MenuBegin(page: 9, count: 16, selected: 2, title: 'Fam. Müller & Söhne GmbH');
+      final beginBytes = encodeMessage(begin);
+      expect(beginBytes.length, lessThanOrEqualTo(64));
+      final decodedBegin = decodeMessage(beginBytes) as MenuBegin;
+      expect([decodedBegin.page, decodedBegin.count, decodedBegin.selected], [9, 16, 2]);
+      expect(decodedBegin.title, 'Fam. Müller & Söhn', reason: 'cut to 20 bytes; ü and ö take two');
 
-      const state = TimerState(running: true, jobId: 7, elapsedSeconds: 360000, label: '01.10. 14:32 und länger');
+      const item = MenuItem(index: 15, icon: 29, label: 'Müller', highlighted: true, running: true, closes: true);
+      final decodedItem = decodeMessage(encodeMessage(item)) as MenuItem;
+      expect([decodedItem.index, decodedItem.icon, decodedItem.label], [15, 29, 'Müller']);
+      expect([decodedItem.highlighted, decodedItem.running, decodedItem.submenu, decodedItem.closes],
+          [true, true, false, true]);
+      expect((decodeMessage(encodeMessage(const MenuItem(index: 0, icon: 32, label: 'Kunden', submenu: true))) as MenuItem).submenu,
+          isTrue);
+
+      const state = TimerState(running: true, jobId: 4000000000, elapsedSeconds: 360000, label: '01.10. 14:32 und länger');
       final stateBytes = encodeMessage(state);
       expect(stateBytes.length, lessThanOrEqualTo(64));
       final decodedState = decodeMessage(stateBytes) as TimerState;
-      expect([decodedState.running, decodedState.jobId, decodedState.elapsedSeconds], [true, 7, 360000]);
+      expect([decodedState.running, decodedState.jobId, decodedState.elapsedSeconds], [true, 4000000000, 360000]);
 
       final result = decodeMessage(encodeMessage(const TimerResult(TimerResult.error, 'Archiviert'))) as TimerResult;
       expect([result.code, result.text], [2, 'Archiviert']);
+      expect((decodeMessage(encodeMessage(const SlotReset(7))) as SlotReset).slot, 7);
     });
 
     test('unknown, foreign and truncated messages decode to null', () {

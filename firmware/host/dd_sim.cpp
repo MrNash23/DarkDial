@@ -6,7 +6,7 @@
 //   R <n>     rotate        S <mode> <index> <slots> <screen> <label>|<text>|<position>|<valid>
 //   C         click                   (answer to ?)
 //   P         tap on the display
-//   D / U     knob down / up          then: J <menuOpen> <menuIndex> <menuCount> <running> <seconds> <notice>|<label>
+//   D / U     knob down / up          then: J <menuOpen> <menuIndex> <menuCount> <running> <seconds> <notice>|<label>|<title>
 //   T <ms>    advance time
 //   ?         report state
 #include <stdio.h>
@@ -72,14 +72,11 @@ int main() {
         printf("S %d %d %d %d %s|%s|%d|%d\n", device.mode() == dd::Mode::Edit ? 1 : 0, i, device.slotCount(),
                static_cast<int>(device.screen()), device.slot(i).label, device.value(i).text,
                device.value(i).position, device.value(i).valid ? 1 : 0);
-        const char *menuLabel = "";
-        if (device.menuOpen()) {
-          const dd::MenuEntry entry = device.menuEntry(device.menuIndex());
-          menuLabel = entry.kind == dd::MenuKind::Stop ? "<stop>" : entry.kind == dd::MenuKind::NewJob ? "<new>" : entry.job->label;
-        }
-        printf("J %d %d %d %d %u %d|%s\n", device.menuOpen() ? 1 : 0, device.menuIndex(), device.menuCount(),
+        const char *menuLabel =
+            device.menuOpen() && device.menuCount() ? device.menuItem(device.menuIndex()).label : "";
+        printf("J %d %d %d %d %u %d|%s|%s\n", device.menuOpen() ? 1 : 0, device.menuIndex(), device.menuCount(),
                device.timerRunning() ? 1 : 0, static_cast<unsigned>(device.timerSeconds(nowMs)),
-               device.screen() == dd::Screen::TimerNotice ? device.noticeCode() : -1, menuLabel);
+               device.screen() == dd::Screen::TimerNotice ? device.noticeCode() : -1, menuLabel, device.menuTitle());
         fflush(stdout);
         break;
       }

@@ -23,14 +23,6 @@ enum class Screen : uint8_t {
   TimerNotice,  // "started" / "stopped" / an error text, shown briefly
 };
 
-/// One line of the time tracking menu.
-enum class MenuKind : uint8_t { Stop, NewJob, Job };
-
-struct MenuEntry {
-  MenuKind kind = MenuKind::NewJob;
-  const Job *job = nullptr;  // only for MenuKind::Job
-};
-
 constexpr uint8_t kStatusLightroom = 1;
 constexpr uint8_t kStatusDevelop = 2;
 constexpr uint8_t kStatusPhoto = 4;
@@ -43,6 +35,8 @@ constexpr uint32_t kLongPressMs = 500;
 constexpr uint32_t kTouchGuardMs = 500;
 constexpr uint32_t kTimerNoticeMs = 1200;
 constexpr uint32_t kDoubleTapMs = 350;
+// The menu closes by itself after this long without input.
+constexpr uint32_t kMenuTimeoutMs = 20000;
 
 /// Writes the time for the display: mm:ss below one hour, then h:mm.
 /// `out` needs 12 bytes.
@@ -122,10 +116,13 @@ class Device {
   int lastMove() const { return lastMove_; }
 
   // Time tracking -------------------------------------------------------------
+  // The menu is a page sent by the service; the device shows one line at a
+  // time and reports which one was chosen.
   bool menuOpen() const { return menuOpen_; }
-  uint8_t menuCount() const;
+  uint8_t menuCount() const { return menuCount_; }
   uint8_t menuIndex() const { return menuIndex_; }
-  MenuEntry menuEntry(uint8_t i) const;
+  const MenuItem &menuItem(uint8_t i) const { return menuItems_[i]; }
+  const char *menuTitle() const { return menuTitle_; }
   bool timerRunning() const { return timerRunning_; }
   uint32_t timerJobId() const { return timerJobId_; }
   const char *timerLabel() const { return timerLabel_; }
@@ -138,8 +135,9 @@ class Device {
   uint16_t configCrc() const;
 
  private:
-  void longPress();
-  void menuAction();
+  void longPress(uint32_t nowMs);
+  void menuAction(uint32_t nowMs);
+  void closeMenu();
   bool touchAllowed(uint32_t nowMs) const;
   void resetSlot();
   void loadDefaults();
@@ -188,12 +186,20 @@ class Device {
   // Time tracking.
   bool menuOpen_ = false;
   uint8_t menuIndex_ = 0;
-  Job jobs_[kMaxJobs];
-  uint8_t jobCount_ = 0;
-  Job incomingJobs_[kMaxJobs];
-  uint8_t incomingJobCount_ = 0;
-  uint8_t incomingJobExpected_ = 0;
-  bool receivingJobs_ = false;
+  uint8_t menuPage_ = 0;
+  uint32_t menuActivityMs_ = 0;
+  MenuItem menuItems_[kMaxMenuItems];
+  uint8_t menuCount_ = 0;
+  char menuTitle_[kMaxLabelBytes + 1] = {0};
+  // Page being received.
+  bool receivingMenu_ = false;
+  MenuItem incomingItems_[kMaxMenuItems];
+  uint8_t incomingItemCount_ = 0;
+  uint8_t incomingItemExpected_ = 0;
+  uint8_t incomingPage_ = 0;
+  uint8_t incomingSelected_ = 0;
+  char incomingTitle_[kMaxLabelBytes + 1] = {0};
+  uint32_t lastNowMs_ = 0;
   bool timerRunning_ = false;
   uint32_t timerJobId_ = 0;
   uint32_t timerBaseSeconds_ = 0;

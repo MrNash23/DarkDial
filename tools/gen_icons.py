@@ -118,6 +118,19 @@ def draw_status(icon_id, size):
     elif icon_id == 31:  # stop
         a = n * 0.20
         d.rounded_rectangle((c - a, c - a, c + a, c + a), radius=n * 0.04, outline=white, width=stroke)
+    elif icon_id == 32:  # client: a person
+        r = n * 0.11
+        d.ellipse((c - r, c - n * 0.24, c + r, c - n * 0.24 + 2 * r), outline=white, width=stroke)
+        d.arc((c - n * 0.24, c + n * 0.03, c + n * 0.24, c + n * 0.51), 180, 360, fill=white, width=stroke)
+    elif icon_id == 33:  # back: arrow to the left
+        a = n * 0.24
+        d.line((c - a, c, c + a, c), fill=white, width=stroke)
+        d.line((c - a + n * 0.14, c - n * 0.14, c - a, c, c - a + n * 0.14, c + n * 0.14),
+               fill=white, width=stroke, joint="curve")
+    elif icon_id == 34:  # close: cross
+        a = n * 0.18
+        d.line((c - a, c - a, c + a, c + a), fill=white, width=stroke)
+        d.line((c - a, c + a, c + a, c - a), fill=white, width=stroke)
     return image.resize((size, size), Image.LANCZOS)
 
 

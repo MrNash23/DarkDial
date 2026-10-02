@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:darkdial_core/darkdial_core.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 /// A clock the test moves by hand.
@@ -110,55 +113,186 @@ void main() {
     });
   });
 
-  group('device list', () {
-    test('most recently used first, suggestion on top, capped', () {
+  group('device menu', () {
+    List<String> labels(MenuPage page) => [for (final item in page.items) item.label];
+
+    test('start page: stop only while running, suggestion on top and not repeated, three recent jobs', () {
+      final menu = DeviceMenu(tracker, Language.de);
+      expect(labels(menu.start()), ['Neuer Job', 'Neuer Kunde', 'Schließen'], reason: 'nothing there yet');
+
       final ids = <int>[];
-      for (var i = 0; i < 16; i++) {
+      for (var i = 0; i < 6; i++) {
         clock.advance(const Duration(minutes: 1));
-        ids.add(tracker.createJob(name: 'Job $i').id);
+        ids.add(tracker.createJob(name: 'Job $i', client: i < 2 ? 'Verlag' : '').id);
       }
-      clock.advance(const Duration(minutes: 1));
-      tracker.start(ids[3], origin: 'app');
-      clock.advance(const Duration(minutes: 1));
-      tracker.stop();
-
-      var list = tracker.deviceJobs();
-      expect(list, hasLength(maxDeviceJobs));
-      expect(list.first.job.id, ids[3], reason: 'last used');
-      expect(list.any((j) => j.suggested), isFalse);
-
-      // Lightroom shows a collection that belongs to an old job.
       const source = LrSource(kind: 'collection', key: '7', name: 'Hochzeit');
       tracker.assignSource(ids[0], source);
       tracker.currentSource = source;
-      list = tracker.deviceJobs();
-      expect(list.first.job.id, ids[0]);
-      expect(list.first.suggested, isTrue);
-      expect(list.where((j) => j.job.id == ids[0]), hasLength(1));
-      expect(list[1].job.id, ids[3]);
 
-      tracker.start(ids[0], origin: 'device');
-      expect(tracker.deviceJobs().first.running, isTrue);
+      var page = menu.start();
+      expect(page.title, 'Zeiterfassung');
+      expect(labels(page), ['Job 0', 'Job 5', 'Job 4', 'Job 3', 'Kunden', 'Neuer Job', 'Neuer Kunde', 'Schließen']);
+      expect(page.items.first.highlighted, isTrue);
+      expect(page.items[4].submenu, isTrue);
+      expect(page.items.last.closes, isTrue);
+      expect(page.items.where((i) => i.running), isEmpty);
+
+      tracker.start(ids[5], origin: 'app');
+      page = menu.start();
+      expect(labels(page).first, 'Stopp');
+      expect(page.items.first.running, isTrue);
+      expect(page.items.firstWhere((i) => i.label == 'Job 5').running, isTrue);
     });
 
-    test('a source belongs to one job; several sources per job; archived jobs are not suggested', () {
-      final a = tracker.createJob(name: 'A');
-      final b = tracker.createJob(name: 'B');
-      const collection = LrSource(kind: 'collection', key: '7', name: 'Auswahl');
-      const folder = LrSource(kind: 'folder', key: '/Fotos/2026', name: '2026');
-      tracker.assignSource(a.id, collection);
-      tracker.assignSource(a.id, folder);
-      expect(tracker.jobs().firstWhere((j) => j.id == a.id).sources, hasLength(2));
+    test('client, then job: two levels down and back', () {
+      final menu = DeviceMenu(tracker, Language.de);
+      final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
+      tracker.createJob(name: 'Album', client: 'Fam. Müller');
+      tracker.createJob(name: 'Katalog', client: 'Verlag');
+      tracker.archive(tracker.createJob(name: 'Altes', client: 'Fam. Müller').id);
 
-      tracker.assignSource(b.id, collection);
-      expect(tracker.jobs().firstWhere((j) => j.id == a.id).sources.single.kind, 'folder');
-      tracker.currentSource = collection;
-      expect(tracker.suggestion!.id, b.id);
+      var page = menu.start();
+      page = menu.select(labels(page).indexOf('Kunden')).page!;
+      expect(page.title, 'Kunden');
+      expect(labels(page), containsAll(['Fam. Müller', 'Verlag', 'Zurück']));
+      expect(labels(page).last, 'Zurück');
 
-      tracker.archive(b.id);
-      expect(tracker.suggestion, isNull);
-      tracker.currentSource = const LrSource(kind: 'folder', key: '/anders', name: 'anders');
-      expect(tracker.suggestion, isNull);
+      page = menu.select(labels(page).indexOf('Fam. Müller')).page!;
+      expect(page.title, 'Fam. Müller');
+      expect(labels(page), containsAll(['Hochzeit', 'Album', 'Neuer Job', 'Zurück']));
+      expect(labels(page), isNot(contains('Altes')), reason: 'archived');
+      expect(labels(page), isNot(contains('Katalog')));
+
+      // Back goes up one level, not out.
+      final up = menu.select(labels(page).indexOf('Zurück')).page!;
+      expect(up.title, 'Kunden');
+      page = menu.select(labels(up).indexOf('Fam. Müller')).page!;
+
+      final outcome = menu.select(labels(page).indexOf('Hochzeit'));
+      expect(outcome.result!.code, TimerResult.started);
+      expect(tracker.running!.job.id, wedding.id);
+      expect(menu.open, isFalse);
+    });
+
+    test('new job inside a client belongs to that client', () {
+      final menu = DeviceMenu(tracker, Language.de);
+      tracker.createJob(name: 'Katalog', client: 'Verlag');
+      var page = menu.start();
+      page = menu.select(labels(page).indexOf('Kunden')).page!;
+      page = menu.select(labels(page).indexOf('Verlag')).page!;
+      expect(menu.select(labels(page).indexOf('Neuer Job')).result!.code, TimerResult.started);
+      expect(tracker.running!.job.unnamed, isTrue);
+      expect(tracker.running!.job.client, 'Verlag');
+    });
+
+    test('new client creates an unnamed client with a running unnamed job', () {
+      final menu = DeviceMenu(tracker, Language.de);
+      final page = menu.start();
+      expect(menu.select(labels(page).indexOf('Neuer Kunde')).result!.code, TimerResult.started);
+      final client = tracker.clients().single;
+      expect(client.unnamed, isTrue);
+      expect(tracker.clientLabel(client), 'Kunde 01.10. 12:32');
+      expect(tracker.running!.job.clientId, client.id);
+      expect(tracker.running!.job.unnamed, isTrue);
+      // The unnamed client shows up in the menu with date and time.
+      final clients = menu.select(labels(menu.start()).indexOf('Kunden')).page!;
+      expect(labels(clients).first, 'Kunde 01.10. 12:32');
+    });
+
+    test('stop, close, English, stale job', () {
+      final menu = DeviceMenu(tracker, Language.en);
+      final job = tracker.createJob(name: 'A');
+      tracker.start(job.id, origin: 'app');
+      var page = menu.start();
+      expect(page.title, 'Time tracking');
+      expect(labels(page), ['Stop', 'A', 'New job', 'New client', 'Close']);
+      expect(menu.select(0).result!.code, TimerResult.stopped);
+      expect(tracker.running, isNull);
+
+      // A job archived behind the menu's back: error, menu closed.
+      page = menu.start();
+      db.setArchived(job.id, true);
+      final outcome = menu.select(labels(page).indexOf('A'));
+      expect(outcome.result!.code, TimerResult.error);
+      expect(outcome.result!.text, 'Archived');
+      expect(menu.open, isFalse);
+
+      // An index outside the page just shows the page again.
+      menu.start();
+      expect(menu.select(99).page, isNotNull);
+    });
+
+    test('pages never exceed what the device holds', () {
+      final menu = DeviceMenu(tracker, Language.de);
+      for (var i = 0; i < 30; i++) {
+        tracker.createJob(name: 'Job $i', client: i.isEven ? 'Kunde $i' : 'Großkunde');
+      }
+      var page = menu.start();
+      expect(page.items.length, lessThanOrEqualTo(maxMenuItems));
+      page = menu.select(labels(page).indexOf('Kunden')).page!;
+      expect(page.items, hasLength(maxMenuItems));
+      expect(labels(page).last, 'Zurück');
+      page = menu.select(labels(page).indexOf('Großkunde')).page!;
+      expect(page.items, hasLength(maxMenuItems));
+      expect(labels(page).sublist(maxMenuItems - 2), ['Neuer Job', 'Zurück']);
+    });
+  });
+
+  group('clients', () {
+    test('a client name creates the client once, ignoring case; empty means none', () {
+      final a = tracker.createJob(name: 'A', client: 'Verlag');
+      final b = tracker.createJob(name: 'B', client: ' verlag ');
+      final c = tracker.createJob(name: 'C');
+      expect(tracker.clients(), hasLength(1));
+      expect(a.clientId, b.clientId);
+      expect(b.client, 'Verlag');
+      expect(c.clientId, isNull);
+      expect(tracker.jobsOf(a.clientId!), hasLength(2));
+    });
+
+    test('renaming to an existing name merges; updateJob can keep an unnamed client', () {
+      final a = tracker.createJob(name: 'A', client: 'Verlag');
+      tracker.startNewClient(origin: 'device');
+      final unnamed = tracker.clients().firstWhere((c) => c.unnamed);
+      final job = tracker.running!.job;
+
+      // Naming the job must not lose its still unnamed client.
+      tracker.updateJob(job.id, name: 'Titelbild', short: '', client: null, color: null);
+      expect(tracker.db.job(job.id)!.clientId, unnamed.id);
+
+      tracker.renameClient(unnamed.id, 'verlag');
+      expect(tracker.clients(), hasLength(1));
+      expect(tracker.db.job(job.id)!.clientId, a.clientId);
+      expect(tracker.db.job(job.id)!.client, 'Verlag');
+
+      tracker.renameClient(a.clientId!, 'Verlag Neu');
+      expect(tracker.db.job(a.id)!.client, 'Verlag Neu');
+    });
+
+    test('deleting a job removes its entries, not while it runs; deleting a client keeps its jobs', () {
+      final job = tracker.createJob(name: 'A', client: 'Verlag');
+      tracker.start(job.id, origin: 'app');
+      expect(() => tracker.deleteJob(job.id), throwsA(isA<TimeTrackingError>()));
+      clock.advance(const Duration(minutes: 5));
+      tracker.stop();
+
+      tracker.deleteClient(job.clientId!);
+      expect(tracker.db.job(job.id)!.clientId, isNull);
+      expect(tracker.entries(), hasLength(1));
+
+      tracker.deleteJob(job.id);
+      expect(tracker.jobs(), isEmpty);
+      expect(tracker.entries(), isEmpty);
+    });
+
+    test('wipe empties everything', () {
+      tracker.createJob(name: 'A', client: 'Verlag');
+      tracker.startNewClient(origin: 'device');
+      tracker.wipe();
+      expect(tracker.jobs(), isEmpty);
+      expect(tracker.clients(), isEmpty);
+      expect(tracker.entries(), isEmpty);
+      expect(tracker.running, isNull);
     });
   });
 
@@ -369,11 +503,56 @@ void main() {
     });
   });
 
+  test('a version 1 database is migrated: client texts become clients, data stays', () {
+    final dir = Directory.systemTemp.createTempSync('darkdial_migration');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final path = '${dir.path}/time.sqlite';
+    final old = sqlite3.open(path);
+    old.execute('''
+      CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL DEFAULT '', short TEXT NOT NULL DEFAULT '',
+        client TEXT NOT NULL DEFAULT '', color INTEGER, archived INTEGER NOT NULL DEFAULT 0, created_utc INTEGER NOT NULL,
+        created_offset INTEGER NOT NULL, last_used_utc INTEGER NOT NULL)''');
+    old.execute('''
+      CREATE TABLE job_sources (job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, kind TEXT NOT NULL,
+        key TEXT NOT NULL, name TEXT NOT NULL, PRIMARY KEY (job_id, kind, key))''');
+    old.execute('''
+      CREATE TABLE time_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        start_utc INTEGER NOT NULL, start_offset INTEGER NOT NULL, end_utc INTEGER, end_offset INTEGER,
+        note TEXT NOT NULL DEFAULT '', origin TEXT NOT NULL, edited INTEGER NOT NULL DEFAULT 0)''');
+    old.execute('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    old.execute("INSERT INTO jobs(name, client, created_utc, created_offset, last_used_utc) VALUES "
+        "('Hochzeit', 'Fam. Müller', 1000, 120, 5000), ('Album', ' fam. müller', 2000, 120, 9000), "
+        "('Katalog', 'Verlag', 3000, 120, 4000), ('', '', 3500, 120, 3500)");
+    old.execute("INSERT INTO time_entries(job_id, start_utc, start_offset, end_utc, end_offset, origin) VALUES (1, 1000, 120, 61000, 120, 'device')");
+    old.execute("INSERT INTO job_sources VALUES (1, 'collection', '77', 'Auswahl')");
+    old.execute('PRAGMA user_version = 1');
+    old.dispose();
+
+    final migrated = TimeDatabase.open(path);
+    addTearDown(migrated.close);
+    final clients = migrated.clients();
+    expect(clients.map((c) => c.name), ['Fam. Müller', 'Verlag'], reason: 'most recently used first');
+    expect(clients.first.lastUsedAt.millisecondsSinceEpoch, 9000);
+    final jobs = {for (final job in migrated.jobs(archived: false)) job.name: job};
+    expect(jobs['Hochzeit']!.clientId, jobs['Album']!.clientId);
+    expect(jobs['Album']!.client, 'Fam. Müller');
+    expect(jobs['Katalog']!.client, 'Verlag');
+    expect(jobs['']!.clientId, isNull);
+    expect(jobs['Hochzeit']!.sources.single.key, '77');
+    expect(migrated.entries(now: DateTime.utc(2026)).single.duration(DateTime.utc(2026)), const Duration(minutes: 1));
+
+    // Opening again changes nothing.
+    migrated.close();
+    final again = TimeDatabase.open(path);
+    expect(again.clients(), hasLength(2));
+    again.close();
+  });
+
   test('database opens an existing file at the current schema version and refuses a newer one', () {
     expect(db.meta('nothing'), isNull);
     db.setMeta('k', '1');
     db.setMeta('k', '2');
     expect(db.meta('k'), '2');
-    expect(TimeDatabase.schemaVersion, 1);
+    expect(TimeDatabase.schemaVersion, 2);
   });
 }

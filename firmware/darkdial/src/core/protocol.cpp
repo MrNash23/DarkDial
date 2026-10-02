@@ -17,9 +17,9 @@ constexpr uint8_t kTypeSlotSelect = 0x02;
 constexpr uint8_t kTypeSlotLeave = 0x03;
 constexpr uint8_t kTypeSlotFocus = 0x04;
 constexpr uint8_t kTypeConfigAck = 0x05;
-constexpr uint8_t kTypeJobListRequest = 0x06;
-constexpr uint8_t kTypeTimerStart = 0x07;
-constexpr uint8_t kTypeTimerStop = 0x08;
+constexpr uint8_t kTypeMenuOpen = 0x06;
+constexpr uint8_t kTypeMenuSelect = 0x07;
+constexpr uint8_t kTypeMenuClosed = 0x08;
 constexpr uint8_t kTypeSlotReset = 0x09;
 constexpr uint8_t kTypeHelloRequest = 0x41;
 constexpr uint8_t kTypeConfigBegin = 0x42;
@@ -27,9 +27,9 @@ constexpr uint8_t kTypeConfigSlot = 0x43;
 constexpr uint8_t kTypeConfigEnd = 0x44;
 constexpr uint8_t kTypeValue = 0x45;
 constexpr uint8_t kTypeStatus = 0x46;
-constexpr uint8_t kTypeJobListBegin = 0x47;
-constexpr uint8_t kTypeJobItem = 0x48;
-constexpr uint8_t kTypeJobListEnd = 0x49;
+constexpr uint8_t kTypeMenuBegin = 0x47;
+constexpr uint8_t kTypeMenuItem = 0x48;
+constexpr uint8_t kTypeMenuEnd = 0x49;
 constexpr uint8_t kTypeTimerState = 0x4A;
 constexpr uint8_t kTypeTimerResult = 0x4B;
 
@@ -177,22 +177,27 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       out.statusFlags = p[0];
       out.notice = p[1];
       return true;
-    case kTypeJobListBegin:
-      if (size < 1) return false;
-      out.type = MessageType::JobListBegin;
-      out.jobCount = p[0];
+    case kTypeMenuBegin:
+      if (size < 4) return false;
+      out.menuPage = p[0];
+      out.menuCount = p[1];
+      out.menuSelected = p[2];
+      if (!readString(p, size, 3, out.text, kMaxLabelBytes)) return false;
+      out.type = MessageType::MenuBegin;
       return true;
-    case kTypeJobItem:
-      if (size < 7) return false;
+    case kTypeMenuItem:
+      if (size < 4) return false;
       out.index = p[0];
-      out.job.id = readU32(p + 1);
-      out.job.suggested = (p[5] & 1) != 0;
-      out.job.running = (p[5] & 2) != 0;
-      if (!readString(p, size, 6, out.job.label, kMaxLabelBytes)) return false;
-      out.type = MessageType::JobItem;
+      out.item.icon = p[1];
+      out.item.highlighted = (p[2] & 1) != 0;
+      out.item.running = (p[2] & 2) != 0;
+      out.item.submenu = (p[2] & 4) != 0;
+      out.item.closes = (p[2] & 8) != 0;
+      if (!readString(p, size, 3, out.item.label, kMaxLabelBytes)) return false;
+      out.type = MessageType::MenuItem;
       return true;
-    case kTypeJobListEnd:
-      out.type = MessageType::JobListEnd;
+    case kTypeMenuEnd:
+      out.type = MessageType::MenuEnd;
       return true;
     case kTypeTimerState:
       if (size < 10) return false;
@@ -247,15 +252,14 @@ size_t buildConfigAck(uint8_t *out, uint8_t result, uint16_t crc) {
   return frame(out, kTypeConfigAck, p, sizeof(p));
 }
 
-size_t buildJobListRequest(uint8_t *out) { return frame(out, kTypeJobListRequest, nullptr, 0); }
+size_t buildMenuOpen(uint8_t *out) { return frame(out, kTypeMenuOpen, nullptr, 0); }
 
-size_t buildTimerStart(uint8_t *out, uint32_t jobId) {
-  const uint8_t p[4] = {static_cast<uint8_t>(jobId >> 24), static_cast<uint8_t>(jobId >> 16),
-                        static_cast<uint8_t>(jobId >> 8), static_cast<uint8_t>(jobId)};
-  return frame(out, kTypeTimerStart, p, sizeof(p));
+size_t buildMenuSelect(uint8_t *out, uint8_t page, uint8_t index) {
+  const uint8_t p[2] = {page, index};
+  return frame(out, kTypeMenuSelect, p, sizeof(p));
 }
 
-size_t buildTimerStop(uint8_t *out) { return frame(out, kTypeTimerStop, nullptr, 0); }
+size_t buildMenuClosed(uint8_t *out) { return frame(out, kTypeMenuClosed, nullptr, 0); }
 size_t buildSlotReset(uint8_t *out, uint8_t slot) { return frame(out, kTypeSlotReset, &slot, 1); }
 
 size_t buildRotation(uint8_t *out, int delta) {

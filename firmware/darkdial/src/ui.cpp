@@ -1,6 +1,7 @@
 #include "ui.h"
 
 #include <lvgl.h>
+#include <stdio.h>
 
 #include "core/params.h"
 #include "icons.h"
@@ -24,7 +25,8 @@ constexpr int kRingTopDeg = 270;
 constexpr int kIconTop = 61;
 constexpr int kLabelTop = 184;
 constexpr int kValueTop = 234;
-constexpr int kGapTimeBottom = 10;  // the running time sits in the gap of the ring
+constexpr int kGapTimeBottom = 10;
+constexpr int kMenuTitleTop = 30;   // page title of the time tracking menu  // the running time sits in the gap of the ring
 // The ring only starts to fill after this part of the long press, so a
 // normal click does not flash it.
 constexpr float kHoldVisibleFrom = 0.2f;
@@ -46,6 +48,7 @@ lv_obj_t *dot = nullptr;
 lv_obj_t *label = nullptr;
 lv_obj_t *value = nullptr;
 lv_obj_t *gapTime = nullptr;
+lv_obj_t *menuTitle = nullptr;
 lv_obj_t *logo = nullptr;
 lv_obj_t *poweredBy = nullptr;
 
@@ -158,27 +161,36 @@ const char *timerText(dd::TimerTextId id, uint8_t language) {
   return language == 0 ? dd::kTimerText[id].de : dd::kTimerText[id].en;
 }
 
-/// The time tracking menu: one entry at a time, like the carousel.
-void showJobMenu(const dd::Device &device, uint32_t nowMs) {
+/// The time tracking menu: one line of the page at a time, like the
+/// carousel, with the page title on top and the position on the ring.
+void showMenu(const dd::Device &device, uint32_t nowMs) {
   if (!device.serviceConnected()) {
     showStatus(dd::ICON_STATUS_OFFLINE, device.language());
     return;
   }
+  lv_label_set_text(menuTitle, device.menuTitle());
+  if (device.menuCount() == 0) {
+    // Just opened: the page is on its way.
+    showMessage(dd::ICON_TIMER_STOPWATCH, "");
+    return;
+  }
+  const dd::MenuItem &item = device.menuItem(device.menuIndex());
   char time[12] = "";
-  if (device.timerRunning()) dd::formatElapsed(device.timerSeconds(nowMs), time);
-  const dd::MenuEntry entry = device.menuEntry(device.menuIndex());
-  switch (entry.kind) {
-    case dd::MenuKind::Stop:
-      showMessage(dd::ICON_TIMER_STOP, timerText(dd::TEXT_STOP, device.language()), time);
-      break;
-    case dd::MenuKind::NewJob:
-      showMessage(dd::ICON_TIMER_PLUS, timerText(dd::TEXT_NEWJOB, device.language()));
-      break;
-    case dd::MenuKind::Job:
-      showMessage(dd::ICON_TIMER_STOPWATCH, entry.job->label, entry.job->running ? time : "");
-      // The job that matches what is open in Lightroom stands out.
-      if (entry.job->suggested) lv_obj_set_style_text_color(label, lv_color_hex(kColorAccent), 0);
-      break;
+  if (item.running && device.timerRunning()) dd::formatElapsed(device.timerSeconds(nowMs), time);
+  char text[dd::kMaxLabelBytes + 4];
+  // "»" (Latin-1) marks a line that leads to another page.
+  snprintf(text, sizeof(text), item.submenu ? "%s \xC2\xBB" : "%s", item.label);
+  showMessage(item.icon, text, time);
+  if (item.highlighted) lv_obj_set_style_text_color(label, lv_color_hex(kColorAccent), 0);
+
+  // Where we are in the list: one segment of the ring per line.
+  if (device.menuCount() > 1) {
+    const int segment = kRingSweepDeg / device.menuCount();
+    const int start = kRingStartDeg + device.menuIndex() * kRingSweepDeg / device.menuCount();
+    lv_arc_set_angles(ring, static_cast<lv_value_precise_t>(start % 360),
+                      static_cast<lv_value_precise_t>((start + (segment < 6 ? 6 : segment)) % 360));
+    lv_obj_set_style_arc_color(ring, lv_color_hex(kColorSelect), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_opa(ring, LV_OPA_COVER, LV_PART_INDICATOR);
   }
 }
 
@@ -305,6 +317,12 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   lv_obj_align(poweredByLogo, LV_ALIGN_TOP_MID, 0, kPoweredByLogoTop);
   lv_obj_set_hidden(poweredBy, true);
 
+  menuTitle = lv_label_create(screen);
+  lv_obj_set_style_text_font(menuTitle, &dd_font_small, 0);
+  lv_obj_set_style_text_color(menuTitle, lv_color_hex(kColorSelect), 0);
+  lv_obj_align(menuTitle, LV_ALIGN_TOP_MID, 0, kMenuTitleTop);
+  lv_label_set_text(menuTitle, "");
+
   logo = lv_image_create(screen);
   lv_image_set_src(logo, &dd_logo);
   lv_obj_center(logo);
@@ -330,6 +348,7 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   shownHold = hold;
 
   lv_obj_set_style_text_color(label, lv_color_hex(kColorLabel), 0);
+  lv_label_set_text(menuTitle, "");
   const dd::Screen screen = device.screen();
   // What the carousel animation compares: slots and menu entries slide, a
   // change of screen does not.
@@ -356,8 +375,8 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
       }
       break;
     case dd::Screen::JobMenu:
-      showJobMenu(device, nowMs);
-      if (device.serviceConnected()) index = 1000 + device.menuIndex();
+      showMenu(device, nowMs);
+      if (device.serviceConnected() && device.menuCount() > 0) index = 1000 + device.menuIndex();
       break;
     case dd::Screen::TimerNotice:
       showTimerNotice(device);

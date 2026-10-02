@@ -7,14 +7,14 @@ extern "C" {
 #endif
 
 #define DD_ICON_SIZE 112
-#define DD_ICON_TABLE_SIZE 32
+#define DD_ICON_TABLE_SIZE 35
 // Centre and radius of the colour dot inside the HSL icons.
 #define DD_HSL_DOT_X 56
 #define DD_HSL_DOT_Y 16
 #define DD_HSL_DOT_R 7
 
 // Indexed by protocol icon ID; NULL where no icon exists.
-extern const lv_image_dsc_t *const dd_icons[32];
+extern const lv_image_dsc_t *const dd_icons[35];
 extern const lv_image_dsc_t dd_logo;
 extern const lv_image_dsc_t dd_powered_by;
 

@@ -89,10 +89,10 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x03` | SlotLeave | `u8 slot` | Back in selection mode, on this slot. |
 | `0x04` | SlotFocus | `u8 slot` | Carousel moved to this slot in selection mode. |
 | `0x05` | ConfigAck | `u8 result`, `u16 crc` | Reply to ConfigEnd. Result: 0 ok, 1 CRC mismatch, 2 too many slots, 3 bad sequence. |
-| `0x06` | JobListRequest | – | *1.1.* The job menu was opened; service answers with the job list and TimerState. |
-| `0x07` | TimerStart | `u32 jobId` | *1.1.* Start the clock for this job; `0xFFFFFFFF` creates a new, unnamed job. A running clock is stopped first. |
-| `0x08` | TimerStop | – | *1.1.* Stop the running clock. |
-| `0x09` | SlotReset | `u8 slot` | *1.1.* Double tap on the display in edit mode: reset this slot to Lightroom's default. |
+| `0x06` | MenuOpen | – | *1.1.* Long press: the time tracking menu was opened; service answers with the start page and TimerState. |
+| `0x07` | MenuSelect | `u8 page`, `u8 index` | *1.1.* The line `index` of page `page` was clicked. Service answers with another page or a TimerResult. |
+| `0x08` | MenuClosed | – | *1.1.* The device closed the menu itself: long press, timeout, or a line with the "closes" flag. |
+| `0x09` | SlotReset | `u8 slot` | *1.1.* Double tap or long touch on the display in edit mode: reset this slot to Lightroom's default. |
 
 ### 1.5 Messages service → device
 
@@ -104,11 +104,11 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x44` | ConfigEnd | `u16 crc` | CRC over all ConfigSlot payloads. Device answers ConfigAck and, on success, stores the configuration and shows "loaded". |
 | `0x45` | Value | `u8 slot`, `u16 position`, `u8 flags`, `str text` | Current value of a slot. `position` 0 … 16383 is the ring position; for bipolar slots 8192 is the centre (top). Flags bit 0: value valid. `text` is the formatted number, ≤ 8 bytes ASCII, e.g. `+1.35`, `5600K`. |
 | `0x46` | Status | `u8 flags`, `u8 notice` | Flags bit 0: Lightroom connected, bit 1: Develop module active, bit 2: photo selected. Notice: 0 none, 1 switching to Develop. Sent on every change and at least every 2 s as heartbeat. |
-| `0x47` | JobListBegin | `u8 count` | *1.1.* Starts a job list, `count` 0 … 13. |
-| `0x48` | JobItem | `u8 index`, `u32 id`, `u8 flags`, `str label` | *1.1.* One job. Flags bit 0: suggested for what is open in Lightroom, bit 1: its clock is running. Label ≤ 20 bytes. Sent in index order. |
-| `0x49` | JobListEnd | – | *1.1.* The list is complete and replaces the previous one. |
+| `0x47` | MenuBegin | `u8 page`, `u8 count`, `u8 selected`, `str title` | *1.1.* Starts a menu page with `count` 0 … 16 lines. `page` is echoed in MenuSelect. `selected` is the line to start on. Title ≤ 20 bytes. |
+| `0x48` | MenuItem | `u8 index`, `u8 icon`, `u8 flags`, `str label` | *1.1.* One line. Flags bit 0: highlighted, bit 1: show the running time with it, bit 2: leads to another page, bit 3: choosing it closes the menu on the device. Label ≤ 20 bytes. Sent in index order. |
+| `0x49` | MenuEnd | – | *1.1.* The page is complete and replaces the one shown. |
 | `0x4A` | TimerState | `u8 running`, `u32 jobId`, `u32 elapsedSeconds`, `str label` | *1.1.* State of the clock. `elapsedSeconds` is the time of the running entry so far; the device counts on from there. |
-| `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* Answer to TimerStart/TimerStop. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
+| `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* The chosen action is done: the device closes the menu and shows the result briefly. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
 final XOR) over the concatenation of the unpacked payloads of all ConfigSlot
@@ -141,16 +141,24 @@ displays and selects.
 
 - A device announces time tracking by `minor ≥ 1` in Hello. The service sends
   the 1.1 messages only to such devices.
-- **Menu.** On a long press the device sends JobListRequest and shows the
-  list when JobListEnd arrives. The device itself puts "Stop" (only while a
-  clock runs) and "New job" in front of the jobs. The service sends the jobs
-  already ordered: the suggestion first, then most recently used.
+- **Menu.** The service builds the menu, page by page; the device shows one
+  line at a time and reports which one was clicked. What a line means (start
+  a job, open the clients, go back) is known to the service only, so menus
+  can change without new firmware. On a long press the device sends MenuOpen
+  and shows the page once MenuEnd arrives.
+- **Pages.** After MenuSelect the service sends either another page or a
+  TimerResult. A page with the same title as the one shown is an update and
+  keeps the selected line; any other page starts on its `selected` line. A
+  MenuSelect whose `page` is not the page last sent is ignored.
+- **Closing.** A second long press, 20 s without input, or a line with the
+  "closes" flag close the menu on the device, which then sends MenuClosed.
 - **Clock.** The service sends TimerState after every change, when a device
   connects, and once a minute to correct drift. Between two messages the
   device counts locally.
-- **Result.** After TimerStart or TimerStop the service sends TimerResult,
-  then TimerState. Without service the menu shows "offline" and allows no
-  action.
+- Without service the menu shows "offline" and allows no action.
+- **Touch.** The knob is the display: pressing it puts a finger on the glass.
+  The device ignores touch input while the knob is down and for 500 ms after
+  it moved.
 - `u32` is four bytes, big-endian.
 
 ---

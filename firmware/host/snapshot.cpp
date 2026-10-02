@@ -147,53 +147,58 @@ int main(int argc, char **argv) {
   feed(device, status(all), nowMs);
   feed(device, timerState(false, 0, 0, ""), nowMs);
   device.buttonDown(nowMs);
-  run(device, 500);
+  run(device, 350);
   save("20_hold_ring_fills");
   run(device, 300);
   device.buttonUp(nowMs);
-  feed(device, jobListBegin(3), nowMs);
-  feed(device, jobItem(0, 7, true, false, "M\xC3\xBCller"), nowMs);
-  feed(device, jobItem(1, 5, false, false, "Katalog"), nowMs);
-  feed(device, jobItem(2, 9, false, false, "01.10. 14:32"), nowMs);
-  feed(device, jobListEnd(), nowMs);
+  run(device, 100);
+  save("21_menu_waiting_for_page");
+  sendMenu(device, 1, "Zeiterfassung",
+           {{29, 1, "M\xC3\xBCller"}, {29, 0, "Katalog"}, {29, 0, "01.10. 14:32"}, {32, 4, "Kunden"},
+            {30, 0, "Neuer Job"}, {30, 0, "Neuer Kunde"}, {34, 8, "Schlie\xC3\x9F" "en"}},
+           nowMs);
   run(device, 300);
-  save("21_menu_new_job");
-  device.rotate(1, nowMs);
-  run(device, 400);
   save("22_menu_suggested_job");
+  device.rotate(3, nowMs);
+  run(device, 400);
+  save("23_menu_clients_entry");
+  device.click();
+  sendMenu(device, 2, "Kunden", {{32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {33, 0, "Zur\xC3\xBC" "ck"}}, nowMs);
+  run(device, 300);
+  save("24_menu_client_list");
+  device.click();
+  sendMenu(device, 3, "Fam. M\xC3\xBCller",
+           {{29, 0, "Hochzeit"}, {29, 0, "Album"}, {30, 0, "Neuer Job"}, {33, 0, "Zur\xC3\xBC" "ck"}}, nowMs);
+  run(device, 300);
+  save("25_menu_jobs_of_client");
   device.click();
   feed(device, timerResult(0), nowMs);
-  feed(device, timerState(true, 7, 0, "M\xC3\xBCller"), nowMs);
+  feed(device, timerState(true, 7, 0, "Hochzeit"), nowMs);
   run(device, 300);
-  save("23_notice_started");
+  save("26_notice_started");
   run(device, 1500);
-  feed(device, status(all), nowMs);
-  feed(device, timerState(true, 7, 754, "M\xC3\xBCller"), nowMs);
+  feed(device, timerState(true, 7, 754, "Hochzeit"), nowMs);
   run(device, 300);
-  save("24_slot_with_running_time");
+  save("27_slot_with_running_time");
   device.buttonDown(nowMs);
-  run(device, 800);
+  run(device, 700);
   device.buttonUp(nowMs);
-  feed(device, jobListBegin(3), nowMs);
-  feed(device, jobItem(0, 7, true, true, "M\xC3\xBCller"), nowMs);
-  feed(device, jobItem(1, 5, false, false, "Katalog"), nowMs);
-  feed(device, jobItem(2, 9, false, false, "01.10. 14:32"), nowMs);
-  feed(device, jobListEnd(), nowMs);
-  feed(device, status(all), nowMs);
+  sendMenu(device, 4, "Zeiterfassung",
+           {{31, 2, "Stopp"}, {29, 2, "Hochzeit"}, {32, 4, "Kunden"}, {30, 0, "Neuer Job"},
+            {30, 0, "Neuer Kunde"}, {34, 8, "Schlie\xC3\x9F" "en"}},
+           nowMs);
   run(device, 300);
-  save("25_menu_stop");
-  device.rotate(2, nowMs);
+  save("28_menu_stop_with_time");
+  feed(device, timerState(true, 7, 4 * 3600 + 7 * 60, "Hochzeit"), nowMs);
+  device.rotate(1, nowMs);
   run(device, 400);
-  save("26_menu_running_job");
-  feed(device, timerState(true, 7, 4 * 3600 + 7 * 60, "M\xC3\xBCller"), nowMs);
-  run(device, 300);
-  save("27_menu_running_job_hours");
-  device.rotate(-2, nowMs);
+  save("29_menu_running_job_hours");
+  device.rotate(-1, nowMs);
   device.click();
   feed(device, timerResult(1), nowMs);
   feed(device, timerState(false, 0, 0, ""), nowMs);
   run(device, 300);
-  save("28_notice_stopped");
+  save("30_notice_stopped");
   run(device, 1500);
   heartbeat = -1;
 
@@ -217,6 +222,6 @@ int main(int argc, char **argv) {
   run(device, 800);
   device.buttonUp(nowMs);
   run(device, 200);
-  save("29_menu_offline");
+  save("31_menu_offline");
   return 0;
 }

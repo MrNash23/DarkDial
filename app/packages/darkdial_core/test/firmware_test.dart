@@ -68,9 +68,18 @@ class FirmwareProcess implements MidiConnection {
   }
 
   /// Time tracking state: menu open, menu index, menu count, clock running,
-  /// seconds, notice code (-1 none), label of the selected menu line.
-  Future<({bool menuOpen, int menuIndex, int menuCount, bool running, int seconds, int notice, String label})>
-      timer() async {
+  /// seconds, notice code (-1 none), label of the selected menu line, page title.
+  Future<
+      ({
+        bool menuOpen,
+        int menuIndex,
+        int menuCount,
+        bool running,
+        int seconds,
+        int notice,
+        String label,
+        String title
+      })> timer() async {
     final completer = _timer = Completer<String>();
     _process.stdin.writeln('?');
     final line = await completer.future.timeout(const Duration(seconds: 2));
@@ -83,7 +92,8 @@ class FirmwareProcess implements MidiConnection {
       running: head[3] == '1',
       seconds: int.parse(head[4]),
       notice: int.parse(head[5]),
-      label: line.substring(split + 1),
+      label: line.substring(split + 1).split('|').first,
+      title: line.substring(split + 1).split('|').last,
     );
   }
 
@@ -180,32 +190,47 @@ void main() {
     final clock = runClock(firmware);
     addTearDown(clock.cancel);
 
-    final wedding = tracker.createJob(name: 'Hochzeit Müller', short: 'Müller');
+    final wedding = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
     tracker.assignSource(wedding.id, const LrSource(kind: 'collection', key: '77', name: 'Auswahl'));
-    tracker.createJob(name: 'Katalog');
+    tracker.createJob(name: 'Katalog', client: 'Verlag');
+
+    /// Turns until the selected line reads [label].
+    Future<void> turnTo(String label) async {
+      for (var i = 0; i < 20; i++) {
+        if ((await firmware.timer()).label == label) return;
+        firmware.rotate(1);
+      }
+      fail('no line "$label" in the menu');
+    }
 
     // A short press is a click and never opens the menu.
     firmware.hold(200);
     await until(() => engine.state.editing, 'click enters edit mode');
     expect((await firmware.timer()).menuOpen, isFalse);
 
-    // A long press opens it, from edit mode; the list arrives.
-    firmware.hold(800);
-    await until(() async => (await firmware.timer()).menuOpen, 'menu');
-    await until(() async => (await firmware.timer()).menuCount == 3, 'new job + two jobs');
-    expect((await firmware.timer()).label, '<new>');
+    // A long press opens it, from edit mode, and it stays open after the
+    // release - also when the release comes with a touch on the glass.
+    firmware.hold(700);
+    firmware.tap();
+    await until(() async => (await firmware.timer()).menuCount > 0, 'start page');
+    var timer = await firmware.timer();
+    expect(timer.menuOpen, isTrue);
+    expect(timer.title, 'Zeiterfassung');
     expect(engine.state.editing, isTrue, reason: 'the state behind the menu is untouched');
+    expect(tracker.running, isNull, reason: 'the touch on release chose nothing');
 
-    // The collection opened in Lightroom moves its job to the top.
-    plugin.userOpensSource('collection', 'Auswahl', '77');
-    firmware.rotate(1);
-    await until(() async => (await firmware.timer()).label == 'Müller', 'suggested job first');
-
-    // Click starts it: confirmation, clock running, menu closed.
+    // Two levels down: clients, one client, its job.
+    await turnTo('Kunden');
+    firmware.click();
+    await until(() async => (await firmware.timer()).title == 'Kunden', 'client list');
+    await turnTo('Fam. Müller');
+    firmware.click();
+    await until(() async => (await firmware.timer()).title == 'Fam. Müller', 'jobs of the client');
+    await turnTo('Hochzeit');
     firmware.click();
     await until(() => tracker.running?.job.id == wedding.id, 'clock started');
     await until(() async => (await firmware.timer()).running, 'clock on the device');
-    var timer = await firmware.timer();
+    timer = await firmware.timer();
     expect(timer.menuOpen, isFalse);
     expect(timer.notice, TimerResult.started);
 
@@ -214,10 +239,15 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1300));
     expect((await firmware.timer()).seconds, greaterThan(before));
 
-    // Stop from the menu: "Stop" is the first line while a clock runs.
-    firmware.hold(800);
-    await until(() async => (await firmware.timer()).menuOpen, 'menu again');
-    expect((await firmware.timer()).label, '<stop>');
+    // The collection opened in Lightroom puts its job on the start page, on
+    // top; while a clock runs, "Stopp" is the first line.
+    plugin.userOpensSource('collection', 'Auswahl', '77');
+    firmware.hold(700);
+    await until(() async => (await firmware.timer()).menuCount > 0, 'start page again');
+    expect((await firmware.timer()).label, 'Stopp');
+    firmware.rotate(1);
+    await until(() async => (await firmware.timer()).label == 'Hochzeit', 'suggested job second');
+    firmware.rotate(-1);
     firmware.click();
     await until(() => tracker.running == null, 'stopped');
     await until(() async => !(await firmware.timer()).running, 'device follows');

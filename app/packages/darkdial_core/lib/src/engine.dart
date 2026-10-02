@@ -6,6 +6,7 @@ import 'lightroom_link.dart';
 import 'midi_codec.dart';
 import 'param_def.dart';
 import 'time/database.dart';
+import 'time/device_menu.dart';
 import 'time/time_tracker.dart';
 import 'value_mapping.dart';
 
@@ -140,7 +141,9 @@ class Engine {
   Timer? _heartbeatTimer;
   Timer? _clockTimer;
   String? _sentTimerState;
-  String? _sentJobList;
+  DeviceMenu? _menu;
+  int _menuPage = 0;
+  String? _sentMenuPage;
 
   Stream<EngineState> get states => _states.stream;
 
@@ -171,9 +174,11 @@ class Engine {
     _heartbeatTimer = Timer.periodic(options.heartbeatInterval, (_) => _sendStatus());
     final tracker = timeTracker;
     if (tracker != null) {
+      _menu = DeviceMenu(tracker, _config.language);
       _subscriptions.add(tracker.changes.listen((_) {
         _sendTimerState();
-        _sendJobList();
+        // A menu that is open follows what changed underneath it.
+        if (_menu!.open) _sendMenuPage(_menu!.current());
         _notify();
       }));
       // The device counts on by itself; once a minute corrects its drift.
@@ -221,7 +226,6 @@ class Engine {
         _sendValue(i);
       }
       _sendTimerState(force: true);
-      _sendJobList(force: true);
     }
     return ok;
   }
@@ -266,7 +270,8 @@ class Engine {
     if (_session != session) return;
     _session = null;
     _sentTimerState = null;
-    _sentJobList = null;
+    _sentMenuPage = null;
+    _menu?.close();
     _deviceState = DeviceLinkState.disconnected;
     _editing = false;
     _pendingDetents = 0;
@@ -299,24 +304,12 @@ class Engine {
         _notify();
       case SlotReset(:final slot):
         _resetSlot(slot);
-      case JobListRequest():
-        _sendJobList(force: true);
-        _sendTimerState(force: true);
-      case TimerStart(:final jobId):
-        _timerAction(() {
-          final tracker = timeTracker!;
-          if (jobId == newJobId) {
-            tracker.startNew(origin: 'device');
-          } else {
-            tracker.start(jobId, origin: 'device');
-          }
-          return TimerResult.started;
-        });
-      case TimerStop():
-        _timerAction(() {
-          timeTracker!.stop();
-          return TimerResult.stopped;
-        });
+      case MenuOpen():
+        _openMenu();
+      case MenuSelect(:final page, :final index):
+        _selectMenu(page, index);
+      case MenuClosed():
+        _menu?.close();
       default:
         break;
     }
@@ -370,27 +363,45 @@ class Engine {
   /// Devices announce time tracking with protocol minor 1.
   bool get _deviceTracksTime => (_session?.hello.minor ?? 0) >= 1;
 
-  /// Runs a start or stop asked for by the device and answers with the
-  /// result; the new clock state follows through the tracker's change event.
-  void _timerAction(int Function() action) {
-    final session = _session;
-    if (session == null) return;
-    if (timeTracker == null) {
-      session.send(const TimerResult(TimerResult.error, '–'));
+  /// Long press on the device: send the start page of the menu.
+  void _openMenu() {
+    final menu = _menu;
+    if (menu == null) {
+      // No time tracking in this engine: an empty page the device can close.
+      _sendMenuPage(const MenuPage('', []), force: true);
       return;
     }
-    try {
-      session.send(TimerResult(action()));
-    } on TimeTrackingError catch (error) {
-      final german = _config.language == Language.de;
-      final text = switch (error.message) {
-        'archived' => german ? 'Archiviert' : 'Archived',
-        _ => german ? 'Unbekannt' : 'Unknown',
-      };
-      session.send(TimerResult(TimerResult.error, text));
-      _sendJobList(force: true); // the device's list was out of date
-    }
+    menu.language = _config.language;
+    _sendMenuPage(menu.start(), force: true);
     _sendTimerState(force: true);
+  }
+
+  /// A line was clicked: either the next page, or an action with its result.
+  void _selectMenu(int page, int index) {
+    final menu = _menu;
+    final session = _session;
+    // A click on a page that has been replaced meanwhile is dropped.
+    if (menu == null || session == null || !menu.open || page != _menuPage) return;
+    final outcome = menu.select(index);
+    if (outcome.page != null) {
+      _sendMenuPage(outcome.page!, force: true);
+    } else {
+      session.send(outcome.result!);
+      _sendTimerState(force: true);
+    }
+  }
+
+  void _sendMenuPage(MenuPage page, {bool force = false}) {
+    final session = _session;
+    if (session == null || !_deviceTracksTime) return;
+    final signature =
+        '${page.title}|${[for (final item in page.items) '${item.icon},${item.flags},${item.label}'].join(';')}';
+    if (!force && signature == _sentMenuPage) return;
+    _sentMenuPage = signature;
+    _menuPage = (_menuPage + 1) & 0x7F;
+    session.send(MenuBegin(page: _menuPage, count: page.items.length, title: page.title));
+    page.items.forEach(session.send);
+    session.send(const MenuEnd());
   }
 
   void _sendTimerState({bool force = false}) {
@@ -411,26 +422,6 @@ class Engine {
     if (!force && signature == _sentTimerState) return;
     _sentTimerState = signature;
     session.send(message);
-  }
-
-  void _sendJobList({bool force = false}) {
-    final session = _session;
-    if (session == null || !_deviceTracksTime) return;
-    final jobs = timeTracker?.deviceJobs() ?? const <DeviceJob>[];
-    final signature = [for (final j in jobs) '${j.job.id}|${j.label}|${j.suggested}|${j.running}'].join(';');
-    if (!force && signature == _sentJobList) return;
-    _sentJobList = signature;
-    session.send(JobListBegin(jobs.length));
-    for (var i = 0; i < jobs.length; i++) {
-      session.send(JobItem(
-        index: i,
-        id: jobs[i].job.id,
-        suggested: jobs[i].suggested,
-        running: jobs[i].running,
-        label: jobs[i].label,
-      ));
-    }
-    session.send(const JobListEnd());
   }
 
   void _sendStatus() {
