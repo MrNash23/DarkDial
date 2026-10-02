@@ -43,7 +43,9 @@ constexpr int kLedCount = 8;
 constexpr uint8_t kTouchAddress = 0x15;  // CST816T
 // +1 or -1: which way of turning counts up. To be confirmed on the device.
 constexpr int kEncoderDirection = 1;
-constexpr uint32_t kEncoderDebounceUs = 1000;
+// At rest for this long, a leftover half step is dropped so the count stays
+// aligned with the detents.
+constexpr uint32_t kEncoderRestUs = 150000;
 constexpr uint32_t kSwitchDebounceMs = 30;
 
 class Display : public lgfx::LGFX_Device {
@@ -92,20 +94,31 @@ Display display;
 USBMIDI midi("Darkdial");
 Preferences preferences;
 
+// Quadrature decoder. Both phases are watched and every transition is looked
+// up in a table, so contact bounce (a step forward and back again) cancels
+// out instead of being counted, and the direction never depends on reading
+// one phase at the right instant. The knob has a detent every two
+// transitions.
 volatile int32_t encoderCount = 0;
-volatile int encoderLastA = HIGH;
+volatile uint8_t encoderState = 0;
+volatile int8_t encoderSteps = 0;       // transitions not yet turned into a detent
 volatile uint32_t encoderLastEdgeUs = 0;
 
-// The knob has a detent on every edge of phase A (half a quadrature cycle),
-// so both edges count. Phase B differs from A at the edge in one direction
-// and equals it in the other.
 void IRAM_ATTR onEncoderEdge() {
-  const uint32_t now = micros();
-  const int a = digitalRead(kPinEncoderA);
-  if (a == encoderLastA || now - encoderLastEdgeUs < kEncoderDebounceUs) return;
-  encoderLastA = a;
-  encoderLastEdgeUs = now;
-  encoderCount += (digitalRead(kPinEncoderB) != a) ? kEncoderDirection : -kEncoderDirection;
+  // Index: previous state << 2 | new state, state = A << 1 | B.
+  static const int8_t kStep[16] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
+  const uint8_t state = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
+  if (state == encoderState) return;
+  encoderSteps += kStep[(encoderState << 2) | state];
+  encoderState = state;
+  encoderLastEdgeUs = micros();
+  if (encoderSteps >= 2) {
+    encoderCount += kEncoderDirection;
+    encoderSteps -= 2;
+  } else if (encoderSteps <= -2) {
+    encoderCount -= kEncoderDirection;
+    encoderSteps += 2;
+  }
 }
 
 void flushDisplay(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *pixels) {
@@ -178,8 +191,9 @@ void begin() {
   pinMode(kPinEncoderA, INPUT);
   pinMode(kPinEncoderB, INPUT);
   pinMode(kPinSwitch, INPUT_PULLUP);
-  encoderLastA = digitalRead(kPinEncoderA);
+  encoderState = static_cast<uint8_t>((digitalRead(kPinEncoderA) << 1) | digitalRead(kPinEncoderB));
   attachInterrupt(digitalPinToInterrupt(kPinEncoderA), onEncoderEdge, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(kPinEncoderB), onEncoderEdge, CHANGE);
 
   lv_init();
   lv_tick_set_cb(tick);
@@ -204,6 +218,7 @@ int readDetents() {
   noInterrupts();
   const int32_t count = encoderCount;
   encoderCount = 0;
+  if (encoderSteps != 0 && micros() - encoderLastEdgeUs > kEncoderRestUs) encoderSteps = 0;
   interrupts();
   return count;
 }

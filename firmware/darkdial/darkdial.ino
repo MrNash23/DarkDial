@@ -98,6 +98,7 @@ void loop() {
   if (detents) {
     lastInput = "turn";
     device->rotate(detents, now);
+    Serial.printf("[%lu] turn %+d\n", millis(), detents);
   }
   // The knob reports down and up; the core decides between click and long
   // press. Taps on the display go through tap(), which also detects the

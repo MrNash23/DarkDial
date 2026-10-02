@@ -67,7 +67,8 @@ class Accelerator {
 
  private:
   uint32_t lastMs_ = 0;
-  bool primed_ = false;
+  int lastDirection_ = 0;
+  int run_ = 0;  // detents in a row in the same direction
 };
 
 class Device {
