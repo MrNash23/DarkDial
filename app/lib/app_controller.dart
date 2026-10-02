@@ -27,8 +27,9 @@ class HslDot {
 /// Sections of the main window, in the order of the navigation rail.
 const int sectionSliders = 0;
 const int sectionLibrary = 1;
-const int sectionTime = 2;
-const int sectionInfo = 3;
+const int sectionDevice = 2;
+const int sectionTime = 3;
+const int sectionInfo = 4;
 
 class AppController extends ChangeNotifier {
   static const MethodChannel _loginItem = MethodChannel('darkdial/login_item');

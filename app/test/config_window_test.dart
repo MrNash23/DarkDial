@@ -9,6 +9,7 @@ import 'package:darkdial/app_controller.dart';
 import 'package:darkdial/main.dart';
 import 'package:darkdial/plugin_installer.dart';
 import 'package:darkdial/ui/config_window.dart';
+import 'package:darkdial/ui/device_window.dart';
 import 'package:darkdial/ui/dial_preview.dart';
 import 'package:darkdial/ui/info_window.dart';
 import 'package:darkdial/ui/library_window.dart';
@@ -62,6 +63,7 @@ void main() {
     bool timeWindow = false,
     bool infoWindow = false,
     bool libraryWindow = false,
+    bool deviceWindow = false,
   }) async {
     tester.view.physicalSize = const Size(1040, 720);
     tester.view.devicePixelRatio = 1;
@@ -104,7 +106,9 @@ void main() {
                 ? InfoWindow(controller: controller)
                 : libraryWindow
                     ? LibraryWindow(controller: controller)
-                    : ConfigWindow(controller: controller),
+                    : deviceWindow
+                        ? DeviceWindow(controller: controller)
+                        : ConfigWindow(controller: controller),
       ),
     ));
     // Asset images decode on real time.
@@ -231,7 +235,7 @@ void main() {
     await tester.runAsync(controller.shutdown);
   });
 
-  testWidgets('switches and language change the device configuration', (tester) async {
+  testWidgets('a switch in the list puts the control on the device', (tester) async {
     await start(tester, settings: simulatorSettings);
     await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
     final model = controller.simulatorModel!;
@@ -244,17 +248,31 @@ void main() {
     await tester.tap(tile);
     await settle(tester, () => model.slots.length == 1 && model.slots.first.label == 'Kontrast', 'slot on device');
 
-    // The general settings sit below the editor of the selected control.
-    final details =
-        find.descendant(of: find.byKey(const Key('config-details')), matching: find.byType(Scrollable)).first;
-    await tester.scrollUntilVisible(find.text('EN'), 120, scrollable: details);
+    // Timers started from taps live in the test's fake clock; stopping the
+    // engine cancels them before the framework checks for leftovers.
+    await tester.runAsync(controller.shutdown);
+  });
+
+  testWidgets('device section: language and following Lightroom', (tester) async {
+    await start(tester, deviceWindow: true, settings: {
+      'simulator': true,
+      'config': {
+        'language': 'de',
+        'slots': [
+          {'param': 4, 'enabled': true},
+        ],
+      },
+    });
+    await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
+    final model = controller.simulatorModel!;
+    await settle(tester, () => model.slots.length == 1 && model.slots.first.label == 'Kontrast', 'slot on device');
+
     await tester.tap(find.text('EN'));
     await settle(tester, () => model.slots.first.label == 'Contrast', 'English label on device');
-    expect(find.text('On the device'.toUpperCase()), findsOneWidget);
+    expect(find.text('Display'.toUpperCase()), findsOneWidget);
 
     // Following Lightroom is on by default and can be switched off.
     expect(controller.config.followLightroom, isTrue);
-    await tester.scrollUntilVisible(find.byKey(const Key('follow-lightroom')), 120, scrollable: details);
     await tester.tap(find.byKey(const Key('follow-lightroom')));
     await tester.pump();
     expect(controller.config.followLightroom, isFalse);
@@ -270,9 +288,10 @@ void main() {
     expect(restored.language, Language.en);
     expect(restored.activeSlots.single.param.lr, 'Contrast');
     expect(restored.followLightroom, isFalse);
+    expect(controller.state.device, DeviceLinkState.connected);
+    expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Send to device')).onPressed, isNotNull);
+    await screenshot(tester, 'device');
 
-    // Timers started from taps live in the test's fake clock; stopping the
-    // engine cancels them before the framework checks for leftovers.
     await tester.runAsync(controller.shutdown);
   });
 
@@ -285,15 +304,11 @@ void main() {
           {'param': 4, 'enabled': true},
         ],
       },
-    });
+    }, deviceWindow: true);
     await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
     final model = controller.simulatorModel!;
     await settle(tester, () => controller.state.displayAngle == 0, 'angle known');
-    final details =
-        find.descendant(of: find.byKey(const Key('config-details')), matching: find.byType(Scrollable)).first;
-    // Brings a widget of the details column fully into view.
-    Future<void> show(String key, [double delta = 120]) async {
-      await tester.scrollUntilVisible(find.byKey(Key(key)), delta, scrollable: details);
+    Future<void> show(String key, [double _ = 0]) async {
       await tester.ensureVisible(find.byKey(Key(key)));
       await tester.pump();
     }

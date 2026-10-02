@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app_controller.dart';
 import 'tray.dart';
 import 'ui/config_window.dart';
+import 'ui/device_window.dart';
 import 'ui/dial_preview.dart';
 import 'ui/info_window.dart';
 import 'ui/library_window.dart';
@@ -101,7 +102,7 @@ class DarkdialApp extends StatelessWidget {
   }
 }
 
-/// The window: sliders, Library mode, time tracking and info side by side.
+/// The window: sliders, Library mode, device, time tracking and info side by side.
 class MainWindow extends StatelessWidget {
   const MainWindow({super.key, required this.controller});
   final AppController controller;
@@ -131,6 +132,10 @@ class MainWindow extends StatelessWidget {
                     label: Text(s.sectionLibrary),
                   ),
                   NavigationRailDestination(
+                    icon: const Icon(Icons.screen_rotation_alt_outlined),
+                    label: Text(s.sectionDevice),
+                  ),
+                  NavigationRailDestination(
                     icon: Badge(
                       isLabelVisible: controller.ready && controller.unnamedCount > 0,
                       child: const Icon(Icons.timer_outlined),
@@ -147,6 +152,7 @@ class MainWindow extends StatelessWidget {
                   children: [
                     ConfigWindow(controller: controller),
                     LibraryWindow(controller: controller),
+                    DeviceWindow(controller: controller),
                     TimeWindow(controller: controller),
                     InfoWindow(controller: controller),
                   ],

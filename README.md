@@ -166,11 +166,12 @@ Left alone for three minutes, the display shows the Darkdial logo. The next
 turn, press or touch brings it back; that first input does nothing else.
 
 If the device does not stand upright, for example to lead the cable away
-neatly, the picture can be turned: in the app, section "Sliders" → "General"
-→ "Rotate …", then turn the knob until it is level and press it to save.
+neatly, the picture can be turned: in the app, section "Device" →
+"Rotate …", then turn the knob until it is level and press it to save.
 
 Click the menu-bar icon and choose **Configure …** to pick your sliders
-(section "Sliders") and what the taps do in the Library (section "Library"), or
+(section "Sliders"), what the taps do in the Library (section "Library") and
+how the device itself behaves (section "Device"), or
 **Time tracking …** for clients, jobs and hours. Clients are created in the
 app; on the device you choose among them.
 

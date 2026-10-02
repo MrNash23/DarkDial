@@ -4,11 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_controller.dart';
-import '../strings.dart';
 import 'dial_preview.dart';
 
-/// The sliders: available controls, order on the device, preview, settings
-/// of the selected control, and what applies to all of them.
+/// The sliders: available controls, order on the device, preview and the
+/// settings of the selected control.
 class ConfigWindow extends StatefulWidget {
   const ConfigWindow({super.key, required this.controller});
   final AppController controller;
@@ -19,7 +18,6 @@ class ConfigWindow extends StatefulWidget {
 
 class _ConfigWindowState extends State<ConfigWindow> {
   int? _selectedParam;
-  String? _sendResult;
 
   AppController get c => widget.controller;
 
@@ -29,7 +27,6 @@ class _ConfigWindowState extends State<ConfigWindow> {
       listenable: c,
       builder: (context, _) {
         if (!c.ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        final s = c.strings;
         final active = c.config.slots.where((slot) => slot.enabled).toList();
         final selected = active.where((slot) => slot.paramId == _selectedParam).firstOrNull ??
             (active.isEmpty ? null : active[c.state.activeSlot.clamp(0, active.length - 1)]);
@@ -63,33 +60,6 @@ class _ConfigWindowState extends State<ConfigWindow> {
                             const Divider(height: 40),
                             _SlotEditor(key: ValueKey(selected.paramId), controller: c, slot: selected),
                           ],
-                          const Divider(height: 40),
-                          SectionTitle(s.general),
-                          Row(
-                            children: [
-                              Expanded(child: Text(s.languageLabel)),
-                              SegmentedButton<Language>(
-                                segments: const [
-                                  ButtonSegment(value: Language.de, label: Text('DE')),
-                                  ButtonSegment(value: Language.en, label: Text('EN')),
-                                ],
-                                selected: {c.config.language},
-                                showSelectedIcon: false,
-                                onSelectionChanged: (value) => c.setLanguage(value.first),
-                              ),
-                            ],
-                          ),
-                          SwitchListTile(
-                            key: const Key('follow-lightroom'),
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(s.followLightroom),
-                            value: c.config.followLightroom,
-                            onChanged: (value) => c.setConfig(c.config.copyWith(followLightroom: value)),
-                          ),
-                          _OrientationRow(controller: c),
-                          const SizedBox(height: 12),
-                          _sendRow(s),
                         ],
                       ),
                     ),
@@ -100,31 +70,6 @@ class _ConfigWindowState extends State<ConfigWindow> {
           ),
         );
       },
-    );
-  }
-
-  Widget _sendRow(Strings s) {
-    final hasDevice = c.state.device == DeviceLinkState.connected;
-    return Row(
-      children: [
-        OutlinedButton.icon(
-          onPressed: hasDevice
-              ? () async {
-                  final ok = await c.sendToDevice();
-                  if (mounted) setState(() => _sendResult = ok ? s.sent : s.sendFailed);
-                }
-              : null,
-          icon: const Icon(Icons.upload, size: 18),
-          label: Text(s.sendToDevice),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            hasDevice ? (_sendResult ?? '') : s.noDevice,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -315,74 +260,6 @@ class PreviewSection extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8),
             child: Text(s.previewHint, style: Theme.of(context).textTheme.bodySmall),
           ),
-      ],
-    );
-  }
-}
-
-/// The picture can be turned for a device that does not stand upright: a
-/// button starts it, the knob of the device turns, saving ends it.
-class _OrientationRow extends StatelessWidget {
-  const _OrientationRow({required this.controller});
-  final AppController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = controller;
-    final s = c.strings;
-    final angle = c.state.displayAngle;
-    final small = Theme.of(context).textTheme.bodySmall;
-    if (angle == null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            Expanded(child: Text(s.orientation)),
-            Flexible(child: Text(s.rotateNeedsFirmware, style: small, textAlign: TextAlign.end)),
-          ],
-        ),
-      );
-    }
-    if (c.state.displayAdjusting) {
-      return Column(
-        key: const Key('orientation-adjusting'),
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text('${s.orientation}: ${s.orientationValue(angle)}')),
-              TextButton(
-                key: const Key('orientation-cancel'),
-                onPressed: c.cancelDisplayRotation,
-                child: Text(s.cancel),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                key: const Key('orientation-save'),
-                onPressed: c.saveDisplayRotation,
-                child: Text(s.save),
-              ),
-            ],
-          ),
-          Padding(padding: const EdgeInsets.only(top: 4), child: Text(s.rotateHint, style: small)),
-        ],
-      );
-    }
-    return Row(
-      children: [
-        Expanded(child: Text('${s.orientation}: ${s.orientationValue(angle)}', key: const Key('orientation-value'))),
-        if (angle != 0)
-          TextButton(
-            key: const Key('orientation-upright'),
-            onPressed: c.resetDisplayRotation,
-            child: Text(s.rotateUpright),
-          ),
-        const SizedBox(width: 8),
-        OutlinedButton(
-          key: const Key('orientation-rotate'),
-          onPressed: c.beginDisplayRotation,
-          child: Text(s.rotateDisplay),
-        ),
       ],
     );
   }

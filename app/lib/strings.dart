@@ -38,10 +38,24 @@ class Strings {
   String get resetSlot => _t('Zurücksetzen', 'Reset');
   String get languageLabel => _t('Sprache der Kurzwörter', 'Language of short words');
   String get followLightroom => _t(
-        'Gerät springt zu dem Regler, der in Lightroom bewegt wird',
-        'Device jumps to the slider that is moved in Lightroom',
+        'Zum Regler springen, der in Lightroom bewegt wird',
+        'Jump to the slider that is moved in Lightroom',
       );
-  String get general => _t('Allgemein', 'General');
+  String get deviceDisplay => _t('Anzeige', 'Display');
+  String get deviceBehaviour => _t('Verhalten', 'Behaviour');
+  String get deviceTransfer => _t('Übertragung', 'Transfer');
+  String get followLightroomHint => _t(
+        'Bewegst du in Lightroom einen Regler mit der Maus, wechselt das Gerät dorthin, und du kannst am '
+            'Drehknopf weitermachen.',
+        'When you move a slider in Lightroom with the mouse, the device goes there and you can continue with '
+            'the knob.',
+      );
+  String get sendHint => _t(
+        'Änderungen werden automatisch übertragen. Hiermit lässt sich die Konfiguration erneut senden, falls '
+            'das Gerät etwas anderes zeigt als die App.',
+        'Changes are sent automatically. This sends the configuration again if the device shows something '
+            'other than the app.',
+      );
   String get orientation => _t('Ausrichtung des Displays', 'Orientation of the display');
   String orientationValue(int degrees) => degrees == 0 ? _t('aufrecht', 'upright') : '$degrees°';
   String get rotateDisplay => _t('Drehen …', 'Rotate …');
@@ -132,6 +146,7 @@ class Strings {
   // Time tracking ----------------------------------------------------------------
   String get sectionSliders => _t('Regler', 'Sliders');
   String get sectionLibrary => _t('Bibliothek', 'Library');
+  String get sectionDevice => _t('Gerät', 'Device');
   String get sectionTime => _t('Zeiterfassung', 'Time tracking');
   String get sectionInfo => _t('Infos', 'About');
   String get tagline => _t('Drehregler für Lightroom Classic mit Zeiterfassung', 'Rotary controller for Lightroom Classic with time tracking');
