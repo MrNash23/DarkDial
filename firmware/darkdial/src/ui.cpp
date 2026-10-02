@@ -50,6 +50,7 @@ lv_obj_t *logo = nullptr;
 lv_obj_t *poweredBy = nullptr;
 
 void (*tapHandler)() = nullptr;
+void (*longTouchHandler)() = nullptr;
 uint32_t bootMs = 0;
 uint32_t shownRevision = UINT32_MAX;
 int shownIndex = -1;
@@ -57,6 +58,10 @@ int shownHold = 0;
 
 void onScreenClicked(lv_event_t *) {
   if (tapHandler) tapHandler();
+}
+
+void onScreenLongPressed(lv_event_t *) {
+  if (longTouchHandler) longTouchHandler();
 }
 
 void setTranslateX(void *object, int32_t x) {
@@ -214,8 +219,9 @@ void showSlot(const dd::Device &device) {
 
 }  // namespace
 
-void ui_init(void (*onTap)(), uint32_t nowMs) {
+void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   tapHandler = onTap;
+  longTouchHandler = onLongTouch;
   bootMs = nowMs;
   shownRevision = UINT32_MAX;
   shownIndex = -1;
@@ -225,7 +231,9 @@ void ui_init(void (*onTap)(), uint32_t nowMs) {
   lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
   lv_obj_set_scrollable(screen, false);
-  lv_obj_add_event_cb(screen, onScreenClicked, LV_EVENT_CLICKED, nullptr);
+  // SHORT_CLICKED, not CLICKED: the latter also fires after a long touch.
+  lv_obj_add_event_cb(screen, onScreenClicked, LV_EVENT_SHORT_CLICKED, nullptr);
+  lv_obj_add_event_cb(screen, onScreenLongPressed, LV_EVENT_LONG_PRESSED, nullptr);
 
   ring = lv_arc_create(screen);
   lv_obj_set_size(ring, kDisplaySize - 2 * kRingMargin, kDisplaySize - 2 * kRingMargin);

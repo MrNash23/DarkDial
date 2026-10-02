@@ -54,6 +54,9 @@ int main() {
       case 'P':
         device.tap(nowMs);
         break;
+      case 'L':
+        device.longTouch(nowMs);
+        break;
       case 'D':
         device.buttonDown(nowMs);
         break;

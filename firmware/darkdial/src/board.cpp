@@ -194,6 +194,7 @@ void begin() {
   lv_indev_t *touch = lv_indev_create();
   lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(touch, readTouch);
+  lv_indev_set_long_press_time(touch, 600);
 
   preferences.begin("darkdial", false);
   midi.begin();

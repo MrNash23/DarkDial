@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
   RecordingHost host;
   const uint8_t serial[6] = {2, 0, 0x51, 0x4D, 0, 1};
   dd::Device device(host, 0, 1, 0, serial);
-  ui_init(nullptr, nowMs);
+  ui_init(nullptr, nullptr, nowMs);
 
   const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
 

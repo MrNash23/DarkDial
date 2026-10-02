@@ -131,29 +131,52 @@ uint32_t Device::timerSeconds(uint32_t nowMs) const {
   return timerBaseSeconds_ + (nowMs - timerBaseMs_) / 1000;
 }
 
-void Device::tap(uint32_t nowMs) {
+bool Device::touchAllowed(uint32_t nowMs) const {
+  if (pressed_) return false;
+  return !knobUsed_ || nowMs - knobMovedAtMs_ >= kTouchGuardMs;
+}
+
+void Device::resetSlot() {
+  uint8_t out[kMaxSysexBytes];
+  host_.send(out, buildSlotReset(out, index_));
+}
+
+bool Device::tap(uint32_t nowMs) {
+  if (!touchAllowed(nowMs)) return false;
   if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) {
     tapPending_ = false;
     click();
-    return;
+    return true;
   }
   if (tapPending_ && nowMs - tapAtMs_ <= kDoubleTapMs) {
     tapPending_ = false;
-    uint8_t out[kMaxSysexBytes];
-    host_.send(out, buildSlotReset(out, index_));
-    return;
+    resetSlot();
+    return true;
   }
   tapPending_ = true;
   tapAtMs_ = nowMs;
+  return true;
+}
+
+bool Device::longTouch(uint32_t nowMs) {
+  if (!touchAllowed(nowMs)) return false;
+  if (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0) return false;
+  tapPending_ = false;
+  resetSlot();
+  return true;
 }
 
 void Device::buttonDown(uint32_t nowMs) {
   pressed_ = true;
   longFired_ = false;
   pressedAtMs_ = nowMs;
+  knobUsed_ = true;
+  knobMovedAtMs_ = nowMs;
+  tapPending_ = false;  // a tap that came with this press is not a tap
 }
 
-void Device::buttonUp(uint32_t) {
+void Device::buttonUp(uint32_t nowMs) {
+  knobMovedAtMs_ = nowMs;
   if (pressed_ && !longFired_) click();
   pressed_ = false;
 }

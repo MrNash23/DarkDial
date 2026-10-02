@@ -292,7 +292,8 @@ static void testLongPress() {
   device.buttonDown(1000);
   device.tick(1300);
   CHECK(device.mode() == dd::Mode::Select && !device.menuOpen());
-  CHECK(device.holdProgress(1350) > 0.49f && device.holdProgress(1350) < 0.51f);
+  const uint32_t half = 1000 + dd::kLongPressMs / 2;
+  CHECK(device.holdProgress(half) > 0.49f && device.holdProgress(half) < 0.51f);
   device.buttonUp(1400);
   CHECK(device.mode() == dd::Mode::Edit && !device.menuOpen());
   CHECK(device.holdProgress(1500) == 0);
@@ -490,7 +491,48 @@ static void testDoubleTap() {
   CHECK(device.mode() == dd::Mode::Select);
 }
 
+static void testTouchWithKnob() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), 0);
+
+  // Pressing the knob puts a finger on the glass: the tap that comes with a
+  // click must not count as a second click.
+  device.buttonDown(1000);
+  CHECK(!device.tap(1050));
+  device.buttonUp(1100);
+  CHECK(!device.tap(1150));
+  CHECK(device.mode() == dd::Mode::Edit);
+  device.tick(1100 + dd::kDoubleTapMs + 100);
+  CHECK(device.mode() == dd::Mode::Edit);
+
+  // The menu survives the release of the long press and the tap it causes.
+  feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), 3000);
+  host.sent.clear();
+  device.buttonDown(3000);
+  device.tick(3000 + dd::kLongPressMs);
+  CHECK(device.menuOpen());
+  device.buttonUp(3900);
+  CHECK(!device.tap(3950));
+  CHECK(!device.longTouch(3950));
+  device.tick(4100);
+  CHECK(device.menuOpen() && host.sent.size() == 1);  // only the job list request
+
+  // Once the knob has been left alone, a tap selects as before.
+  CHECK(device.tap(3900 + dd::kTouchGuardMs));
+  CHECK(!device.menuOpen() && host.sent.size() == 2 && host.sent[1][5] == 0x07);
+
+  // Long touch in edit mode resets the slot; elsewhere it does nothing.
+  host.sent.clear();
+  CHECK(device.mode() == dd::Mode::Edit);
+  CHECK(device.longTouch(6000));
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x09);
+  device.click();
+  CHECK(device.mode() == dd::Mode::Select && !device.longTouch(7000));
+}
+
 int main() {
+  testTouchWithKnob();
   testDoubleTap();
   testLongPress();
   testJobMenu();

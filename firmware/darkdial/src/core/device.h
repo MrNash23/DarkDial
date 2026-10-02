@@ -37,7 +37,10 @@ constexpr uint8_t kStatusPhoto = 4;
 
 constexpr uint32_t kHeartbeatTimeoutMs = 5000;
 constexpr uint32_t kLoadedNoticeMs = 1200;
-constexpr uint32_t kLongPressMs = 700;
+constexpr uint32_t kLongPressMs = 500;
+// The knob is the display: pressing it puts a finger on the glass. Touch
+// input is ignored while the knob is down and this long after it moved.
+constexpr uint32_t kTouchGuardMs = 500;
 constexpr uint32_t kTimerNoticeMs = 1200;
 constexpr uint32_t kDoubleTapMs = 350;
 
@@ -84,8 +87,12 @@ class Device {
   void click();
   /// The display was tapped. A tap is a click, except in edit mode, where two
   /// taps within kDoubleTapMs reset the slot to its default; a single tap
-  /// there becomes a click once that time has passed.
-  void tap(uint32_t nowMs);
+  /// there becomes a click once that time has passed. Returns false if the
+  /// tap was ignored because it came with a press of the knob.
+  bool tap(uint32_t nowMs);
+  /// The display was touched and held: in edit mode, reset the slot to its
+  /// default. Returns false if ignored.
+  bool longTouch(uint32_t nowMs);
   /// The knob went down / came up. A click is only decided on release, and
   /// only if the long press has not fired, so the two can never overlap.
   void buttonDown(uint32_t nowMs);
@@ -133,6 +140,8 @@ class Device {
  private:
   void longPress();
   void menuAction();
+  bool touchAllowed(uint32_t nowMs) const;
+  void resetSlot();
   void loadDefaults();
   void changed() { revision_++; }
   void finishConfig(const Message &message, uint32_t nowMs);
@@ -173,6 +182,8 @@ class Device {
   bool pressed_ = false;
   bool longFired_ = false;
   uint32_t pressedAtMs_ = 0;
+  bool knobUsed_ = false;
+  uint32_t knobMovedAtMs_ = 0;
 
   // Time tracking.
   bool menuOpen_ = false;

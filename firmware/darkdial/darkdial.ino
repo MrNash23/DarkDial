@@ -31,8 +31,20 @@ BoardHost host;
 dd::Device *device = nullptr;
 dd::SysexAssembler assembler;
 volatile bool tapped = false;
+volatile bool longTouched = false;
 
 void onTap() { tapped = true; }
+void onLongTouch() { longTouched = true; }
+
+// Diagnostics on the serial port: what opened or closed the time tracking
+// menu, and which touches were ignored because they came with a knob press.
+const char *lastInput = "boot";
+void reportMenu() {
+  static bool wasOpen = false;
+  if (device->menuOpen() == wasOpen) return;
+  wasOpen = device->menuOpen();
+  Serial.printf("[%lu] menu %s after: %s\n", millis(), wasOpen ? "opened" : "closed", lastInput);
+}
 
 // Ring LEDs show the mode: off without service, white while browsing, the
 // accent (or the slot's colour) while editing.
@@ -67,7 +79,7 @@ void setup() {
   const size_t size = board::loadConfig(stored, sizeof(stored));
   if (size) device->loadStored(stored, size);
 
-  ui_init(onTap, millis());
+  ui_init(onTap, onLongTouch, millis());
   lv_timer_handler();
   board::setBacklight(80);
   Serial.printf("Darkdial %d.%d.%d, protocol %d.%d\n", DD_FW_MAJOR, DD_FW_MINOR, DD_FW_PATCH, dd::kProtocolMajor,
@@ -83,7 +95,10 @@ void loop() {
   }
 
   const int detents = board::readDetents();
-  if (detents) device->rotate(detents, now);
+  if (detents) {
+    lastInput = "turn";
+    device->rotate(detents, now);
+  }
   // The knob reports down and up; the core decides between click and long
   // press. Taps on the display go through tap(), which also detects the
   // double tap that resets a slot.
@@ -92,17 +107,29 @@ void loop() {
   if (pressed != wasPressed) {
     wasPressed = pressed;
     if (pressed) {
+      lastInput = "knob down";
       device->buttonDown(now);
     } else {
+      lastInput = "knob up";
       device->buttonUp(now);
     }
+    Serial.printf("[%lu] %s\n", millis(), lastInput);
   }
   if (tapped) {
     tapped = false;
-    device->tap(now);
+    const bool used = device->tap(now);
+    if (used) lastInput = "tap";
+    Serial.printf("[%lu] tap %s\n", millis(), used ? "used" : "ignored (knob in use)");
+  }
+  if (longTouched) {
+    longTouched = false;
+    const bool used = device->longTouch(now);
+    if (used) lastInput = "long touch";
+    Serial.printf("[%lu] long touch %s\n", millis(), used ? "used: reset" : "ignored");
   }
 
   device->tick(now);
+  reportMenu();
   ui_update(*device, now);
   updateLeds();
   lv_timer_handler();
