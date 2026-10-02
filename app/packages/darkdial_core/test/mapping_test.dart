@@ -150,7 +150,7 @@ void main() {
       );
       final slots = all.deviceSlots();
       expect(slots, hasLength(45));
-      expect(slots.firstWhere((s) => s.paramId == 32).color, 0xE5392F);
+      expect(slots.firstWhere((s) => s.paramId == 32).color, 0xFA3A31);
       for (final slot in slots) {
         expect(encodeMessage(slot).length, lessThanOrEqualTo(64), reason: slot.label);
       }

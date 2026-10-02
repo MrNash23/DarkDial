@@ -1,0 +1,43 @@
+{
+  "_comment": "Maps protocol icon IDs (protocol/params.json) to source images. Replace the files or point to new ones, then run tools/gen_icons.py. Status icons without a source get a drawn placeholder.",
+  "sourceDir": "Grafiken",
+  "crop": 128,
+  "blackLevel": 30,
+  "logo": "Lgoo.PNG",
+  "icons": {
+    "1": "Temperatur.jpg",
+    "2": "tint.jpg",
+    "3": "exposure.jpg",
+    "4": "contrast.jpg",
+    "5": "highlights.jpg",
+    "6": "shadows.jpg",
+    "7": "whites.jpg",
+    "8": "blacks.jpg",
+    "9": "texture.jpg",
+    "10": "clarity.jpg",
+    "11": "dehaze.jpg",
+    "12": "vibrance.jpg",
+    "13": "saturation.jpg",
+    "14": "sharpen.jpg",
+    "15": "noise.jpg",
+    "16": "vignette.jpg",
+    "17": "grain.jpg",
+    "18": "highlights-curve.jpg",
+    "19": "lights-curve.jpg",
+    "20": "darks-curve.jpg",
+    "21": "shadows-cuve.jpg",
+    "22": "hue.jpg",
+    "23": "saturation-2.jpg",
+    "24": "luminance.jpg",
+    "25": null,
+    "26": null,
+    "27": null,
+    "28": null
+  },
+  "hslDot": {
+    "_comment": "Centre and radius of the colour dot in the HSL source images (source pixels). Device and app paint the slot colour over it.",
+    "x": 83,
+    "y": 36,
+    "radius": 8
+  }
+}

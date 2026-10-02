@@ -12,7 +12,10 @@ import 'dart:io';
 import 'package:darkdial_core/src/fake_plugin.dart';
 
 Future<void> main() async {
-  final plugin = FakePlugin();
+  final plugin = FakePlugin()
+    ..onReceived = (message) {
+      if (message['t'] != 'ping') stdout.writeln('<- ${jsonEncode(message)}');
+    };
   try {
     await plugin.start();
   } on SocketException catch (e) {

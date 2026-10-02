@@ -270,7 +270,7 @@ void engineTests() {
     expect(await rig.engine.updateConfig(config.copyWith(slots: slots)), isTrue);
     expect(rig.model.slots, hasLength(8));
     expect(rig.model.slots.first.label, 'Farbton');
-    expect(rig.model.slots.first.color, 0xE5392F);
+    expect(rig.model.slots.first.color, 0xFA3A31);
     await until(() => rig.plugin.watched.length == 8, 'watch');
     expect(rig.plugin.watched.first, 'HueAdjustmentRed');
     await until(() => rig.model.values.every((v) => v.valid), 'values');

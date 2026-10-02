@@ -49,14 +49,14 @@
       {"lr": "LuminanceAdjustment",  "de": "Luminanz",  "en": "Luminance",  "icon": 24}
     ],
     "colors": [
-      {"lr": "Red",     "de": "Rot",        "en": "Red",     "rgb": "E5392F"},
-      {"lr": "Orange",  "de": "Orange",     "en": "Orange",  "rgb": "F58A1F"},
-      {"lr": "Yellow",  "de": "Gelb",       "en": "Yellow",  "rgb": "F2D21B"},
-      {"lr": "Green",   "de": "Grün",       "en": "Green",   "rgb": "3FA845"},
-      {"lr": "Aqua",    "de": "Aquamarin",  "en": "Aqua",    "rgb": "27C2CF"},
-      {"lr": "Blue",    "de": "Blau",       "en": "Blue",    "rgb": "2F7BE5"},
-      {"lr": "Purple",  "de": "Lila",       "en": "Purple",  "rgb": "8E3FD1"},
-      {"lr": "Magenta", "de": "Magenta",    "en": "Magenta", "rgb": "D9309B"}
+      {"lr": "Red",     "de": "Rot",        "en": "Red",     "rgb": "FA3A31"},
+      {"lr": "Orange",  "de": "Orange",     "en": "Orange",  "rgb": "FA9925"},
+      {"lr": "Yellow",  "de": "Gelb",       "en": "Yellow",  "rgb": "F8D32D"},
+      {"lr": "Green",   "de": "Grün",       "en": "Green",   "rgb": "7FE530"},
+      {"lr": "Aqua",    "de": "Aquamarin",  "en": "Aqua",    "rgb": "63F0ED"},
+      {"lr": "Blue",    "de": "Blau",       "en": "Blue",    "rgb": "5394FC"},
+      {"lr": "Purple",  "de": "Lila",       "en": "Purple",  "rgb": "D146F7"},
+      {"lr": "Magenta", "de": "Magenta",    "en": "Magenta", "rgb": "F71DBA"}
     ]
   },
   "status": [

@@ -26,6 +26,9 @@ class FakePlugin {
   /// Every message received from the service, for assertions.
   final List<Map<String, dynamic>> received = [];
 
+  /// Called for every received message, e.g. for logging.
+  void Function(Map<String, dynamic> message)? onReceived;
+
   /// Delay before a set is applied and answered, to imitate a busy Lightroom.
   Duration setDelay = Duration.zero;
 
@@ -128,6 +131,7 @@ class FakePlugin {
     }
     if (decoded is! Map<String, dynamic>) return;
     received.add(decoded);
+    onReceived?.call(decoded);
     final param = decoded['p'];
     switch (decoded['t']) {
       case 'hello':
