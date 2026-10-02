@@ -276,7 +276,8 @@ class _PreviewSection extends StatelessWidget {
     Widget dial = DialPreview(controller: controller);
     if (model != null) {
       // With the simulator the preview is the device: wheel turns, click
-      // presses, long press opens time tracking, double click resets a slot.
+      // taps, double click double-taps, right click presses the knob, long
+      // press opens time tracking.
       dial = Listener(
         onPointerSignal: (event) {
           if (event is PointerScrollEvent && event.scrollDelta.dy != 0) {
@@ -286,9 +287,9 @@ class _PreviewSection extends StatelessWidget {
           }
         },
         child: GestureDetector(
-          onTap: model.click,
+          onTap: model.tap,
           onDoubleTap: model.doubleTap,
-          onSecondaryTap: model.tap,
+          onSecondaryTap: model.click,
           onLongPress: model.longPress,
           child: MouseRegion(cursor: SystemMouseCursors.click, child: dial),
         ),

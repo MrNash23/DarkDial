@@ -523,8 +523,12 @@ static void testDoubleTap() {
   feed(device, status(dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto), 0);
   device.rotate(2, 0);
 
-  // In the carousel a tap is a click at once.
+  // In the carousel a tap is a click, once it is clear that no press of the
+  // knob comes with it.
   device.tap(100);
+  device.tick(100 + dd::kTapConfirmMs);
+  CHECK(device.mode() == dd::Mode::Select);
+  device.tick(101 + dd::kTapConfirmMs);
   CHECK(device.mode() == dd::Mode::Edit);
 
   // In edit mode a single tap waits for a possible second one, then clicks.
@@ -537,6 +541,7 @@ static void testDoubleTap() {
 
   // Two taps in edit mode reset the slot and stay in edit mode.
   device.tap(2000);
+  device.tick(2001 + dd::kTapConfirmMs);
   CHECK(device.mode() == dd::Mode::Edit);
   host.sent.clear();
   device.tap(3000);
@@ -582,6 +587,7 @@ static void testTouchWithKnob() {
 
   // Once the knob has been left alone, a tap selects as before.
   CHECK(device.tap(3900 + dd::kTouchGuardMs));
+  device.tick(3901 + dd::kTouchGuardMs + dd::kTapConfirmMs);
   CHECK(device.menuOpen() && host.sent.size() == 2 && host.sent[1][5] == 0x07);
   feed(device, timerResult(0), 4500);
   CHECK(!device.menuOpen());
@@ -715,25 +721,37 @@ static void testLibrary() {
   feed(device, status(all), 0);
   CHECK(device.screen() == dd::Screen::Slot);
 
-  // In Develop a double click of the knob asks for the Library; a single
-  // click is just the click, and a turn in between breaks the pair.
+  // Without the Library mode the knob selects a slot, as a tap does.
   device.buttonDown(1000);
   device.buttonUp(1050);
-  CHECK(device.mode() == dd::Mode::Edit && host.sent.size() == 1);
-  device.buttonDown(1200);
-  device.buttonUp(1250);
-  CHECK(device.mode() == dd::Mode::Select && sentAction(host, dd::kActionToggleModule));
+  CHECK(device.mode() == dd::Mode::Edit && host.sent.size() == 1 && host.sent[0][5] == 0x02);
+  device.buttonDown(2000);
+  device.buttonUp(2050);
+  CHECK(device.mode() == dd::Mode::Select);
+
+  // The service offers the Library mode: in Develop the knob now asks for
+  // the Library and leaves the slot alone; a tap selects it.
+  feed(device, library(dd::kLibraryKnob), 3000);
+  CHECK(device.screen() == dd::Screen::Slot);
   host.sent.clear();
   device.buttonDown(3000);
   device.buttonUp(3050);
-  device.rotate(1, 3100);
-  device.buttonDown(3200);
-  device.buttonUp(3250);
-  CHECK(!sentAction(host, dd::kActionToggleModule));
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionToggleModule) && device.mode() == dd::Mode::Select);
+  host.sent.clear();
+  CHECK(device.tap(4000));
+  device.tick(4001 + dd::kTapConfirmMs);
+  CHECK(device.mode() == dd::Mode::Edit && host.sent.size() == 1 && host.sent[0][5] == 0x02);
+  device.buttonDown(4600);
+  device.buttonUp(4650);
+  CHECK(sentAction(host, dd::kActionToggleModule) && device.mode() == dd::Mode::Edit);
+  // In edit mode a tap waits for a second one (the reset) before it leaves.
+  feed(device, status(all), 5000);
+  device.tap(5200);
+  device.tick(5201 + dd::kDoubleTapMs);
   CHECK(device.mode() == dd::Mode::Select);
 
   // The service says Lightroom shows the Library.
-  const uint8_t both = dd::kLibraryActive | dd::kLibraryTap | dd::kLibraryDoubleTap;
+  const uint8_t both = dd::kLibraryActive | dd::kLibraryKnob | dd::kLibraryTap | dd::kLibraryDoubleTap;
   feed(device, library(both | dd::kLibraryPicked, 3, 2, "IMG_0042.CR3"), 6000);
   CHECK(device.screen() == dd::Screen::Library);
   CHECK(device.libraryPicked() && !device.libraryRejected() && device.libraryRating() == 3);
@@ -778,20 +796,44 @@ static void testLibrary() {
   feed(device, status(all), 11000);
   feed(device, library(dd::kLibraryActive | dd::kLibraryTap), 11000);
   device.tap(11100);
-  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionTap));
-  host.sent.clear();
-  feed(device, library(dd::kLibraryActive | dd::kLibraryDoubleTap), 12000);
-  device.tap(12100);
-  device.tick(12100 + 2 * dd::kDoubleTapMs);
   CHECK(host.sent.empty());
-  device.tap(13000);
-  device.tap(13100);
-  CHECK(sentAction(host, dd::kActionDoubleTap));
-  feed(device, status(all), 14000);
-  feed(device, library(dd::kLibraryActive), 14000);
+  device.tick(11101 + dd::kTapConfirmMs);
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionTap));
+
+  // A finger that touches the glass on its way to pressing the knob: the tap
+  // is dropped, in the Library (no mark) and in Develop (no slot selected).
   host.sent.clear();
-  device.tap(14100);
-  device.tick(15000);
+  feed(device, status(all), 11500);
+  device.tap(11600);
+  device.buttonDown(11700);
+  device.tick(11800);
+  device.buttonUp(11850);
+  CHECK(!device.tap(11900));
+  device.tick(12500);
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionToggleModule));
+  feed(device, library(dd::kLibraryKnob), 12600);
+  host.sent.clear();
+  device.tap(12700);
+  device.buttonDown(12800);
+  device.buttonUp(12900);
+  CHECK(!device.tap(12950));
+  device.tick(13500);
+  CHECK(host.sent.size() == 1 && sentAction(host, dd::kActionToggleModule) && device.mode() == dd::Mode::Select);
+  host.sent.clear();
+  host.sent.clear();
+  feed(device, status(all), 13600);
+  feed(device, library(dd::kLibraryActive | dd::kLibraryDoubleTap), 13600);
+  device.tap(13700);
+  device.tick(13700 + 2 * dd::kDoubleTapMs);
+  CHECK(host.sent.empty());
+  device.tap(14500);
+  device.tap(14600);
+  CHECK(sentAction(host, dd::kActionDoubleTap));
+  feed(device, status(all), 15000);
+  feed(device, library(dd::kLibraryActive), 15000);
+  host.sent.clear();
+  device.tap(15100);
+  device.tick(15900);
   CHECK(host.sent.empty());
 
   // The time tracking menu works from the Library as from anywhere.
@@ -807,9 +849,22 @@ static void testLibrary() {
   device.buttonUp(18700);
   CHECK(!device.menuOpen() && device.screen() == dd::Screen::Library);
 
+  // In the menu the knob chooses lines; it does not switch the module.
+  feed(device, status(all), 19000);
+  device.buttonDown(19000);
+  device.tick(19000 + dd::kLongPressMs);
+  device.buttonUp(19700);
+  sendMenu(device, 1, "Kunde", {{32, 0, "A"}, {33, 0, "B"}}, 19800);
+  host.sent.clear();
+  device.buttonDown(19900);
+  device.buttonUp(19950);
+  CHECK(host.sent.size() == 1 && host.sent[0][5] == 0x07);
+  feed(device, timerResult(0), 19960);
+  device.tick(19961 + dd::kTimerNoticeMs);
+
   // Back in Develop the device is where it was.
   feed(device, status(all), 20000);
-  feed(device, library(0), 20000);
+  feed(device, library(dd::kLibraryKnob), 20000);
   CHECK(device.screen() == dd::Screen::Slot && device.index() == index);
   // A lost service ends the Library, too.
   feed(device, library(both), 21000);

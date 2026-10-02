@@ -78,11 +78,12 @@ constexpr uint8_t kLibraryTap = 2;        // a tap has an action
 constexpr uint8_t kLibraryDoubleTap = 4;  // a double tap has an action
 constexpr uint8_t kLibraryPicked = 8;     // the photo is flagged as pick
 constexpr uint8_t kLibraryRejected = 16;  // … as rejected
+constexpr uint8_t kLibraryKnob = 32;      // a click of the knob switches the module
 
 // What the user did in the Library, sent as LibraryAction.
 constexpr uint8_t kActionTap = 1;
 constexpr uint8_t kActionDoubleTap = 2;
-constexpr uint8_t kActionToggleModule = 3;  // also sent from Develop, on a double click
+constexpr uint8_t kActionToggleModule = 3;  // the knob was clicked
 
 /// A decoded message from the service. Only the fields of `type` are set.
 struct Message {

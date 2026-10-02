@@ -192,9 +192,8 @@ class SlotReset extends DeviceMessage {
   final int slot;
 }
 
-/// In the Library: the display was tapped or double-tapped, or the knob was
-/// clicked to change the module (that one also comes from Develop, on a
-/// double click).
+/// The display was tapped or double-tapped in the Library, or the knob was
+/// clicked to switch between Library and Develop.
 class LibraryAction extends DeviceMessage {
   const LibraryAction(this.action);
 
@@ -386,6 +385,7 @@ class Library extends DeviceMessage {
     this.active = false,
     this.tapEnabled = false,
     this.doubleTapEnabled = false,
+    this.knobToggles = false,
     this.flag = 0,
     this.rating = 0,
     this.color = 0,
@@ -396,6 +396,9 @@ class Library extends DeviceMessage {
   final bool tapEnabled;
   final bool doubleTapEnabled;
 
+  /// A click of the knob switches the module; slots are selected by tap.
+  final bool knobToggles;
+
   /// 1 picked, -1 rejected, 0 neither.
   final int flag;
   final int rating;
@@ -405,7 +408,12 @@ class Library extends DeviceMessage {
   final String name;
 
   int get flags =>
-      (active ? 1 : 0) | (tapEnabled ? 2 : 0) | (doubleTapEnabled ? 4 : 0) | (flag > 0 ? 8 : 0) | (flag < 0 ? 16 : 0);
+      (active ? 1 : 0) |
+      (tapEnabled ? 2 : 0) |
+      (doubleTapEnabled ? 4 : 0) |
+      (flag > 0 ? 8 : 0) |
+      (flag < 0 ? 16 : 0) |
+      (knobToggles ? 32 : 0);
 }
 
 class TimerResult extends DeviceMessage {
@@ -657,6 +665,7 @@ DeviceMessage? decodeMessage(List<int> bytes) {
         active: p[0] & 1 != 0,
         tapEnabled: p[0] & 2 != 0,
         doubleTapEnabled: p[0] & 4 != 0,
+        knobToggles: p[0] & 32 != 0,
         flag: p[0] & 8 != 0 ? 1 : (p[0] & 16 != 0 ? -1 : 0),
         rating: p[1].clamp(0, 5),
         color: p[2] > 5 ? 0 : p[2],

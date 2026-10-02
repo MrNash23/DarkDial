@@ -69,9 +69,9 @@ class Rig {
   /// Moves the carousel to [lr] and enters edit mode.
   Future<void> edit(String lr) async {
     final target = slotOf(lr);
-    if (model.mode == DeviceMode.edit) model.click();
+    if (model.mode == DeviceMode.edit) model.tap();
     model.rotate(target - model.index);
-    model.click();
+    model.tap();
     await until(() => engine.state.editing && engine.state.activeSlot == target, 'edit $lr');
   }
 }
@@ -189,7 +189,7 @@ void engineTests() {
     await until(() => rig.plugin.values['Contrast'] == 3, 'Contrast 3');
 
     // The user leaves Contrast and moves on in the carousel ...
-    rig.model.click();
+    rig.model.tap();
     rig.model.rotate(2);
     final here = rig.model.index;
     // ... and only now Lightroom reports Contrast as moved: no jump back.
@@ -445,7 +445,7 @@ void deviceTests() {
 
     model.idle = true;
     sent.clear();
-    model.click();
+    model.tap();
     expect(model.mode, DeviceMode.select);
     expect(sent, isEmpty);
     model.idle = true;
@@ -464,7 +464,7 @@ void deviceTests() {
     // Tint (id 2) moves to index 0 in the new configuration.
     const tint = ConfigSlot(index: 0, paramId: 2, iconId: 2, bipolar: true, color: 0, label: 'Tint');
     const exposure = ConfigSlot(index: 1, paramId: 3, iconId: 3, bipolar: true, color: 0, label: 'Exposure');
-    model.click();
+    model.tap();
     model
       ..handle(const ConfigBegin(2, 1))
       ..handle(tint)

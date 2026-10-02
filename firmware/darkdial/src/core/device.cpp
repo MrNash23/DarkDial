@@ -142,33 +142,42 @@ void Device::resetSlot() {
   host_.send(out, buildSlotReset(out, index_));
 }
 
+/// Two taps in a row mean something else than one: reset in edit mode, the
+/// second action in the Library.
+bool Device::doubleTapPossible() const {
+  if (menuOpen_) return false;
+  if (libraryActive()) return (libraryFlags_ & kLibraryDoubleTap) != 0;
+  return mode_ == Mode::Edit && slotCount_ > 0;
+}
+
+/// A tap that stayed alone and came without a press of the knob.
+void Device::singleTap() {
+  if (libraryActive() && !menuOpen_) {
+    if (libraryFlags_ & kLibraryTap) libraryAction(kActionTap);
+  } else {
+    click();
+  }
+}
+
 bool Device::tap(uint32_t nowMs) {
   lastNowMs_ = nowMs;
   if (!touchAllowed(nowMs)) return false;
   if (wake(nowMs)) return true;
-  const bool library = libraryActive() && !menuOpen_;
-  if (library && !(libraryFlags_ & kLibraryDoubleTap)) {
-    // No double tap to wait for: the tap acts at once.
+  if (tapPending_) {
     tapPending_ = false;
-    if (libraryFlags_ & kLibraryTap) libraryAction(kActionTap);
-    return true;
-  }
-  if (!library && (menuOpen_ || mode_ != Mode::Edit || slotCount_ == 0)) {
-    tapPending_ = false;
-    click();
-    return true;
-  }
-  if (tapPending_ && nowMs - tapAtMs_ <= kDoubleTapMs) {
-    tapPending_ = false;
-    if (library) {
-      libraryAction(kActionDoubleTap);
-    } else {
-      resetSlot();
+    if (doubleTapPossible() && nowMs - tapAtMs_ <= kDoubleTapMs) {
+      if (libraryActive()) {
+        libraryAction(kActionDoubleTap);
+      } else {
+        resetSlot();
+      }
+      return true;
     }
-    return true;
+    singleTap();  // two quick taps where there is no double tap: two taps
   }
   tapPending_ = true;
   tapAtMs_ = nowMs;
+  tapWaitMs_ = doubleTapPossible() ? kDoubleTapMs : kTapConfirmMs;
   return true;
 }
 
@@ -207,27 +216,15 @@ void Device::buttonUp(uint32_t nowMs) {
   pressed_ = false;
 }
 
-/// A click of the knob itself. In the Library it switches to Develop; in
-/// Develop it is the normal click, and a second one right after it switches
-/// to the Library.
-void Device::knobClick(uint32_t nowMs) {
-  if (menuOpen_) {
-    click();
-    return;
-  }
-  if (libraryActive()) {
-    knobClicked_ = false;
+/// A click of the knob itself. While the service offers the Library mode it
+/// switches between Library and Develop; otherwise, and in the menu, it is
+/// the same click as a tap.
+void Device::knobClick(uint32_t) {
+  if (!menuOpen_ && serviceConnected_ && (libraryFlags_ & (kLibraryActive | kLibraryKnob))) {
     libraryAction(kActionToggleModule);
     return;
   }
   click();
-  if (knobClicked_ && nowMs - knobClickAtMs_ <= kDoubleClickMs) {
-    knobClicked_ = false;
-    libraryAction(kActionToggleModule);
-  } else {
-    knobClicked_ = true;
-    knobClickAtMs_ = nowMs;
-  }
 }
 
 float Device::holdProgress(uint32_t nowMs) const {
@@ -290,12 +287,10 @@ void Device::rotate(int detents, uint32_t nowMs) {
   uint8_t out[kMaxSysexBytes];
   if (libraryActive()) {
     // One photo per detent; the service asks Lightroom for it.
-    knobClicked_ = false;
     host_.send(out, buildRotation(out, detents));
     return;
   }
   if (slotCount_ == 0) return;
-  knobClicked_ = false;
   if (mode_ == Mode::Select) {
     // One slot per detent, wrapping around; no acceleration in the carousel.
     int next = (static_cast<int>(index_) + detents) % slotCount_;
@@ -329,14 +324,9 @@ void Device::click() {
 
 void Device::tick(uint32_t nowMs) {
   lastNowMs_ = nowMs;
-  if (tapPending_ && nowMs - tapAtMs_ > kDoubleTapMs) {
+  if (tapPending_ && nowMs - tapAtMs_ > tapWaitMs_) {
     tapPending_ = false;
-    // It stayed a single tap.
-    if (libraryActive() && !menuOpen_) {
-      if (libraryFlags_ & kLibraryTap) libraryAction(kActionTap);
-    } else {
-      click();
-    }
+    singleTap();
   }
   if (pressed_ && !longFired_ && nowMs - pressedAtMs_ >= kLongPressMs) {
     longFired_ = true;

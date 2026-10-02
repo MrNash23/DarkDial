@@ -203,9 +203,11 @@ void main() {
       fail('no line "$label" in the menu');
     }
 
-    // A short press is a click and never opens the menu.
-    firmware.hold(200);
-    await until(() => engine.state.editing, 'click enters edit mode');
+    // A tap on the display selects the slider. (A short press of the knob
+    // switches the module; that is covered by engine_library_test.dart.)
+    firmware.tap();
+    firmware.advance(250); // a tap counts once no press of the knob came with it
+    await until(() => engine.state.editing, 'tap enters edit mode');
     expect((await firmware.timer()).menuOpen, isFalse);
 
     // A long press opens it, from edit mode, and it stays open after the

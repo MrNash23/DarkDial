@@ -38,8 +38,10 @@ constexpr uint32_t kLongPressMs = 500;
 constexpr uint32_t kTouchGuardMs = 500;
 constexpr uint32_t kTimerNoticeMs = 1200;
 constexpr uint32_t kDoubleTapMs = 350;
-// Two clicks of the knob within this time switch from Develop to the Library.
-constexpr uint32_t kDoubleClickMs = 400;
+// A finger that is about to press the knob often taps the glass first. A tap
+// therefore only counts once this time has passed without the knob going
+// down; where a double tap is possible, that wait is longer anyway.
+constexpr uint32_t kTapConfirmMs = 200;
 // The menu closes by itself after this long without input.
 constexpr uint32_t kMenuTimeoutMs = 20000;
 // Without knob or touch input for this long the display shows the logo.
@@ -84,19 +86,25 @@ class Device {
 
   /// Knob turned by `detents` (sign = direction).
   void rotate(int detents, uint32_t nowMs);
-  /// A click: knob released before the long-press threshold, or display tapped.
+  /// A click on what is shown: selects a slot or leaves it, chooses a menu
+  /// line. Comes from a tap on the display, and from the knob wherever the
+  /// knob does not switch the module.
   void click();
-  /// The display was tapped. A tap is a click, except in edit mode, where two
-  /// taps within kDoubleTapMs reset the slot to its default; a single tap
-  /// there becomes a click once that time has passed. In the Library a tap
-  /// and a double tap are the two actions chosen in the app. Returns false if
-  /// the tap was ignored because it came with a press of the knob.
+  /// The display was tapped. A tap is a click; in edit mode two taps within
+  /// kDoubleTapMs reset the slot to its default instead; in the Library a tap
+  /// and a double tap are the two actions chosen in the app. No tap acts at
+  /// once: it waits (in tick) for a second tap where there is a double tap,
+  /// otherwise kTapConfirmMs, and is dropped if the knob goes down meanwhile.
+  /// Returns false if the tap was ignored because it came with a press of
+  /// the knob.
   bool tap(uint32_t nowMs);
   /// The display was touched and held: in edit mode, reset the slot to its
   /// default. Returns false if ignored.
   bool longTouch(uint32_t nowMs);
   /// The knob went down / came up. A click is only decided on release, and
   /// only if the long press has not fired, so the two can never overlap.
+  /// While the service offers the Library mode, the click switches between
+  /// Library and Develop and slots are selected by tapping the display.
   void buttonDown(uint32_t nowMs);
   void buttonUp(uint32_t nowMs);
   /// True while the logo is shown because nobody used knob or touch for
@@ -158,6 +166,8 @@ class Device {
  private:
   void longPress(uint32_t nowMs);
   void knobClick(uint32_t nowMs);
+  bool doubleTapPossible() const;
+  void singleTap();
   void libraryAction(uint8_t action);
   void menuAction(uint32_t nowMs);
   void closeMenu();
@@ -199,14 +209,13 @@ class Device {
   // Display taps.
   bool tapPending_ = false;
   uint32_t tapAtMs_ = 0;
+  uint32_t tapWaitMs_ = 0;
 
   // Library.
   uint8_t libraryFlags_ = 0;
   uint8_t libraryRating_ = 0;
   uint8_t libraryColor_ = 0;
   char libraryName_[kMaxLabelBytes + 1] = {0};
-  bool knobClicked_ = false;
-  uint32_t knobClickAtMs_ = 0;
 
   // Idle logo.
   bool idle_ = false;

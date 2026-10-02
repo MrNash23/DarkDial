@@ -36,7 +36,7 @@ void main() {
   Future<void> choose(String label) async {
     await until(() => labels().contains(label), 'line "$label" in ${labels()}');
     model().rotate(labels().indexOf(label) - model().menuIndex);
-    model().click();
+    model().tap();
   }
 
   setUp(() async {
@@ -77,7 +77,7 @@ void main() {
     expect(model().menu.single.info, isTrue);
 
     // Clicking the help line closes the menu; nothing was started.
-    model().click();
+    model().tap();
     expect(model().menuOpen, isFalse);
     await pause();
     expect(tracker.running, isNull);
@@ -226,7 +226,7 @@ void main() {
   test('double tap in edit mode resets the slot to the Lightroom default', () async {
     final slot = engine.state.slots.indexWhere((s) => s.settings.param.lr == 'Contrast');
     model().rotate(slot - model().index);
-    model().click();
+    model().tap();
     await until(() => engine.state.editing, 'edit mode');
     model().rotate(7);
     await until(() => plugin.values['Contrast'] == 7, 'Contrast 7');
@@ -237,7 +237,7 @@ void main() {
     expect(model().mode, DeviceMode.edit);
 
     // Outside edit mode a double tap does nothing.
-    model().click();
+    model().tap();
     final resets = plugin.received.where((m) => m['t'] == 'reset').length;
     model().doubleTap();
     await pause();
@@ -249,7 +249,7 @@ void main() {
     await until(() => model().timerRunning, 'clock');
     final slot = engine.state.slots.indexWhere((s) => s.settings.param.lr == 'Exposure');
     model().rotate(slot - model().index);
-    model().click();
+    model().tap();
     await until(() => engine.state.editing, 'edit mode');
     model().rotate(2);
     await until(() => (plugin.values['Exposure']! - 0.10).abs() < 1e-9, 'Exposure');

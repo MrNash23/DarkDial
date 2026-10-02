@@ -139,15 +139,22 @@ class DeviceModel {
     }
   }
 
-  /// Knob click. In the Library it asks for Develop.
+  /// Knob click. While the service offers the Library mode it switches
+  /// between Library and Develop; otherwise it is the same as a tap.
   void click() {
+    if (!idle && !menuOpen && serviceConnected && (library.active || library.knobToggles)) {
+      _wake();
+      emit(const LibraryAction(LibraryAction.toggleModule));
+      return;
+    }
+    _select();
+  }
+
+  /// A click on what is shown: selects a slot or leaves it, chooses a menu line.
+  void _select() {
     if (_wake()) return;
     if (menuOpen) {
       _menuAction();
-      return;
-    }
-    if (libraryActive) {
-      emit(const LibraryAction(LibraryAction.toggleModule));
       return;
     }
     if (slots.isEmpty) return;
@@ -161,22 +168,10 @@ class DeviceModel {
     onChanged();
   }
 
-  /// Two clicks of the knob in a row: from Develop to the Library. The clicks
-  /// themselves happen as usual.
-  void doubleClick() {
-    if (idle || menuOpen || libraryActive) {
-      click();
-      return;
-    }
-    click();
-    click();
-    emit(const LibraryAction(LibraryAction.toggleModule));
-  }
-
   /// Tap on the display: the tap action in the Library, otherwise a click.
   void tap() {
     if (!libraryActive || menuOpen || idle) {
-      click();
+      _select();
       return;
     }
     _wake();

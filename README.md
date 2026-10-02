@@ -24,7 +24,7 @@ Darkdial is free and open source. It is powered by
 
 - **Turn** to move through your sliders: Exposure, Contrast, Highlights,
   Shadows, Temperature, and so on. Each has its own icon and a short name.
-- **Press** to select one, then **turn** to change it. Slow turns make small
+- **Tap** the display to select one, then **turn** to change it. Slow turns make small
   steps, a quick spin covers a lot of ground.
 - The **ring** around the display shows the value: from the top to either side
   for sliders with a centre, from the start for the others. The number is
@@ -35,8 +35,8 @@ Darkdial is free and open source. It is powered by
   knob (this can be switched off).
 - **Double-tap** the display, or hold a finger on it, to reset the selected
   slider to its default.
-- **Double-press** the knob to go to the Library, press it there to come
-  back to Develop.
+- **Press** the knob to go to the Library, and there to come back to
+  Develop.
 
 <!-- Screenshot: the device screens for a few sliders (firmware/host/snapshots) -->
 
@@ -147,9 +147,9 @@ and Lightroom are connected.
 | On the device | Does |
 | --- | --- |
 | Turn | Move through the sliders; in edit mode, change the value |
-| Press, or tap the display | Select a slider, or leave it again |
+| Tap the display | Select a slider, or leave it again |
 | Double-tap, or touch and hold | Reset the selected slider to its default |
-| Press twice | Switch Lightroom to the Library |
+| Press | Switch Lightroom to the Library |
 | Hold the knob for half a second | Open time tracking; hold again to close it |
 
 | In the Library | Does |
@@ -157,6 +157,9 @@ and Lightroom are connected.
 | Turn | Next or previous photo |
 | Tap, double-tap | Mark the photo as chosen in the app |
 | Press | Switch Lightroom to Develop |
+
+With the Library mode switched off in the app, or without Lightroom, the
+press selects a slider like a tap.
 
 Left alone for three minutes, the display shows the Darkdial logo. The next
 turn, press or touch brings it back; that first input does nothing else.

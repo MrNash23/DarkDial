@@ -26,10 +26,10 @@ class Strings {
   String tooMany(int max) => _t('Das Gerät zeigt höchstens $max Regler', 'The device shows at most $max controls');
   String get preview => _t('Vorschau', 'Preview');
   String get previewHint =>
-      _t('Mausrad dreht · Klick drückt · langer Klick: Zeiterfassung · Doppelklick: zurücksetzen · '
-              'Bibliothek: Rechtsklick tippt, Doppelklick doppeltippt',
-          'Scroll turns · click presses · long click: time tracking · double click: reset · '
-              'Library: right click taps, double click double-taps');
+      _t('Mausrad dreht · Klick tippt · Doppelklick doppeltippt · Rechtsklick drückt den Knopf · '
+              'langer Klick: Zeiterfassung',
+          'Scroll turns · click taps · double click double-taps · right click presses the knob · '
+              'long click: time tracking');
   String get shortWord => _t('Kurzwort', 'Short word');
   String get icon => _t('Symbol', 'Icon');
   String get step => _t('Schrittweite', 'Step size');
@@ -47,10 +47,10 @@ class Strings {
         'Turning browses the photos',
       );
   String get libraryHint => _t(
-        'Knopfdruck wechselt nach Entwickeln, Doppeldruck in Entwickeln zurück in die Bibliothek. '
-            'Dieselbe Aktion noch einmal nimmt die Markierung zurück.',
-        'A press of the knob switches to Develop, a double press in Develop back to the Library. '
-            'The same action again takes the mark back.',
+        'Der Knopfdruck wechselt zwischen Bibliothek und Entwickeln; ein Regler wird durch Tippen '
+            'auf das Display gewählt. Dieselbe Aktion noch einmal nimmt die Markierung zurück.',
+        'A press of the knob switches between Library and Develop; a slider is selected by tapping '
+            'the display. The same action again takes the mark back.',
       );
   String get libraryTap => _t('Tippen', 'Tap');
   String get libraryDoubleTap => _t('Doppeltippen', 'Double tap');

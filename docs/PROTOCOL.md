@@ -93,7 +93,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x07` | MenuSelect | `u8 page`, `u8 index` | *1.1.* The line `index` of page `page` was clicked. Service answers with another page or a TimerResult. |
 | `0x08` | MenuClosed | – | *1.1.* The device closed the menu itself: long press, timeout, or a line with the "closes" flag. |
 | `0x09` | SlotReset | `u8 slot` | *1.1.* Double tap or long touch on the display in edit mode: reset this slot to Lightroom's default. |
-| `0x0A` | LibraryAction | `u8 action` | *1.3.* 1: the display was tapped in the Library, 2: double-tapped, 3: the knob asks for the other module (a click in the Library, a double click in Develop). |
+| `0x0A` | LibraryAction | `u8 action` | *1.3.* 1: the display was tapped in the Library, 2: double-tapped, 3: the knob was clicked and asks for the other module (sent while Library flag bit 0 or bit 5 is set). |
 
 ### 1.5 Messages service → device
 
@@ -111,7 +111,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x4A` | TimerState | `u8 running`, `u32 jobId`, `u32 elapsedSeconds`, `str label` | *1.1.* State of the clock. `elapsedSeconds` is the time of the running entry so far; the device counts on from there. |
 | `0x4C` | SlotGoto | `u8 slot` | *1.2.* The slider of this slot was just moved in Lightroom: the device goes to the slot and into edit mode, and answers with SlotLeave (if it was editing another slot) and SlotSelect. Ignored while the menu is open. |
 | `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* The chosen action is done: the device closes the menu and shows the result briefly. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
-| `0x4D` | Library | `u8 flags`, `u8 rating`, `u8 color`, `str name` | *1.3.* Flags bit 0: Lightroom shows the Library, the device is in Library mode; bit 1: a tap has an action; bit 2: a double tap has an action; bit 3: the photo is flagged as pick; bit 4: as rejected. `rating` 0 … 5 stars. `color` 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple. `name` is the file name, ≤ 20 bytes. Sent on every change. |
+| `0x4D` | Library | `u8 flags`, `u8 rating`, `u8 color`, `str name` | *1.3.* Flags bit 0: Lightroom shows the Library, the device is in Library mode; bit 1: a tap has an action; bit 2: a double tap has an action; bit 3: the photo is flagged as pick; bit 4: as rejected; bit 5: the Library mode is on offer, a click of the knob switches the module. `rating` 0 … 5 stars. `color` 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple. `name` is the file name, ≤ 20 bytes. Sent on every change. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
 final XOR) over the concatenation of the unpacked payloads of all ConfigSlot
@@ -177,12 +177,18 @@ the device only knows "tap" and "double tap".
   A lost heartbeat ends it.
 - **Turning** sends the relative Control Change of 1.1, one per detent
   without acceleration. The service selects the next or previous photos.
-- **The knob** toggles the module: a click in Library mode, and a double
-  click (two clicks within 400 ms) outside it, send LibraryAction 3. The two
-  clicks of a double click act as usual before that.
+- **The knob** toggles the module: while flag bit 0 or bit 5 is set, a click
+  of the knob sends LibraryAction 3 and does nothing else, and slots are
+  selected and left by tapping the display. The service sets bit 5 whenever
+  the Library mode is switched on and Lightroom is connected, in any module.
+  Without the flags (mode switched off, no Lightroom, no service) the knob
+  selects slots as before. In the time tracking menu the knob always chooses
+  the line.
 - **Taps.** With flag bit 2 a tap waits 350 ms for a second one; two taps
   send action 2, one sends action 1 if bit 1 is set. Without bit 2 a tap
-  sends action 1 at once. The service marks the photo and answers with the
+  sends action 1 after 200 ms. A tap is dropped if the knob goes down while
+  it waits: a finger on its way to pressing the knob touches the glass
+  first. The same holds for taps outside the Library. The service marks the photo and answers with the
   new Library message.
 - The long press opens the time tracking menu as everywhere.
 

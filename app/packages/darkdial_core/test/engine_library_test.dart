@@ -119,19 +119,28 @@ void main() {
     await until(() => plugin.mark.rating == 5, 'five stars');
   });
 
-  test('the knob toggles between Library and Develop', () async {
+  test('the knob toggles between Library and Develop; a tap selects the slider', () async {
     await boot();
-    // Develop: a double click goes to the Library, the device is where it was.
+    await until(() => model().library.knobToggles, 'knob offered');
+    // Develop: the knob goes to the Library and leaves the slot alone.
     final index = model().index;
-    model().doubleClick();
+    model().click();
     await until(() => plugin.module == 'library', 'library');
     await until(() => model().libraryActive, 'device in the library');
-    // Library: a single click goes back.
+    expect(model().mode, DeviceMode.select);
+    // Library: the knob goes back.
     model().click();
     await until(() => plugin.module == 'develop', 'develop');
     await until(() => !model().libraryActive, 'device back');
     expect(model().index, index);
-    expect(model().mode, DeviceMode.select);
+    // In Develop the display selects and leaves the slider.
+    model().tap();
+    await until(() => engine.state.editing, 'edit mode by tap');
+    model().rotate(2);
+    await until(() => plugin.received.any((m) => m['t'] == 'set'), 'value set');
+    model().tap();
+    await until(() => !engine.state.editing, 'left by tap');
+    expect(plugin.module, 'develop');
   });
 
   test('a change made in Lightroom reaches the device', () async {
@@ -148,9 +157,12 @@ void main() {
     plugin.userSwitchesModule('library');
     await pause(100);
     expect(model().libraryActive, isFalse);
-    model().doubleClick();
-    await pause();
+    // The knob is the plain click again: it selects the slider.
+    expect(model().library.knobToggles, isFalse);
+    model().click();
+    await until(() => engine.state.editing, 'edit mode by knob');
     expect(plugin.received.where((m) => m['t'] == 'module'), isEmpty);
+    model().click();
 
     // Switching it on in the app takes effect at once.
     await engine.updateConfig(engine.config.copyWith(library: const LibrarySettings()));
@@ -162,6 +174,9 @@ void main() {
     plugin.userSwitchesModule('library');
     await pause(100);
     expect(model().libraryActive, isFalse);
+    expect(model().library.knobToggles, isFalse);
+    model().click();
+    await until(() => engine.state.editing, 'the knob still selects');
   });
 
   test('no photo selected: the Library shows nothing to mark', () async {

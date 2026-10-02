@@ -365,18 +365,19 @@ class Engine {
 
   /// Lightroom shows the Library and the knob browses instead of editing.
   /// Needs a device and a plugin that know how (protocol minor 3 each).
-  bool get _libraryActive =>
-      _config.library.enabled &&
-      _deviceBrowses &&
-      lightroom.connected &&
-      lightroom.pluginProtocolMinor >= 3 &&
-      _module == 'library';
+  bool get _libraryActive => _libraryOffered && _module == 'library';
+
+  /// The Library mode is on offer: the knob switches between Library and
+  /// Develop, whichever module Lightroom shows.
+  bool get _libraryOffered =>
+      _config.library.enabled && _deviceBrowses && lightroom.connected && lightroom.pluginProtocolMinor >= 3;
 
   Library _libraryMessage() {
-    if (!_libraryActive) return const Library();
+    if (!_libraryActive) return Library(knobToggles: _libraryOffered);
     final settings = _config.library;
     return Library(
       active: true,
+      knobToggles: true,
       tapEnabled: settings.tap != LibraryMark.none,
       doubleTapEnabled: settings.doubleTap != LibraryMark.none,
       flag: _photo ? _flag : 0,
@@ -397,7 +398,7 @@ class Engine {
   }
 
   void _libraryAction(int action) {
-    if (!_config.library.enabled || !lightroom.connected || lightroom.pluginProtocolMinor < 3) return;
+    if (!_libraryOffered) return;
     switch (action) {
       case LibraryAction.toggleModule:
         // The knob switches between the two modules it works in.
