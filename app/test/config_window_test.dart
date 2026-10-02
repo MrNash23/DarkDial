@@ -187,8 +187,10 @@ void main() {
     // Long press opens the time tracking menu; a click starts a new job, and
     // the running time appears in the gap of the ring.
     await tester.longPress(find.byType(DialPreview));
-    await tester.pump();
+    await settle(tester, () => find.text('Neuer Job').evaluate().isNotEmpty, 'start page of the menu');
     expect(find.descendant(of: find.byType(DialPreview), matching: find.text('Neuer Job')), findsOneWidget);
+    expect(find.byKey(const Key('preview-menu-title')), findsOneWidget);
+    expect(find.text('Zeiterfassung'), findsOneWidget);
     await tester.tap(find.byType(DialPreview));
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, () => controller.tracker.running != null, 'clock started from the device');
@@ -237,7 +239,7 @@ void main() {
     final dayStart = DateTime.now().subtract(const Duration(hours: 5));
     tracker.addManualEntry(jobId: earlier.id, start: dayStart, end: dayStart.add(const Duration(hours: 2, minutes: 30)));
     await sync(tester);
-    expect(find.textContaining('unbenannter Job'), findsOneWidget);
+    expect(find.textContaining('unbenannter Eintrag'), findsOneWidget);
     expect(find.byKey(const Key('clock-time')), findsOneWidget);
 
     // Overview: the manual entry counts with 2:30.
@@ -256,7 +258,19 @@ void main() {
     await sync(tester);
     expect(tracker.db.job(started.job.id)!.name, 'Hochzeit Müller, Potsdam');
     expect(tracker.displayLabel(tracker.db.job(started.job.id)!), 'Müller');
-    expect(find.textContaining('unbenannter Job'), findsNothing);
+    expect(find.textContaining('unbenannter Eintrag'), findsNothing);
+
+    // Jobs are grouped by client; renaming the client applies to all its jobs.
+    expect(find.text('Verlag'), findsOneWidget);
+    expect(find.text('Ohne Kunde'), findsOneWidget);
+    await tester.tap(find.byKey(ValueKey('client-rename-${earlier.clientId}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('client-name')), 'Verlag Berlin');
+    await tester.tap(find.byKey(const Key('client-save')));
+    await tester.pumpAndSettle();
+    await sync(tester);
+    expect(tracker.db.job(earlier.id)!.client, 'Verlag Berlin');
+    expect(find.text('Verlag Berlin'), findsOneWidget);
     await screenshot(tester, 'jobs');
 
     // Archiving the running job is refused.
@@ -288,7 +302,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('time-search')), 'titelbild');
     await tester.pump();
     expect(find.byKey(ValueKey('entry-${manual.id}')), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('time-search')), 'verlag');
+    await tester.enterText(find.byKey(const Key('time-search')), 'berlin');
     await tester.pump();
     expect(find.byKey(ValueKey('job-${earlier.id}')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('time-search')), '');
@@ -303,7 +317,7 @@ void main() {
     expect(path, target);
     final csv = File(target).readAsStringSync();
     expect(csv, contains('Job;Kunde;Start;Ende;Dauer;Notiz'));
-    expect(csv, contains('Katalog Verlag;Verlag;'));
+    expect(csv, contains('Katalog Verlag;Verlag Berlin;'));
     expect(csv, contains(';2:30;Retusche Titelbild'));
 
     // Overview screenshot.
@@ -311,6 +325,69 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('overview-total')), findsOneWidget);
     await screenshot(tester, 'overview');
+
+    // Deleting a job asks first and says what is lost; then job and times are gone.
+    await tester.tap(find.text('Jobs'));
+    await tester.pump();
+    await tester.tap(find.byKey(ValueKey('job-menu-${earlier.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Löschen …'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1 Eintrag, zusammen 2:30 Stunden'), findsOneWidget);
+    expect(tracker.db.job(earlier.id), isNotNull, reason: 'nothing happens before the confirmation');
+    await tester.tap(find.byKey(const Key('confirm-delete')));
+    await tester.pumpAndSettle();
+    await sync(tester);
+    expect(tracker.db.job(earlier.id), isNull);
+    expect(tracker.entries(jobId: earlier.id), isEmpty);
+    expect(tracker.db.job(started.job.id), isNotNull);
+    await tester.runAsync(controller.shutdown);
+  });
+
+  testWidgets('factory reset asks, then removes jobs, clients, times and the control selection', (tester) async {
+    await start(tester, settings: {
+      'simulator': true,
+      'config': {
+        'language': 'de',
+        'slots': [
+          {'param': 4, 'enabled': true, 'label': 'Mein K'},
+        ],
+      },
+    });
+    await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
+    final model = controller.simulatorModel!;
+    await settle(tester, () => model.slots.length == 1, 'custom configuration on the device');
+    final tracker = controller.tracker;
+    final job = tracker.createJob(name: 'Hochzeit', client: 'Fam. Müller');
+    final t = DateTime.now().subtract(const Duration(hours: 3));
+    tracker.addManualEntry(jobId: job.id, start: t, end: t.add(const Duration(hours: 1)));
+    await sync(tester);
+
+    final button = find.byKey(const Key('factory-reset'));
+    await tester.scrollUntilVisible(
+      button,
+      200,
+      scrollable: find.descendant(of: find.byKey(const Key('config-details')), matching: find.byType(Scrollable)).first,
+    );
+    await tester.ensureVisible(button);
+    await tester.pumpAndSettle();
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('factory-reset-confirm')), findsOneWidget);
+    expect(find.textContaining('alle 1 Jobs mit 1 Zeiteinträgen'), findsOneWidget);
+    expect(tracker.jobs(), hasLength(1), reason: 'nothing happens before the confirmation');
+
+    await tester.tap(find.byKey(const Key('factory-reset-confirm')));
+    await tester.pump();
+    await settle(tester, () => model.slots.length == 13, 'default controls back on the device');
+    expect(tracker.jobs(), isEmpty);
+    expect(tracker.clients(), isEmpty);
+    expect(tracker.entries(), isEmpty);
+    expect(controller.config.activeSlots, hasLength(13));
+    expect(controller.config.activeSlots.every((slot) => slot.label == null), isTrue);
+    final stored = jsonDecode(File(p.join(temp.path, 'settings.json')).readAsStringSync()) as Map<String, dynamic>;
+    expect(AppConfig.fromJson(stored['config'] as Map<String, dynamic>).activeSlots, hasLength(13));
+    await tester.pump(const Duration(seconds: 5)); // let the confirmation message disappear
     await tester.runAsync(controller.shutdown);
   });
 

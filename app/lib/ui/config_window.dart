@@ -56,6 +56,7 @@ class _ConfigWindowState extends State<ConfigWindow> {
                     const VerticalDivider(width: 1),
                     Expanded(
                       child: ListView(
+                        key: const Key('config-details'),
                         padding: const EdgeInsets.all(20),
                         children: [
                           _PreviewSection(controller: c),
@@ -501,6 +502,15 @@ class _InfoSection extends StatelessWidget {
           value: c.useSimulator,
           onChanged: c.setUseSimulator,
         ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: const Key('factory-reset'),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => _confirmFactoryReset(context, c),
+            child: Text(s.factoryReset),
+          ),
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -512,6 +522,34 @@ class _InfoSection extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Factory reset deletes all recorded times, so it spells out what is lost.
+void _confirmFactoryReset(BuildContext context, AppController controller) {
+  final s = controller.strings;
+  final tracker = controller.tracker;
+  final jobs = tracker.jobs().length + tracker.jobs(archived: true).length;
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(s.factoryResetTitle),
+      content: SizedBox(width: 460, child: Text(s.factoryResetWarning(jobs, tracker.entries().length))),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(s.cancel)),
+        FilledButton(
+          key: const Key('factory-reset-confirm'),
+          style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+          onPressed: () async {
+            final messenger = ScaffoldMessenger.of(context);
+            Navigator.of(context).pop();
+            await controller.factoryReset();
+            messenger.showSnackBar(SnackBar(content: Text(s.factoryResetDone)));
+          },
+          child: Text(s.factoryResetConfirm),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Shown on the very first start: installs the plugin and the login item.

@@ -81,10 +81,41 @@ class Strings {
   String get start => _t('Starten', 'Start');
   String get stop => _t('Stopp', 'Stop');
   String get noClock => _t('Keine Uhr läuft', 'No clock running');
+  /// [count] unnamed jobs and clients together.
   String unnamedHint(int count) => _t(
-        count == 1 ? '1 unbenannter Job – bitte benennen' : '$count unbenannte Jobs – bitte benennen',
-        count == 1 ? '1 unnamed job – please name it' : '$count unnamed jobs – please name them',
+        count == 1 ? '1 unbenannter Eintrag – bitte benennen' : '$count unbenannte Einträge – bitte benennen',
+        count == 1 ? '1 unnamed item – please name it' : '$count unnamed items – please name them',
       );
+  String get noClient => _t('Ohne Kunde', 'No client');
+  String get renameClient => _t('Kunde umbenennen', 'Rename client');
+  String get renameClientHint => _t(
+        'Gibt es schon einen Kunden mit diesem Namen, werden beide zusammengeführt.',
+        'If a client with this name exists already, the two are merged.',
+      );
+  String get unnamedClientHint => _t('Kunde ist noch unbenannt', 'Client has no name yet');
+  String get deleteJob => _t('Löschen …', 'Delete …');
+  String deleteJobTitle(String name) => _t('„$name“ löschen?', 'Delete "$name"?');
+  String deleteJobWarning(int entries, String total) => _t(
+        'Der Job wird mit allen erfassten Zeiten endgültig gelöscht: $entries ${entries == 1 ? 'Eintrag' : 'Einträge'}, '
+            'zusammen $total Stunden. Das lässt sich nicht rückgängig machen. Archivieren behält die Zeiten.',
+        'The job is deleted for good with all recorded times: $entries ${entries == 1 ? 'entry' : 'entries'}, '
+            '$total hours in total. This cannot be undone. Archiving keeps the times.',
+      );
+  String get deleteForever => _t('Endgültig löschen', 'Delete for good');
+  String get factoryReset => _t('Auf Werkseinstellungen zurücksetzen …', 'Reset to factory settings …');
+  String get factoryResetTitle => _t('Alles zurücksetzen?', 'Reset everything?');
+  String factoryResetWarning(int jobs, int entries) => _t(
+        'Gelöscht werden: alle $jobs Jobs mit $entries Zeiteinträgen, alle Kunden und Lightroom-Zuordnungen, '
+            'die Reglerauswahl mit Reihenfolge, Kurzwörtern und Schrittweiten. Das Gerät erhält wieder die '
+            'Standardregler. Das lässt sich nicht rückgängig machen. Exportiere vorher bei Bedarf die Zeiten als CSV.\n\n'
+            'Das Lightroom-Plugin und der Autostart bleiben installiert.',
+        'This deletes: all $jobs jobs with $entries time entries, all clients and Lightroom assignments, '
+            'the selection of controls with their order, short words and step sizes. The device gets the default '
+            'controls again. This cannot be undone. Export the times as CSV first if you need them.\n\n'
+            'The Lightroom plug-in and the login item stay installed.',
+      );
+  String get factoryResetConfirm => _t('Alles löschen', 'Delete everything');
+  String get factoryResetDone => _t('Zurückgesetzt.', 'Reset done.');
   String get overview => _t('Übersicht', 'Overview');
   String get jobs => 'Jobs';
   String get entries => _t('Einträge', 'Entries');

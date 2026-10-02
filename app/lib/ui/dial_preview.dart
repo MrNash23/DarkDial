@@ -38,6 +38,7 @@ class DialPreview extends StatelessWidget {
     final model = controller.simulatorModel;
     final clock = controller.tracker.running;
     String menuTime = '';
+    var menuHighlighted = false;
     if (model != null && model.notice != null) {
       final notice = model.notice!;
       statusIcon = notice.code == TimerResult.started ? kTimerIcons['stopwatch'] : kTimerIcons['stop'];
@@ -46,20 +47,16 @@ class DialPreview extends StatelessWidget {
           : (notice.code == TimerResult.stopped ? kTimerTexts['stopped']! : [notice.text, notice.text]);
       statusLabel = texts[s.language.index];
     } else if (model != null && model.menuOpen) {
-      final line = model.menu[model.menuIndex];
-      final running = clock == null ? '' : formatClock(clock.elapsed(DateTime.now().toUtc()));
-      switch (line.kind) {
-        case MenuKind.stop:
-          statusIcon = kTimerIcons['stop'];
-          statusLabel = kTimerTexts['stop']![s.language.index];
-          menuTime = running;
-        case MenuKind.newJob:
-          statusIcon = kTimerIcons['plus'];
-          statusLabel = kTimerTexts['newJob']![s.language.index];
-        case MenuKind.job:
-          statusIcon = kTimerIcons['stopwatch'];
-          statusLabel = line.job!.label;
-          if (line.job!.running) menuTime = running;
+      if (model.menu.isEmpty) {
+        // Just opened: the page is on its way.
+        statusIcon = kTimerIcons['stopwatch'];
+        statusLabel = '';
+      } else {
+        final item = model.menu[model.menuIndex];
+        statusIcon = item.icon;
+        statusLabel = item.submenu ? '${item.label} »' : item.label;
+        menuHighlighted = item.highlighted;
+        if (item.running && clock != null) menuTime = formatClock(clock.elapsed(DateTime.now().toUtc()));
       }
     }
     final inMenu = model != null && model.menuOpen && model.notice == null;
@@ -81,6 +78,7 @@ class DialPreview extends StatelessWidget {
         icon: Image.asset('assets/icons/icon_$statusIcon.png', width: iconSize, height: iconSize),
         label: statusLabel!,
         value: menuTime,
+        labelColor: menuHighlighted ? accentColor : null,
       );
     } else if (slot == null) {
       content = const SizedBox.shrink();
@@ -125,6 +123,15 @@ class DialPreview extends StatelessWidget {
           alignment: Alignment.topCenter,
           children: [
             Positioned.fill(child: content),
+            if (inMenu)
+              Positioned(
+                top: size * 30 / 360,
+                child: Text(
+                  model.menuTitle,
+                  key: const Key('preview-menu-title'),
+                  style: TextStyle(color: ringSelectColor, fontSize: size * 0.058),
+                ),
+              ),
             // The running time sits in the gap of the ring; in the menu it is shown big.
             if (clock != null && !inMenu)
               Positioned(
@@ -150,12 +157,19 @@ class DialPreview extends StatelessWidget {
 }
 
 class _Content extends StatelessWidget {
-  const _Content({required this.size, required this.icon, required this.label, required this.value});
+  const _Content({
+    required this.size,
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.labelColor,
+  });
 
   final double size;
   final Widget icon;
   final String label;
   final String value;
+  final Color? labelColor;
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +181,7 @@ class _Content extends StatelessWidget {
           top: size * 0.535,
           child: Text(
             label,
-            style: TextStyle(color: const Color(0xFFB8B8BE), fontSize: size * 0.075, letterSpacing: 0.3),
+            style: TextStyle(color: labelColor ?? const Color(0xFFB8B8BE), fontSize: size * 0.075, letterSpacing: 0.3),
           ),
         ),
         Positioned(

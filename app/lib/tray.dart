@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:darkdial_core/darkdial_core.dart';
+import 'package:darkdial_core/darkdial_core.dart' hide MenuItem;
 import 'package:tray_manager/tray_manager.dart';
 
 import 'app_controller.dart';
@@ -59,7 +59,7 @@ class Tray with TrayListener {
       if (Platform.isMacOS) await trayManager.setTitle(title);
     }
     final recent = tracker.jobs().take(6).toList();
-    final unnamed = controller.unnamedJobs.length;
+    final unnamed = controller.unnamedCount;
 
     // Rebuilding the menu while it is open closes it; only do it on change.
     final signature = '$deviceText|$lightroomText|$active|${controller.launchAtLogin}|${s.language}|$title|$unnamed|'

@@ -49,7 +49,7 @@ class _TimeWindowState extends State<TimeWindow> {
       builder: (context, _) {
         final s = c.strings;
         final query = _search.text.trim();
-        final unnamed = c.unnamedJobs.length;
+        final unnamed = c.unnamedCount;
 
         Widget content;
         if (query.isNotEmpty) {

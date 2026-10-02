@@ -126,7 +126,7 @@ class MainWindow extends StatelessWidget {
                   NavigationRailDestination(icon: const Icon(Icons.tune), label: Text(s.sectionDevice)),
                   NavigationRailDestination(
                     icon: Badge(
-                      isLabelVisible: controller.ready && controller.unnamedJobs.isNotEmpty,
+                      isLabelVisible: controller.ready && controller.unnamedCount > 0,
                       child: const Icon(Icons.timer_outlined),
                     ),
                     label: Text(s.sectionTime),

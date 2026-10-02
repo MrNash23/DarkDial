@@ -291,6 +291,23 @@ class AppController extends ChangeNotifier {
   /// Unnamed jobs created on the device, waiting for a name.
   List<Job> get unnamedJobs => tracker.jobs().where((job) => job.unnamed).toList();
 
+  /// Jobs and clients without a name, together.
+  int get unnamedCount => unnamedJobs.length + tracker.clients().where((client) => client.unnamed).length;
+
+  String clientTitle(Client client) => client.unnamed
+      ? '${strings.unnamed} · ${tracker.clientLabel(client, word: strings.client)}'
+      : client.name;
+
+  /// Back to how the app was on its first start: no jobs, clients or times,
+  /// the default controls. Plugin and login item are left alone.
+  Future<void> factoryReset() async {
+    tracker.wipe();
+    config = AppConfig.defaults(config.language);
+    notifyListeners();
+    await _save();
+    await _engine?.updateConfig(config);
+  }
+
   String jobTitle(Job job) => job.unnamed ? '${strings.unnamed} · ${tracker.displayLabel(job)}' : job.name;
 
   bool _shutDown = false;
