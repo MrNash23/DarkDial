@@ -167,23 +167,13 @@ static void testCarouselAndEdit() {
   CHECK(host.sent[0] == Bytes({0xB0, 0x10, 65}));
   CHECK(host.sent[1] == Bytes({0xB0, 0x10, 65}));
   CHECK(host.sent[2] == Bytes({0xB0, 0x10, 63}));
-
-  // A single quick detent stays a single step, and so does a quick step back:
-  // only a sustained fast turn in one direction speeds up.
-  device.rotate(1, 1405);
-  CHECK(host.sent.back()[2] == 64 + 1);
-  device.rotate(-1, 1410);
-  CHECK(host.sent.back()[2] == 64 - 1);
-  device.rotate(-1, 1425);
-  device.rotate(-1, 1440);
-  CHECK(host.sent.back()[2] == 64 - 1);
-  device.rotate(-1, 1455);  // third quick one in a row
-  CHECK(host.sent.back()[2] == 64 - 2);
-  device.rotate(-1, 1460);  // faster still
-  CHECK(host.sent.back()[2] == 64 - 4);
-  // A pause ends the run.
-  device.rotate(-1, 1700);
-  CHECK(host.sent.back()[2] == 64 - 1);
+  // Fast turning: larger steps.
+  device.rotate(1, 1440);
+  CHECK(host.sent.back()[2] == 64 + 2);
+  device.rotate(1, 1460);
+  CHECK(host.sent.back()[2] == 64 + 4);
+  device.rotate(1, 1470);
+  CHECK(host.sent.back()[2] == 64 + 8);
   CHECK(device.index() == 1);  // the carousel does not move in edit mode
 
   device.click();

@@ -9,22 +9,18 @@ namespace dd {
 
 int Accelerator::apply(int detents, uint32_t nowMs) {
   const uint32_t gap = nowMs - lastMs_;
-  const int direction = detents > 0 ? 1 : -1;
   lastMs_ = nowMs;
-  // A change of direction, or a pause, starts over: precise single steps.
-  if (direction != lastDirection_ || gap > 150) {
-    lastDirection_ = direction;
-    run_ = 0;
+  if (!primed_) {
+    primed_ = true;
     return detents;
   }
-  // Only a sustained fast turn speeds up; a single quick detent, as contact
-  // bounce or a nervous finger produce, stays a single step.
-  run_++;
-  if (run_ < 3) return detents;
+  // Time between two detents decides the factor.
   int factor = 1;
-  if (gap < 10) {
+  if (gap < 15) {
+    factor = 8;
+  } else if (gap < 30) {
     factor = 4;
-  } else if (gap < 22) {
+  } else if (gap < 60) {
     factor = 2;
   }
   return detents * factor;

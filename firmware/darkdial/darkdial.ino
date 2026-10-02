@@ -39,6 +39,20 @@ void onLongTouch() { longTouched = true; }
 // Diagnostics on the serial port: what opened or closed the time tracking
 // menu, and which touches were ignored because they came with a knob press.
 const char *lastInput = "boot";
+// Which slot is shown and in which mode, whenever that changes: tells a jump
+// asked for by the service ("service") from one made on the device.
+bool serviceActed = false;
+void reportSlot() {
+  static int shownIndex = -1;
+  static dd::Mode shownMode = dd::Mode::Select;
+  if (device->index() == shownIndex && device->mode() == shownMode) return;
+  shownIndex = device->index();
+  shownMode = device->mode();
+  Serial.printf("[%lu] slot %d %s (%s) after: %s\n", millis(), shownIndex,
+                shownMode == dd::Mode::Edit ? "edit" : "select", device->slot(shownIndex).label,
+                serviceActed ? "service" : lastInput);
+}
+
 void reportMenu() {
   static bool wasOpen = false;
   if (device->menuOpen() == wasOpen) return;
@@ -90,9 +104,19 @@ void loop() {
   const uint32_t now = millis();
 
   uint8_t packet[4];
+  serviceActed = false;
   while (board::midiRead(packet)) {
-    if (assembler.feedPacket(packet)) device->onMessage(assembler.data(), assembler.size(), now);
+    if (assembler.feedPacket(packet)) {
+      const int index = device->index();
+      const dd::Mode mode = device->mode();
+      device->onMessage(assembler.data(), assembler.size(), now);
+      if (device->index() != index || device->mode() != mode) {
+        serviceActed = true;
+        reportSlot();
+      }
+    }
   }
+  serviceActed = false;
 
   const int detents = board::readDetents();
   if (detents) {
@@ -129,19 +153,9 @@ void loop() {
     Serial.printf("[%lu] long touch %s\n", millis(), used ? "used: reset" : "ignored");
   }
 
-  // Diagnostics: raw activity on the encoder lines, once a second if any.
-  static uint32_t rawAt = 0, rawA = 0, rawB = 0;
-  if (now - rawAt >= 1000) {
-    uint32_t a, b;
-    board::encoderRawChanges(a, b);
-    if (a != rawA || b != rawB) Serial.printf("[%lu] raw A %+ld B %+ld\n", millis(), (long)(a - rawA), (long)(b - rawB));
-    rawAt = now;
-    rawA = a;
-    rawB = b;
-  }
-
   device->tick(now);
   reportMenu();
+  reportSlot();
   ui_update(*device, now);
   updateLeds();
   lv_timer_handler();

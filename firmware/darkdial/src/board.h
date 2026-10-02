@@ -14,10 +14,6 @@ void begin();
 
 /// Detents turned since the last call; sign gives the direction.
 int readDetents();
-/// Diagnostics: how often the raw levels of the two encoder lines changed
-/// since start, before debouncing.
-void encoderRawChanges(uint32_t &a, uint32_t &b);
-
 /// Debounced state of the knob switch: true while it is held down.
 bool buttonPressed();
 
