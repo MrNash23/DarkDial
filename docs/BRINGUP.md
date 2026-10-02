@@ -23,7 +23,7 @@ Only facts (pins, bus settings) were taken over; the code in
 
 | Function | Assumption |
 | --- | --- |
-| LCD | ST77961, SPI2, 3-wire, 80 MHz, SCLK 10, MOSI 11, DC 3, CS 9, RST 14 |
+| LCD | ST77961 with Elecrow's init sequence (`panel_crowpanel.h`; the generic LovyanGFX driver shows garbage), SPI2, 3-wire, 80 MHz, SCLK 10, MOSI 11, DC 3, CS 9, RST 14 |
 | LCD power | GPIO 1 and GPIO 2 high |
 | Backlight | GPIO 46, PWM 5 kHz, 8 bit |
 | Touch | CST816T at I²C 0x15, SDA 6, SCL 7, RST 5 |

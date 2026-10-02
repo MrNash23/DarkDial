@@ -10,6 +10,7 @@
 #include <lvgl.h>
 
 #include "core/protocol.h"
+#include "panel_crowpanel.h"
 
 #if ARDUINO_USB_MODE
 #error "Select Tools > USB Mode > USB-OTG (TinyUSB): USB-MIDI needs the OTG stack."
@@ -83,7 +84,7 @@ class Display : public lgfx::LGFX_Device {
   }
 
  private:
-  lgfx::Panel_ST77961 panel_;
+  PanelCrowPanel146 panel_;
   lgfx::Bus_SPI bus_;
 };
 
