@@ -133,7 +133,9 @@ class AppController extends ChangeNotifier {
     }
     try {
       final json = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      useSimulator = json['simulator'] == true;
+      // The simulator replaces the real device, so a released app never uses
+      // it, whatever an old settings file says.
+      useSimulator = kDebugMode && json['simulator'] == true;
       final stored = json['config'];
       if (stored is Map<String, dynamic>) config = AppConfig.fromJson(stored);
     } on Object {

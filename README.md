@@ -205,7 +205,7 @@ screens are rendered headless into `firmware/host/snapshots/`.
 | Task | Command |
 | --- | --- |
 | Run the app | `cd app && flutter run -d macos` |
-| Try it without hardware | switch on "Simulator" in the app's info section; the preview is the device (scroll = turn, click = press, long click = time tracking) |
+| Try it without hardware | in a debug build (`flutter run`), switch on "Simulator" in the info section; the preview is the device (scroll = turn, click = press, long click = time tracking) |
 | Try the real MIDI path without hardware | `swift tools/virtual_device.swift` creates a macOS MIDI device "Darkdial" backed by the firmware core |
 | Try it without Lightroom | `cd app/packages/darkdial_core && dart run darkdial_core:fake_lr` |
 | Install the plug-in for development | `tools/install_plugin.sh`, then reload it in Lightroom's Plug-in Manager |

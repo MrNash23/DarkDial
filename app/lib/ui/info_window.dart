@@ -1,4 +1,5 @@
 import 'package:darkdial_core/darkdial_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
@@ -10,9 +11,12 @@ class _InfoTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text.toUpperCase(), style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.2)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.2),
+    ),
+  );
 }
 
 /// The "Infos" section: versions and connection state, plugin installation,
@@ -25,10 +29,7 @@ class InfoWindow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = controller;
     return Scaffold(
-      body: ListenableBuilder(
-        listenable: c,
-        builder: (context, _) => _page(context),
-      ),
+      body: ListenableBuilder(listenable: c, builder: (context, _) => _page(context)),
     );
   }
 
@@ -40,9 +41,14 @@ class InfoWindow extends StatelessWidget {
     final warning = small?.copyWith(color: Theme.of(context).colorScheme.error);
 
     Widget row(String name, String value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(children: [SizedBox(width: 120, child: Text(name)), Expanded(child: Text(value))]),
-        );
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(width: 120, child: Text(name)),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
 
     final deviceText = switch (state.device) {
       DeviceLinkState.connected =>
@@ -99,13 +105,15 @@ class InfoWindow extends StatelessWidget {
             ),
           ],
         ),
-        SwitchListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: Text(s.useSimulator),
-          value: c.useSimulator,
-          onChanged: c.setUseSimulator,
-        ),
+        // The simulator is a development aid: only offered in debug builds.
+        if (kDebugMode)
+          SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(s.useSimulator),
+            value: c.useSimulator,
+            onChanged: c.setUseSimulator,
+          ),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
@@ -164,4 +172,3 @@ void _confirmFactoryReset(BuildContext context, AppController controller) {
     ),
   );
 }
-
