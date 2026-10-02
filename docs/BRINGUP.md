@@ -27,7 +27,7 @@ Only facts (pins, bus settings) were taken over; the code in
 | LCD power | GPIO 1 and GPIO 2 high |
 | Backlight | GPIO 46, PWM 5 kHz, 8 bit |
 | Touch | CST816T at I²C 0x15, SDA 6, SCL 7, RST 5 |
-| Encoder | A 45, B 42, one detent per full cycle of A; switch 41, active low |
+| Encoder | A 45, B 42, one detent per edge of A (confirmed on the device); switch 41, active low |
 | LED ring | 8 × WS2812 on GPIO 48 (GRB), power enable GPIO 17 |
 | Power light | GPIO 40, active low |
 | Flash / PSRAM | 16 MB flash, OPI PSRAM (the firmware itself does not need PSRAM) |

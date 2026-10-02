@@ -96,16 +96,16 @@ volatile int32_t encoderCount = 0;
 volatile int encoderLastA = HIGH;
 volatile uint32_t encoderLastEdgeUs = 0;
 
-// One detent is one full cycle of phase A; direction is phase B at the rising edge.
+// The knob has a detent on every edge of phase A (half a quadrature cycle),
+// so both edges count. Phase B differs from A at the edge in one direction
+// and equals it in the other.
 void IRAM_ATTR onEncoderEdge() {
   const uint32_t now = micros();
   const int a = digitalRead(kPinEncoderA);
   if (a == encoderLastA || now - encoderLastEdgeUs < kEncoderDebounceUs) return;
   encoderLastA = a;
   encoderLastEdgeUs = now;
-  if (a == HIGH) {
-    encoderCount += (digitalRead(kPinEncoderB) != a) ? kEncoderDirection : -kEncoderDirection;
-  }
+  encoderCount += (digitalRead(kPinEncoderB) != a) ? kEncoderDirection : -kEncoderDirection;
 }
 
 void flushDisplay(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *pixels) {
