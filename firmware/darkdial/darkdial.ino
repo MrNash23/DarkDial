@@ -95,8 +95,13 @@ void setup() {
                 dd::kProtocolMinor);
 }
 
+uint32_t loopNow = 0;
+void onBleMessage(const uint8_t *message, size_t size) { device->onMessage(message, size, loopNow); }
+
 void loop() {
   const uint32_t now = millis();
+  loopNow = now;
+  board::bleUpdate(onBleMessage);
 
   uint8_t packet[4];
   while (board::midiRead(packet)) {

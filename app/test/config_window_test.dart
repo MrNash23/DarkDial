@@ -310,6 +310,13 @@ void main() {
     final model = controller.simulatorModel!;
     await settle(tester, () => model.slots.length == 1 && model.slots.first.label == 'Kontrast', 'slot on device');
 
+    // Connected over USB (the simulator); Bluetooth is on by default.
+    expect(find.text('USB'), findsOneWidget);
+    expect(controller.config.useBluetooth, isTrue);
+    expect(find.byKey(const Key('firmware-needs-cable')), findsNothing);
+
+    await tester.ensureVisible(find.text('EN'));
+    await tester.pump();
     await tester.tap(find.text('EN'));
     await settle(tester, () => model.slots.first.label == 'Contrast', 'English label on device');
     expect(find.text('Display'.toUpperCase()), findsOneWidget);
@@ -334,6 +341,17 @@ void main() {
     expect(controller.state.device, DeviceLinkState.connected);
     expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Send to device')).onPressed, isNotNull);
     await screenshot(tester, 'device');
+
+    // Bluetooth can be switched off; the choice is saved.
+    await tester.ensureVisible(find.byKey(const Key('use-bluetooth')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('use-bluetooth')));
+    await settle(tester, () => !controller.config.useBluetooth, 'bluetooth off');
+    await settle(
+      tester,
+      () => File(p.join(temp.path, 'settings.json')).readAsStringSync().contains('"bluetooth": false'),
+      'setting saved',
+    );
 
     await tester.runAsync(controller.shutdown);
   });

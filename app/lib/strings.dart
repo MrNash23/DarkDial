@@ -100,6 +100,18 @@ class Strings {
   }
   String get firmwareRetry => _t('Erneut versuchen', 'Try again');
   String get firmwareUnsupported => _t('Auf diesem System noch nicht möglich.', 'Not possible on this system yet.');
+  String get deviceConnection => _t('Verbindung', 'Connection');
+  String get connectionKind => _t('Verbunden über', 'Connected via');
+  String get viaUsb => 'USB';
+  String get viaBluetooth => 'Bluetooth';
+  String get useBluetooth => _t('Bluetooth verwenden', 'Use Bluetooth');
+  String get useBluetoothHint => _t(
+        'Hängt das Gerät nicht per USB am Mac (z. B. an einem Netzteil), verbindet sich die App per Bluetooth. '
+            'Steckt das Kabel am Mac, hat USB Vorrang.',
+        'When the device is not on a USB cable to the Mac (on a power supply, say), the app connects over '
+            'Bluetooth. With the cable in the Mac, USB has priority.',
+      );
+  String get firmwareNeedsCable => _t('Firmware-Update nur per USB-Kabel zum Mac.', 'Firmware updates need the USB cable to the Mac.');
   String get deviceDisplay => _t('Anzeige', 'Display');
   String get deviceBehaviour => _t('Verhalten', 'Behaviour');
   String get deviceTransfer => _t('Übertragung', 'Transfer');

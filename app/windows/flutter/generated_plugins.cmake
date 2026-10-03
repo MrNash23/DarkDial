@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_midi_command_windows
   screen_retriever_windows
   tray_manager
+  universal_ble
   window_manager
 )
 

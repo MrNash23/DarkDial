@@ -18,6 +18,10 @@ abstract class MidiConnection {
   Future<void> close();
 }
 
+/// A connection over the air (Bluetooth). USB is preferred when the same
+/// device is also on a cable.
+abstract interface class WirelessMidiConnection implements MidiConnection {}
+
 /// Source of MIDI ports that might be a Darkdial.
 abstract class MidiTransport {
   /// Emits every port that appears, already opened. Ports present at
@@ -58,6 +62,9 @@ class DeviceSession {
 
   late final IdentityReply identity;
   late final Hello hello;
+
+  /// True if the device is connected over Bluetooth.
+  bool get wireless => _connection is WirelessMidiConnection;
 
   /// Messages from the device after the handshake. Closes when the device is
   /// unplugged.

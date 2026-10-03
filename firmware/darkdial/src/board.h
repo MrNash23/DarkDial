@@ -34,9 +34,16 @@ void saveConfig(const uint8_t *blob, size_t size);
 uint16_t loadRotation();
 void saveRotation(uint16_t degrees);
 
+/// Bluetooth (BLE-MIDI): advertises while no computer has the device on USB,
+/// and hands every complete message that came in to `deliver`. Call often.
+void bleUpdate(void (*deliver)(const uint8_t *message, size_t size));
+/// True while a computer is connected over Bluetooth.
+bool bleActive();
+
 /// Next USB-MIDI event packet from the host, false if none is waiting.
 bool midiRead(uint8_t packet[4]);
-/// Sends one complete MIDI message (control change or SysEx).
+/// Sends one complete MIDI message (control change or SysEx): over
+/// Bluetooth if the service spoke that way last, otherwise over USB.
 void midiSend(const uint8_t *bytes, size_t size);
 
 }  // namespace board

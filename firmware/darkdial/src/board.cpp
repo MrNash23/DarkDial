@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <LovyanGFX.hpp>
+#include <NimBLEDevice.h>
 #include <Preferences.h>
 #include <USB.h>
 #include <USBMIDI.h>
@@ -10,6 +11,7 @@
 #include <esp_timer.h>
 #include <lvgl.h>
 
+#include "core/ble_midi.h"
 #include "core/encoder.h"
 #include "core/protocol.h"
 #include "panel_crowpanel.h"
@@ -91,6 +93,67 @@ class Display : public lgfx::LGFX_Device {
 
 Display display;
 USBMIDI midi("Darkdial");
+
+extern "C" bool tud_mounted(void);
+
+// Bluetooth: the standard BLE-MIDI service. The device advertises only while
+// no computer has it on USB; then USB is used.
+constexpr const char *kBleMidiService = "03B80E5A-EDE8-4B33-A751-6CE34EC4C700";
+constexpr const char *kBleMidiCharacteristic = "7772E5DB-3868-4112-A1A9-F2669D106BF3";
+NimBLECharacteristic *bleMidi = nullptr;
+volatile bool bleConnected = false;
+volatile uint16_t bleMtu = 23;
+bool bleAdvertising = false;
+bool lastFromBle = false;  // answers go back the way the service spoke
+dd::BleMidiDecoder bleDecoder;
+
+// Written packets arrive on the Bluetooth task; the loop takes them from here.
+struct BlePacket {
+  uint8_t data[160];
+  uint8_t size;
+};
+QueueHandle_t blePackets = nullptr;
+
+class BleServerCallbacks : public NimBLEServerCallbacks {
+  void onConnect(NimBLEServer *server, NimBLEConnInfo &info) override {
+    bleConnected = true;
+    bleAdvertising = false;
+    // 7.5 … 15 ms between connection events keeps the knob responsive.
+    server->updateConnParams(info.getConnHandle(), 6, 12, 0, 200);
+  }
+  void onDisconnect(NimBLEServer *, NimBLEConnInfo &, int) override {
+    bleConnected = false;
+    bleMtu = 23;
+  }
+  void onMTUChange(uint16_t mtu, NimBLEConnInfo &) override { bleMtu = mtu; }
+};
+
+class BleMidiCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic *characteristic, NimBLEConnInfo &) override {
+    const NimBLEAttValue value = characteristic->getValue();
+    BlePacket packet;
+    packet.size = static_cast<uint8_t>(value.length() < sizeof(packet.data) ? value.length() : sizeof(packet.data));
+    memcpy(packet.data, value.data(), packet.size);
+    xQueueSend(blePackets, &packet, 0);
+  }
+};
+
+void bleBegin() {
+  blePackets = xQueueCreate(16, sizeof(BlePacket));
+  NimBLEDevice::init("Darkdial");
+  NimBLEDevice::setMTU(247);
+  NimBLEServer *server = NimBLEDevice::createServer();
+  server->setCallbacks(new BleServerCallbacks());
+  NimBLEService *service = server->createService(kBleMidiService);
+  bleMidi = service->createCharacteristic(
+      kBleMidiCharacteristic, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::NOTIFY);
+  bleMidi->setCallbacks(new BleMidiCallbacks());
+  service->start();
+  NimBLEAdvertising *advertising = NimBLEDevice::getAdvertising();
+  advertising->addServiceUUID(kBleMidiService);
+  advertising->setName("Darkdial");
+  advertising->enableScanResponse(true);
+}
 Preferences preferences;
 
 volatile int32_t encoderCount = 0;
@@ -212,6 +275,7 @@ void begin() {
 
   preferences.begin("darkdial", false);
   midi.begin();
+  bleBegin();
 }
 
 int readDetents() {
@@ -283,9 +347,29 @@ void saveConfig(const uint8_t *blob, size_t size) { preferences.putBytes("config
 uint16_t loadRotation() { return preferences.getUShort("rotation", 0) % 360; }
 void saveRotation(uint16_t degrees) { preferences.putUShort("rotation", degrees); }
 
+void bleUpdate(void (*deliver)(const uint8_t *message, size_t size)) {
+  // Advertise only while no computer has the device on USB.
+  const bool usb = tud_mounted();
+  if (!bleConnected) {
+    if (!usb && !bleAdvertising) bleAdvertising = NimBLEDevice::startAdvertising();
+    if (usb && bleAdvertising) {
+      NimBLEDevice::stopAdvertising();
+      bleAdvertising = false;
+    }
+  }
+  BlePacket packet;
+  while (blePackets && xQueueReceive(blePackets, &packet, 0) == pdTRUE) {
+    lastFromBle = true;
+    bleDecoder.feed(packet.data, packet.size, deliver);
+  }
+}
+
+bool bleActive() { return bleConnected; }
+
 bool midiRead(uint8_t packet[4]) {
   midiEventPacket_t event;
   if (!midi.readPacket(&event)) return false;
+  lastFromBle = false;
   packet[0] = event.header;
   packet[1] = event.byte1;
   packet[2] = event.byte2;
@@ -294,6 +378,12 @@ bool midiRead(uint8_t packet[4]) {
 }
 
 void midiSend(const uint8_t *bytes, size_t size) {
+  if (bleConnected && (lastFromBle || !tud_mounted())) {
+    const size_t maxPacket = bleMtu > 3 ? bleMtu - 3 : 20;
+    dd::bleMidiEncode(bytes, size, millis(), maxPacket,
+                      [](const uint8_t *packet, size_t n) { bleMidi->notify(packet, n); });
+    return;
+  }
   if (size == 3 && (bytes[0] & 0xF0) == 0xB0) {
     midiEventPacket_t event = {0x0B, bytes[0], bytes[1], bytes[2]};  // control change
     midi.writePacket(&event);

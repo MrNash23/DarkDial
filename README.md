@@ -72,6 +72,13 @@ The first thirteen are on by default. Short names come in German and English.
 
 <!-- Photo: the device showing the Library screen -->
 
+### Without a cable to the Mac
+
+On a power supply or a power bank instead of the Mac's USB port, the device
+connects over **Bluetooth**. The app finds it by itself; with the cable in the
+Mac, USB has priority. The board has no battery, so it always needs power
+over USB.
+
 ### Track your time per job
 
 - **Hold the knob** for half a second to open time tracking. Choose a client,
@@ -104,7 +111,7 @@ It never stops a clock on its own.
 
 | | |
 | --- | --- |
-| **Hardware** | [Elecrow CrowPanel 1.46″ HMI ESP32 Rotary Display](https://www.elecrow.com/) (ESP32-S3, 360×360 round IPS touch display, rotary knob with push, 8 RGB LEDs), connected by USB-C |
+| **Hardware** | [Elecrow CrowPanel 1.46″ HMI ESP32 Rotary Display](https://www.elecrow.com/crowpanel-1-46inch-hmi-esp32-rotary-display-360-360-ips-round-touch-knob-screen.html) (ESP32-S3, 360×360 round IPS touch display, rotary knob with push, 8 RGB LEDs), connected by USB-C or Bluetooth |
 | **Computer** | A Mac with macOS 13 or newer |
 | **Software** | Adobe Lightroom Classic |
 

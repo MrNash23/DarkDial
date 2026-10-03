@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "../darkdial/src/core/ble_midi.h"
 #include "../darkdial/src/core/encoder.h"
 #include "testing.h"
 
@@ -893,6 +894,63 @@ static void testLibrary() {
   CHECK(!device.libraryActive() && device.screen() == dd::Screen::Offline);
 }
 
+static void testBleMidi() {
+  // Encodes, decodes and compares; returns the number of packets.
+  auto roundTrip = [](const Bytes &message, size_t maxPacket, uint32_t nowMs) {
+    std::vector<Bytes> packets;
+    dd::bleMidiEncode(message.data(), message.size(), nowMs, maxPacket,
+                      [&](const uint8_t *p, size_t n) { packets.emplace_back(p, p + n); });
+    dd::BleMidiDecoder decoder;
+    std::vector<Bytes> out;
+    for (const Bytes &p : packets) {
+      CHECK(p.size() <= maxPacket && (p[0] & 0xC0) == 0x80);
+      decoder.feed(p.data(), p.size(), [&](const uint8_t *m, size_t n) { out.emplace_back(m, m + n); });
+    }
+    CHECK(out.size() == 1 && out[0] == message);
+    return packets.size();
+  };
+
+  // A rotation CC: header, timestamp, the three bytes.
+  std::vector<Bytes> packets;
+  const Bytes cc = {0xB0, 0x11, 66};
+  dd::bleMidiEncode(cc.data(), cc.size(), 0x1234, 20, [&](const uint8_t *p, size_t n) { packets.emplace_back(p, p + n); });
+  CHECK(packets.size() == 1 && packets[0] == Bytes({static_cast<uint8_t>(0x80 | ((0x1234 >> 7) & 0x3F)),
+                                                     static_cast<uint8_t>(0x80 | (0x1234 & 0x7F)), 0xB0, 0x11, 66}));
+  CHECK(roundTrip(cc, 20, 5) == 1);
+
+  // Every message the service and the device exchange survives, in one
+  // packet when the MTU allows, split over several when it does not.
+  const Bytes messages[] = {
+      helloRequest(), value(3, 12000, true, "+1.35"), status(7),
+      menuItem(2, 32, 4, "Fam. M\xC3\xBCller"), timerState(true, 7, 754, "Hochzeit 2026 Juni"),
+      library(dd::kLibraryActive | dd::kLibraryTap, 3, 2, "IMG_0042.CR3"), displayRotation(3, 270),
+  };
+  for (const Bytes &m : messages) {
+    CHECK(roundTrip(m, 244, 77) == 1);
+    CHECK(roundTrip(m, 20, 77) >= (m.size() + 4 + 19) / 20);
+  }
+  uint8_t hello[dd::kMaxSysexBytes];
+  const size_t helloSize = dd::buildHello(hello, 0, 7, 0, kSerial, 0xBEEF);
+  CHECK(helloSize == 31 && roundTrip(Bytes(hello, hello + helloSize), 20, 1000) == 2);
+
+  // Running status, two messages in one packet, and a packet without header.
+  dd::BleMidiDecoder decoder;
+  std::vector<Bytes> out;
+  auto collect = [&](const uint8_t *m, size_t n) { out.emplace_back(m, m + n); };
+  const uint8_t twice[] = {0x80, 0x81, 0xB0, 0x10, 65, 0x82, 0xB0, 0x10, 63, 0x10, 66};
+  decoder.feed(twice, sizeof(twice), collect);
+  CHECK(out.size() == 3 && out[0] == Bytes({0xB0, 0x10, 65}) && out[1] == Bytes({0xB0, 0x10, 63}) &&
+        out[2] == Bytes({0xB0, 0x10, 66}));
+  out.clear();
+  const uint8_t junk[] = {0x10, 0xB0, 0x10, 65};
+  decoder.feed(junk, sizeof(junk), collect);
+  CHECK(out.empty());
+  // A SysEx cut off by a new message is dropped; the new message counts.
+  const uint8_t cut[] = {0x80, 0x81, 0xF0, 0x7D, 0x44, 0x82, 0xB0, 0x10, 65};
+  decoder.feed(cut, sizeof(cut), collect);
+  CHECK(out.size() == 1 && out[0] == Bytes({0xB0, 0x10, 65}));
+}
+
 // The last message the device sent is a DisplayAngle with these values.
 static bool sentAngle(const RecordingHost &host, int degrees, bool adjusting) {
   if (host.sent.empty()) return false;
@@ -1070,6 +1128,7 @@ static void testEncoderRecording(const std::string &fixtures) {
 }
 
 int main(int argc, char **argv) {
+  testBleMidi();
   testDisplayRotation();
   testLibrary();
   testEncoder();

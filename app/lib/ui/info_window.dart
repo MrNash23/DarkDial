@@ -52,7 +52,8 @@ class InfoWindow extends StatelessWidget {
 
     final deviceText = switch (state.device) {
       DeviceLinkState.connected =>
-        '${state.firmwareVersion}${c.useSimulator ? ' (${s.simulator})' : ' · ${state.deviceSerial}'}',
+        '${state.firmwareVersion}${c.useSimulator ? ' (${s.simulator})' : ' · ${state.deviceSerial}'}'
+            '${state.deviceWireless ? ' · ${s.viaBluetooth}' : ''}',
       DeviceLinkState.incompatible => s.versionConflict,
       DeviceLinkState.disconnected => s.notConnected,
     };

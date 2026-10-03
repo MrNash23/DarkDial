@@ -197,6 +197,7 @@ class AppConfig {
     required this.slots,
     this.followLightroom = true,
     this.library = const LibrarySettings(),
+    this.useBluetooth = true,
   });
 
   final Language language;
@@ -206,6 +207,9 @@ class AppConfig {
   final bool followLightroom;
 
   final LibrarySettings library;
+
+  /// Look for the device over Bluetooth too (USB is preferred).
+  final bool useBluetooth;
 
   factory AppConfig.defaults([Language language = Language.de]) => AppConfig(
         language: language,
@@ -220,12 +224,14 @@ class AppConfig {
     List<SlotSettings>? slots,
     bool? followLightroom,
     LibrarySettings? library,
+    bool? useBluetooth,
   }) =>
       AppConfig(
         language: language ?? this.language,
         slots: slots ?? this.slots,
         followLightroom: followLightroom ?? this.followLightroom,
         library: library ?? this.library,
+        useBluetooth: useBluetooth ?? this.useBluetooth,
       );
 
   /// What is sent to the device for the active slots.
@@ -249,6 +255,7 @@ class AppConfig {
         'language': language.name,
         'follow': followLightroom,
         'library': library.toJson(),
+        'bluetooth': useBluetooth,
         'slots': [for (final s in slots) s.toJson()],
       };
 
@@ -275,6 +282,7 @@ class AppConfig {
       slots: slots,
       followLightroom: json['follow'] != false,
       library: LibrarySettings.fromJson(json['library']),
+      useBluetooth: json['bluetooth'] != false,
     );
   }
 }

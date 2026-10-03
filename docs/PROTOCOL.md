@@ -131,7 +131,7 @@ messages in index order.
 
 **Detection** (service, for every MIDI port that appears):
 
-1. Port name contains `Darkdial`, or is the generic name macOS gives a USB
+1. Port name contains `Darkdial` (also a Bluetooth device of that name), or is the generic name macOS gives a USB
    MIDI device whose name it could not read (`USB-MIDI-Gerät`, `USB MIDI
    Device`); otherwise ignore the port. The next two stages decide.
 2. Send Identity Request; expect the reply from 1.2 within 1 s.
@@ -219,6 +219,26 @@ there; the service only starts the adjustment and shows the result.
   goes back to the stored one.
 - The device draws everything turned: ring, texts, icons, logo. Touch needs
   no change, taps count anywhere.
+
+### 1.10 Bluetooth
+
+From firmware 0.7 the device also speaks the same messages over Bluetooth
+Low Energy, as standard BLE-MIDI:
+
+- Service `03B80E5A-EDE8-4B33-A751-6CE34EC4C700`, characteristic
+  `7772E5DB-3868-4112-A1A9-F2669D106BF3` (read, write without response,
+  notify), device name `Darkdial`.
+- Framing per the BLE-MIDI specification: a header byte with the high bits
+  of a 13-bit millisecond timestamp, a timestamp byte before every status
+  byte, SysEx spanning packets when the MTU is small. The messages inside
+  are exactly those of sections 1.1 to 1.9; detection (identity request,
+  Hello) is the same.
+- **USB first.** The device advertises only while no computer has it on USB.
+  If it is on Bluetooth and a cable to the same computer appears, the
+  service changes to USB and lets Bluetooth go; when the cable goes, it
+  connects over Bluetooth again. The device answers over the link the
+  service last spoke on.
+- Firmware updates need USB.
 
 ---
 

@@ -178,7 +178,9 @@ class AppController extends ChangeNotifier {
     // Menu and notices exist only on the device; repaint the preview for them.
     _simulator?.model.onChanged = notifyListeners;
     final engine = Engine(
-      transport: useSimulator ? SimulatedTransport(_simulator!) : FlutterMidiTransport(),
+      transport: useSimulator
+          ? SimulatedTransport(_simulator!)
+          : FlutterMidiTransport(bluetooth: config.useBluetooth && FirmwareUpdater.supported),
       lightroom: _lightroom(),
       config: config,
       appVersion: appVersion,
@@ -188,6 +190,16 @@ class AppController extends ChangeNotifier {
     _states = engine.states.listen((_) => notifyListeners());
     await engine.start();
     notifyListeners();
+  }
+
+  /// Switches the search over Bluetooth on or off; the connection is set up
+  /// anew.
+  Future<void> setUseBluetooth(bool value) async {
+    if (value == config.useBluetooth) return;
+    config = config.copyWith(useBluetooth: value);
+    notifyListeners();
+    await _save();
+    await _startEngine();
   }
 
   /// Applies an edited configuration: saved, watched in Lightroom and

@@ -81,7 +81,11 @@ class EngineState {
     this.library = const Library(),
     this.displayAngle,
     this.displayAdjusting = false,
+    this.deviceWireless = false,
   });
+
+  /// The device is connected over Bluetooth rather than USB.
+  final bool deviceWireless;
 
   /// Degrees the picture on the device is turned by; null if the device
   /// cannot turn it (older firmware) or has not said yet.
@@ -199,6 +203,7 @@ class Engine {
         library: _libraryMessage(),
         displayAngle: _displayAngle,
         displayAdjusting: _displayAdjusting,
+        deviceWireless: _session?.wireless ?? false,
       );
 
   Future<void> start() async {
@@ -282,9 +287,19 @@ class Engine {
 
   // Device ---------------------------------------------------------------------
 
+  /// Connections that came while another one was in use or being opened;
+  /// tried when the device in use goes away.
+  final List<MidiConnection> _spare = [];
+
   Future<void> _onConnection(MidiConnection connection) async {
-    // One device at a time; a second one stays untouched.
-    if (_session != null || _opening) return;
+    final current = _session;
+    // One device at a time. The exception: a cable while on Bluetooth, since
+    // USB has priority.
+    final cableForWireless = current != null && current.wireless && connection is! WirelessMidiConnection;
+    if (_opening || (current != null && !cableForWireless)) {
+      _spare.add(connection);
+      return;
+    }
     _opening = true;
     final (result, session) = await DeviceSession.open(connection, appVersion: appVersion);
     _opening = false;
@@ -292,22 +307,31 @@ class Engine {
       await session?.close();
       return;
     }
-    if (result == HandshakeResult.notDarkdial) return;
-    if (session == null) {
-      _deviceState = DeviceLinkState.incompatible;
-      _notify();
+    if (result == HandshakeResult.notDarkdial) {
+      if (_session == null) unawaited(_trySpare());
       return;
     }
+    if (session == null) {
+      if (_session == null) {
+        _deviceState = DeviceLinkState.incompatible;
+        _notify();
+      }
+      return;
+    }
+    final replaced = _session;
+    _resetDeviceState();
     _session = session;
     _deviceState = DeviceLinkState.connected;
     _subscriptions.add(session.messages.listen(_onDeviceMessage, onDone: () => _onDeviceGone(session)));
+    // The Bluetooth connection is let go once USB has taken over; it comes
+    // back as a spare when the cable is pulled.
+    if (replaced != null) await replaced.close();
     await pushConfig();
     _notify();
   }
 
-  void _onDeviceGone(DeviceSession session) {
-    if (_session != session) return;
-    _session = null;
+  /// Forgets what was sent to the device in use.
+  void _resetDeviceState() {
     _sentTimerState = null;
     _sentMenuPage = null;
     _sentLibrary = null;
@@ -315,11 +339,25 @@ class Engine {
     _displayAngle = null;
     _displayAdjusting = false;
     _menu?.close();
-    _deviceState = DeviceLinkState.disconnected;
     _editing = false;
     _pendingDetents = 0;
+  }
+
+  /// Tries the connections that waited, one after the other.
+  Future<void> _trySpare() async {
+    while (_session == null && !_opening && _spare.isNotEmpty && !_disposed) {
+      await _onConnection(_spare.removeAt(0));
+    }
+  }
+
+  void _onDeviceGone(DeviceSession session) {
+    if (_session != session) return;
+    _session = null;
+    _resetDeviceState();
+    _deviceState = DeviceLinkState.disconnected;
     session.close();
     _notify();
+    unawaited(_trySpare());
   }
 
   void _onDeviceMessage(DeviceMessage message) {

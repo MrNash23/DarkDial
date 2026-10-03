@@ -3,12 +3,20 @@ import 'dart:typed_data';
 
 import 'package:darkdial_core/darkdial_core.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart' as fmc;
+import 'package:flutter_midi_command_ble/flutter_midi_command_ble.dart';
 
-/// USB-MIDI through flutter_midi_command. Only ports that may be a Darkdial
-/// are opened (detection stage 1, see [mayBeDarkdial]); other MIDI devices
-/// are never touched.
+/// USB-MIDI, and with [bluetooth] BLE-MIDI, through flutter_midi_command.
+/// Only ports that may be a Darkdial are opened (detection stage 1, see
+/// [mayBeDarkdial]); other MIDI devices are never touched.
 class FlutterMidiTransport implements MidiTransport {
-  final fmc.MidiCommand _midi = fmc.MidiCommand();
+  FlutterMidiTransport({this.bluetooth = false})
+      : _midi = fmc.MidiCommand(bleTransport: bluetooth ? UniversalBleMidiTransport() : null) {
+    if (!bluetooth) _midi.configureBleTransport(null);
+  }
+
+  final bool bluetooth;
+  final fmc.MidiCommand _midi;
+  Timer? _bluetoothScan;
   final StreamController<MidiConnection> _connections = StreamController<MidiConnection>();
   final Map<String, _Port> _ports = {};
   StreamSubscription<fmc.MidiPacket>? _packets;
@@ -26,6 +34,22 @@ class FlutterMidiTransport implements MidiTransport {
     });
     _setup = _midi.onMidiSetupChanged?.listen((_) => _scan());
     await _scan();
+    if (bluetooth) unawaited(_startBluetooth());
+  }
+
+  /// Scans for BLE-MIDI devices; found ones show up in the device list.
+  /// macOS asks for permission the first time.
+  Future<void> _startBluetooth() async {
+    try {
+      await _midi.startBluetooth();
+      await _midi.waitUntilBluetoothIsInitialized();
+      await _midi.startScanningForBluetoothDevices();
+    } on Object {
+      return; // no Bluetooth, or not allowed: USB keeps working
+    }
+    // The device list does not always announce Bluetooth devices; look again
+    // now and then.
+    _bluetoothScan = Timer.periodic(const Duration(seconds: 3), (_) => _scan());
   }
 
   /// Opens new Darkdial ports and closes those that disappeared.
@@ -52,7 +76,7 @@ class FlutterMidiTransport implements MidiTransport {
         } on Object {
           continue; // shows up again with the next setup change
         }
-        final port = _Port(this, device);
+        final port = device.type == fmc.MidiDeviceType.ble ? _WirelessPort(this, device) : _Port(this, device);
         _ports[device.id] = port;
         _connections.add(port);
       }
@@ -70,6 +94,14 @@ class FlutterMidiTransport implements MidiTransport {
 
   @override
   Future<void> dispose() async {
+    _bluetoothScan?.cancel();
+    if (bluetooth) {
+      try {
+        _midi.stopScanningForBluetoothDevices();
+      } on Object {
+        // Bluetooth never started.
+      }
+    }
     await _packets?.cancel();
     await _setup?.cancel();
     for (final port in _ports.values.toList()) {
@@ -107,4 +139,9 @@ class _Port implements MidiConnection {
     _transport._midi.disconnectDevice(_device);
     await _closeInput();
   }
+}
+
+/// A Darkdial reached over Bluetooth.
+class _WirelessPort extends _Port implements WirelessMidiConnection {
+  _WirelessPort(super.transport, super.device);
 }

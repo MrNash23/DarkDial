@@ -39,6 +39,27 @@ class _DeviceWindowState extends State<DeviceWindow> {
                   key: const Key('device-settings'),
                   padding: const EdgeInsets.all(24),
                   children: [
+                    SectionTitle(s.deviceConnection),
+                    Row(
+                      children: [
+                        SizedBox(width: 140, child: Text(s.connectionKind)),
+                        Text(
+                          c.state.device != DeviceLinkState.connected
+                              ? s.notConnected
+                              : (c.state.deviceWireless ? s.viaBluetooth : s.viaUsb),
+                          key: const Key('connection-kind'),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile(
+                      key: const Key('use-bluetooth'),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(s.useBluetooth),
+                      subtitle: Text(s.useBluetoothHint, style: small),
+                      value: c.config.useBluetooth,
+                      onChanged: FirmwareUpdater.supported ? c.setUseBluetooth : null,
+                    ),
+                    const Divider(height: 40),
                     SectionTitle(s.deviceDisplay),
                     _OrientationRow(controller: c),
                     const SizedBox(height: 12),
@@ -215,6 +236,8 @@ class _FirmwareSection extends StatelessWidget {
     Widget action;
     if (!FirmwareUpdater.supported) {
       action = Text(s.firmwareUnsupported, style: small);
+    } else if (c.state.deviceWireless && !update.running) {
+      action = Text(s.firmwareNeedsCable, key: const Key('firmware-needs-cable'), style: small);
     } else if (update.running) {
       final progress = update.progress!;
       action = Column(
