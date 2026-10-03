@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/logo.png" width="140" alt="Darkdial logo"></p>
+
 # Darkdial
 
 **A rotary controller for Adobe Lightroom Classic, with time tracking built in.**
@@ -8,9 +10,14 @@ In the Library the same knob goes through your photos and a tap rates them.
 A long press switches to a stopwatch for your jobs, so the hours you spend
 editing are recorded where you spend them. On a cable or over Bluetooth.
 
-<!-- Photo: the device on a desk next to a keyboard, Lightroom in the background -->
+<p align="center"><img src="docs/assets/device.jpg" width="760" alt="The Darkdial on a desk, showing Saturation −16"></p>
+
+**Easy to install:** all you need is the device and the app. The DMG
+contains the firmware and puts it on the device with one click, and it
+installs the Lightroom plug-in by itself.
 
 **[Download the macOS app](https://github.com/MrNash23/DarkDial/releases/latest)** ·
+[Website](https://mrnash23.github.io/DarkDial/) ·
 [What you need](#what-you-need) · [Getting started](#getting-started) ·
 [For developers](#for-developers)
 
@@ -39,7 +46,12 @@ Darkdial is free and open source. It is powered by
 - **Press** the knob to go to the Library, and there to come back to
   Develop.
 
-<!-- Screenshot: the device screens for a few sliders (firmware/host/snapshots) -->
+<p align="center">
+  <img src="docs/assets/screen-05_edit_temperature.png" width="180" alt="Editing temperature">
+  <img src="docs/assets/screen-11_select_exposure.png" width="180" alt="Choosing exposure">
+  <img src="docs/assets/screen-09_edit_hsl_saturation_blue.png" width="180" alt="HSL saturation blue">
+  <img src="docs/assets/screen-27_slot_with_running_time.png" width="180" alt="A slider with the running time">
+</p>
 
 You choose which sliders are on the device, in which order, with which short
 name, icon, step size and sensitivity, and what a fast turn does: bigger
@@ -71,7 +83,10 @@ The first thirteen are on by default. Short names come in German and English.
   same action again takes the mark back.
 - **Press** the knob to switch to Develop with the photo you are on.
 
-<!-- Photo: the device showing the Library screen -->
+<p align="center">
+  <img src="docs/assets/screen-34_library_picked.png" width="180" alt="Library: three stars, green label, picked">
+  <img src="docs/assets/screen-36_library_stars.png" width="180" alt="Library: five stars, red label">
+</p>
 
 ### Without a cable to the Mac
 
@@ -104,7 +119,7 @@ on the next start Darkdial asks whether the clock should keep running or stop
 at the time it was last seen, and after sleep whether to deduct the pause.
 It never stops a clock on its own.
 
-<!-- Screenshot: the time tracking window of the desktop app -->
+<p align="center"><img src="docs/assets/screen-23_menu_client.png" width="180" alt="Time tracking on the device: choose a client"></p>
 
 ---
 
@@ -188,6 +203,9 @@ turn, press or touch brings it back; that first input does nothing else.
 If the device does not stand upright, for example to lead the cable away
 neatly, the picture can be turned: in the app, section "Device" →
 "Rotate …", then turn the knob until it is level and press it to save.
+
+<p align="center"><img src="docs/assets/app-sliders.jpg" width="820" alt="The Sliders section of the app"></p>
+<p align="center"><img src="docs/assets/app-device.jpg" width="820" alt="The Device section of the app"></p>
 
 Click the menu-bar icon and choose **Configure …** to pick your sliders
 (section "Sliders"), what the taps do in the Library (section "Library") and

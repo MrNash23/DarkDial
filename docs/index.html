@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Darkdial – a rotary controller for Lightroom Classic</title>
+<meta name="description" content="Darkdial turns a round touch display with a knob into a controller for Adobe Lightroom Classic: develop with the knob, cull in the Library, track your time. Free and open source.">
+<meta property="og:title" content="Darkdial – a rotary controller for Lightroom Classic">
+<meta property="og:description" content="Develop with a knob, cull in the Library, track your time. One device, one app – the firmware comes with it.">
+<meta property="og:image" content="https://mrnash23.github.io/DarkDial/assets/device.jpg">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0d;
+    --panel: #131316;
+    --line: #26262b;
+    --text: #ececef;
+    --muted: #9a9aa2;
+    --accent: #ff9f0a;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 17px/1.6 Montserrat, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* Navigation */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(11, 11, 13, 0.82);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px; }
+  nav .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 600; letter-spacing: 0.18em; font-size: 14px; }
+  nav .brand img { width: 30px; height: 30px; }
+  nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14px; }
+  nav .links a { color: var(--muted); }
+  nav .links a:hover { color: var(--text); text-decoration: none; }
+
+  /* Hero */
+  .hero { padding: 72px 0 40px; display: grid; grid-template-columns: 1fr 1.15fr; gap: 48px; align-items: center; }
+  .eyebrow { color: var(--accent); font-size: 13px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; }
+  h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.08; font-weight: 600; margin: 14px 0 20px; letter-spacing: -0.01em; }
+  h1 span { color: var(--muted); font-weight: 300; }
+  .lead { color: var(--muted); font-size: 19px; max-width: 34em; margin: 0 0 30px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .button {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 24px; border-radius: 999px; font-weight: 600; font-size: 16px;
+    background: var(--accent); color: #1a1205;
+  }
+  .button:hover { text-decoration: none; filter: brightness(1.08); }
+  .button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .button.ghost:hover { border-color: var(--muted); }
+  .small { color: var(--muted); font-size: 14px; }
+  .hero-photo { border-radius: var(--radius); overflow: hidden; box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6); }
+
+  /* Sections */
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 600; margin: 10px 0 14px; line-height: 1.15; }
+  .intro { color: var(--muted); max-width: 44em; margin: 0 0 40px; }
+
+  /* Install */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; counter-reset: step; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; position: relative; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+    border: 2px solid var(--accent); color: var(--accent); font-weight: 600; margin-bottom: 18px;
+  }
+  .step h3 { margin: 0 0 8px; font-size: 19px; font-weight: 600; }
+  .step p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .callout {
+    margin-top: 28px; padding: 22px 26px; border-radius: var(--radius);
+    background: linear-gradient(135deg, rgba(255, 159, 10, 0.14), rgba(255, 159, 10, 0.03));
+    border: 1px solid rgba(255, 159, 10, 0.35);
+  }
+  .callout strong { color: var(--text); }
+
+  /* Features */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .feature { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+  .feature .icon { width: 38px; height: 38px; color: var(--accent); margin-bottom: 14px; }
+  .feature h3 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+  .feature p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+  /* Screens */
+  .screens { display: flex; gap: 22px; overflow-x: auto; padding: 6px 2px 16px; scroll-snap-type: x mandatory; }
+  .screens figure { margin: 0; flex: 0 0 200px; scroll-snap-align: start; text-align: center; }
+  .screens img { width: 200px; height: 200px; border-radius: 50%; border: 6px solid #1c1c20; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55); }
+  .screens figcaption { color: var(--muted); font-size: 14px; margin-top: 12px; }
+
+  /* App */
+  .shot { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55); }
+  .shots { display: grid; gap: 28px; }
+  .shot-row { display: grid; grid-template-columns: 1fr 1.6fr; gap: 36px; align-items: center; }
+  .shot-row.flip { grid-template-columns: 1.6fr 1fr; }
+  .shot-row h3 { font-size: 22px; margin: 0 0 10px; font-weight: 600; }
+  .shot-row p { color: var(--muted); margin: 0 0 10px; }
+  .shot-row ul { color: var(--muted); padding-left: 20px; margin: 0; }
+  .shot-row li { margin: 4px 0; }
+
+  /* Requirements */
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 16px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { width: 160px; color: var(--muted); }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--line); padding: 48px 0 64px; color: var(--muted); font-size: 14.5px; }
+  footer .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  footer strong { color: var(--text); font-weight: 600; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; padding-top: 40px; }
+    .steps, .features { grid-template-columns: 1fr; }
+    .shot-row, .shot-row.flip { grid-template-columns: 1fr; }
+    .shot-row.flip .shot { order: 2; }
+    footer .wrap { grid-template-columns: 1fr; }
+    nav .links a.optional { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/logo.png" alt="">DARKDIAL</a>
+    <div class="links">
+      <a href="#install">Install</a>
+      <a href="#features" class="optional">Features</a>
+      <a href="#app" class="optional">App</a>
+      <a href="https://github.com/MrNash23/DarkDial">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="wrap hero">
+  <div>
+    <div class="eyebrow">For Adobe Lightroom Classic</div>
+    <h1>A knob for your sliders.<br><span>A stopwatch for your hours.</span></h1>
+    <p class="lead">
+      Darkdial turns a small round touch display with a knob into a dedicated
+      controller: pick a slider, turn, and watch the value ring follow. Cull in
+      the Library with a tap. Track the time you spend on every job.
+    </p>
+    <div class="buttons">
+      <a class="button" href="https://github.com/MrNash23/DarkDial/releases/latest">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 10l6 6 6-6M5 20h14"/></svg>
+        Download for macOS
+      </a>
+      <a class="button ghost" href="#install">How to install</a>
+    </div>
+    <p class="small" style="margin-top:16px">Free and open source · signed and notarised by Apple · macOS 13 or newer</p>
+  </div>
+  <div class="hero-photo"><img src="assets/device.jpg" alt="The Darkdial on a wooden desk next to a laptop, showing Saturation −16"></div>
+</header>
+
+<section id="install">
+  <div class="wrap">
+    <div class="eyebrow">Easy to install</div>
+    <h2>The device and one app. That’s all.</h2>
+    <p class="intro">
+      There is nothing to solder and nothing to compile. The app brings the
+      firmware and puts it on the device for you, and it installs the Lightroom
+      plug-in by itself.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <h3>Get the device</h3>
+        <p>An <a href="https://www.elecrow.com/crowpanel-1-46inch-hmi-esp32-rotary-display-360-360-ips-round-touch-knob-screen.html">Elecrow CrowPanel 1.46″ Rotary Display</a> – a round 360×360 touch display with a knob, straight from the box.</p>
+      </div>
+      <div class="step">
+        <h3>Install the app</h3>
+        <p>Download the DMG, drag Darkdial to Applications and start it. It sets up the Lightroom plug-in in one click.</p>
+      </div>
+      <div class="step">
+        <h3>Put the firmware on</h3>
+        <p>Plug the device in, open <em>Device</em> and click <em>Update</em>. About 30 seconds later it shows your sliders.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>The firmware comes with the app.</strong> Every release of the app
+      contains the matching firmware and tells you when the device needs an
+      update – it works for a brand-new board with its factory firmware, too.
+      Your settings stay on the device.
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="eyebrow">What it does</div>
+    <h2>Made for the way you edit.</h2>
+    <p class="intro">Everything happens on a single round screen: turn, tap, press. The display always shows what Lightroom shows.</p>
+    <div class="features">
+      <div class="feature">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v4"/><path d="M7.5 15.5a5 5 0 0 0 9 0"/></svg>
+        <h3>Develop with a knob</h3>
+        <p>Turn through your sliders, tap to pick one, turn to change it. Slow turns make fine steps, a quick spin covers ground – set per slider.</p>
+      </div>
+      <div class="feature">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>
+        <h3>Cull in the Library</h3>
+        <p>The knob goes through your photos. A tap flags, a double tap gives stars or a colour – you choose, and it can move on to the next photo.</p>
+      </div>
+      <div class="feature">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg>
+        <h3>Track your time</h3>
+        <p>Hold the knob, choose a client and a job, and the clock runs. The app keeps hours per job, entries, an overview and a CSV export.</p>
+      </div>
+      <div class="feature">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 4V3l5 4L7 17"/></svg>
+        <h3>USB or Bluetooth</h3>
+        <p>On the Mac’s cable or on a power supply across the desk – the app finds the device either way. With the cable in, USB has priority.</p>
+      </div>
+      <div class="feature">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4"/></svg>
+        <h3>Follows Lightroom</h3>
+        <p>Move a slider with the mouse and the device jumps to it. Presets, photo changes, a reset: the ring and the number update right away.</p>
+      </div>
+      <div class="feature">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13.5 5l-3 14"/></svg>
+        <h3>Open source</h3>
+        <p>Firmware, app and plug-in are on GitHub under the GPL. 46 sliders, German and English short words, your icons and step sizes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <div class="eyebrow">On the device</div>
+    <h2>One look tells you everything.</h2>
+    <p class="intro">The ring shows the value – from the top for sliders with a centre, from the start for the others. These are the screens as the firmware draws them.</p>
+    <div class="screens">
+      <figure><img src="assets/screen-05_edit_temperature.png" alt="Temperature being edited"><figcaption>Editing temperature</figcaption></figure>
+      <figure><img src="assets/screen-11_select_exposure.png" alt="Exposure in the carousel"><figcaption>Choosing a slider</figcaption></figure>
+      <figure><img src="assets/screen-09_edit_hsl_saturation_blue.png" alt="HSL saturation blue"><figcaption>HSL with its colour</figcaption></figure>
+      <figure><img src="assets/screen-34_library_picked.png" alt="Library: three stars, green label, picked"><figcaption>Library: marks of the photo</figcaption></figure>
+      <figure><img src="assets/screen-23_menu_client.png" alt="Time tracking: choose a client"><figcaption>Time tracking</figcaption></figure>
+      <figure><img src="assets/screen-27_slot_with_running_time.png" alt="Slider with the running time in the gap of the ring"><figcaption>The clock keeps running</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="app">
+  <div class="wrap">
+    <div class="eyebrow">The app</div>
+    <h2>Lives in your menu bar.</h2>
+    <p class="intro">The app holds the logic and keeps the books. Lightroom’s plug-in only reads and sets values; the device shows what it is told.</p>
+    <div class="shots">
+      <div class="shot-row">
+        <div>
+          <h3>Your sliders, your way</h3>
+          <p>Switch on the sliders you use, drag them into order and give each one a short word, an icon, a step size and what a fast turn should do.</p>
+          <ul>
+            <li>46 sliders, from white balance to HSL</li>
+            <li>A live preview of the round display</li>
+            <li>Library actions for tap and double tap</li>
+          </ul>
+        </div>
+        <div class="shot"><img src="assets/app-sliders.jpg" alt="The Sliders section of the Darkdial app"></div>
+      </div>
+      <div class="shot-row flip">
+        <div class="shot"><img src="assets/app-device.jpg" alt="The Device section of the Darkdial app"></div>
+        <div>
+          <h3>One place for the device</h3>
+          <p>Connection, orientation of the display, language and firmware – all in the Device section.</p>
+          <ul>
+            <li>Shows whether it is on USB or Bluetooth</li>
+            <li>Turn the picture if the device sits at an angle</li>
+            <li>Firmware update with one click</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="requirements">
+  <div class="wrap">
+    <div class="eyebrow">What you need</div>
+    <h2>Requirements</h2>
+    <table>
+      <tr><td>Hardware</td><td><a href="https://www.elecrow.com/crowpanel-1-46inch-hmi-esp32-rotary-display-360-360-ips-round-touch-knob-screen.html">Elecrow CrowPanel 1.46″ HMI ESP32 Rotary Display</a> (ESP32-S3, round 360×360 IPS touch display, knob with push). A USB-C cable; for Bluetooth a power supply or power bank, as the board has no battery.</td></tr>
+      <tr><td>Computer</td><td>A Mac with macOS 13 or newer. Windows is planned.</td></tr>
+      <tr><td>Software</td><td>Adobe Lightroom Classic. The Darkdial plug-in is installed by the app and works next to MIDI2LR.</td></tr>
+    </table>
+    <div class="buttons" style="margin-top:36px">
+      <a class="button" href="https://github.com/MrNash23/DarkDial/releases/latest">Download the latest release</a>
+      <a class="button ghost" href="https://github.com/MrNash23/DarkDial#readme">Read the full guide</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <strong>Darkdial</strong> is free software under the
+      <a href="https://github.com/MrNash23/DarkDial/blob/main/LICENSE">GNU GPL v3</a>
+      with an <a href="https://github.com/MrNash23/DarkDial/blob/main/ADDITIONAL-TERMS.md">additional term</a>:
+      the credit to meine-belichtungszeit.de must be kept. The name and the
+      logos are not covered by the GPL.
+    </div>
+    <div>
+      Powered by <a href="https://meine-belichtungszeit.de">meine-belichtungszeit.de</a>.<br>
+      Darkdial is not affiliated with or endorsed by Adobe. Adobe and Lightroom
+      are trademarks of Adobe Inc.
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
