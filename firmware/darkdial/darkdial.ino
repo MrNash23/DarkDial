@@ -146,6 +146,7 @@ void loop() {
   reportMenu();
   ui_update(*device, now);
   updateLeds();
+  board::setDisplayAngle(device->displayAngle());
   // Asleep: the display goes dark; touch and knob still wake it.
   static bool dark = false;
   if (device->asleep() != dark) {

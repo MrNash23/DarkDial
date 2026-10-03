@@ -5,3 +5,4 @@
 -DLV_USE_LOG=0
 "-DUSB_PRODUCT=\"Darkdial\""
 "-DUSB_MANUFACTURER=\"Darkdial\""
+-DLV_DEF_REFR_PERIOD=15

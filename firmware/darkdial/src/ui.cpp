@@ -74,7 +74,7 @@ constexpr lv_opa_t kNeighborOpa = 90;
 lv_obj_t *carousel[4] = {};
 bool carouselRunning = false;
 int carouselDirection = 0;
-constexpr uint32_t kCarouselMs = 240;
+constexpr uint32_t kCarouselMs = 280;
 constexpr int kOuterOffset = 130;  // where a neighbour comes from or goes to
 constexpr int kOuterScale = 64;
 lv_obj_t *stars[5] = {};
@@ -107,6 +107,9 @@ void place(lv_obj_t *object, int x, int y, bool bottom = false) {
 /// Puts every object where it belongs for a picture turned by `degrees`
 /// clockwise. Sizes follow the texts, so this runs after every change.
 void layout(int degrees) {
+  static int applied = -1;
+  const bool turn = degrees != applied;
+  applied = degrees;
   lv_obj_update_layout(lv_screen_active());
   const float radians = static_cast<float>(degrees) * 3.14159265f / 180.0f;
   turnCos = cosf(radians);
@@ -119,12 +122,17 @@ void layout(int degrees) {
     const float cy = (p.bottom ? kDisplaySize - p.y - height / 2.0f : p.y + height / 2.0f) - kDisplaySize / 2.0f;
     lv_obj_align(p.object, LV_ALIGN_CENTER, static_cast<int32_t>(lroundf(cx * turnCos - cy * turnSin)),
                  static_cast<int32_t>(lroundf(cx * turnSin + cy * turnCos)));
-    lv_obj_set_style_transform_pivot_x(p.object, width / 2, 0);
-    lv_obj_set_style_transform_pivot_y(p.object, height / 2, 0);
-    lv_obj_set_style_transform_rotation(p.object, degrees * 10, 0);
+    // Setting a style redraws the object, so only when something changes.
+    if (degrees != 0) {
+      lv_obj_set_style_transform_pivot_x(p.object, width / 2, 0);
+      lv_obj_set_style_transform_pivot_y(p.object, height / 2, 0);
+    }
+    if (turn) lv_obj_set_style_transform_rotation(p.object, degrees * 10, 0);
   }
-  lv_arc_set_rotation(ring, degrees);
-  lv_image_set_rotation(logo, degrees * 10);
+  if (turn) {
+    lv_arc_set_rotation(ring, degrees);
+    lv_image_set_rotation(logo, degrees * 10);
+  }
 }
 
 void (*tapHandler)() = nullptr;
@@ -201,10 +209,11 @@ void setCarousel(void *, int32_t progress) {
   carouselStep(carousel[3], t, d * kOuterOffset, d * kNeighborOffset, kOuterScale, kNeighborScale, 0, kNeighborOpa);
 }
 
+// The helper images stay until the next update has shown the real objects,
+// so no frame is drawn without an icon.
 void finishCarousel(lv_anim_t *) {
   carouselRunning = false;
-  for (lv_obj_t *image : carousel) lv_obj_set_hidden(image, true);
-  shownRevision = UINT32_MAX;  // the next update shows the real objects again
+  shownRevision = UINT32_MAX;
 }
 
 /// Starts the carousel from the slot shown to the one now selected.
@@ -518,6 +527,7 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   place(nextIcon, kNeighborOffset, kIconTop);
   for (lv_obj_t *&image : carousel) {
     image = lv_image_create(screen);
+    lv_image_set_antialias(image, false);  // cheaper while moving; not visible at that speed
     lv_obj_set_clickable(image, false);
     lv_obj_set_hidden(image, true);
     place(image, 0, kIconTop);
@@ -569,6 +579,9 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   if (device.revision() == shownRevision && hold == shownHold) return;
   shownRevision = device.revision();
   shownHold = hold;
+  if (!carouselRunning) {
+    for (lv_obj_t *image : carousel) lv_obj_set_hidden(image, true);
+  }
 
   lv_obj_set_style_text_color(label, lv_color_hex(kColorLabel), 0);
   lv_label_set_text(menuTitle, "");
@@ -631,12 +644,10 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
           device.slot(static_cast<uint8_t>(index)).iconId,
           device.slot(static_cast<uint8_t>((index + d + count) % count)).iconId,
       };
+      // Ring, name and value change at once: fading them on every detent
+      // blinks when the knob keeps turning.
       startCarousel(d, icons);
       lv_obj_set_hidden(iconBox, true);
-      animate(ring, setRingOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kCarouselMs);
-      // Name and value fade over instead of jumping.
-      animate(label, setOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kCarouselMs);
-      animate(value, setOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kCarouselMs);
     } else {
       startSlide(device.lastMove(), index < 1000);
     }
@@ -649,7 +660,9 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
     dd::formatElapsed(device.timerSeconds(nowMs), time);
   }
   lv_label_set_text(gapTime, time);
-  layout(device.displayAngle());
+  // The picture is drawn upright; a turned device gets it turned as a whole
+  // on the way to the display (board::setDisplayAngle, or the snapshot tool).
+  layout(0);
 
   if (hold > 0) {
     lv_anim_delete(ring, setRingOpacity);

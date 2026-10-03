@@ -20,6 +20,9 @@ bool buttonPressed();
 
 /// Sets all eight ring LEDs to one colour.
 void setLeds(uint8_t r, uint8_t g, uint8_t b);
+/// Turns the picture by `degrees` clockwise (any angle); LVGL keeps drawing
+/// upright.
+void setDisplayAngle(int degrees);
 /// Backlight brightness 0 … 100.
 void setBacklight(uint8_t percent);
 
@@ -39,6 +42,8 @@ void saveRotation(uint16_t degrees);
 void bleUpdate(void (*deliver)(const uint8_t *message, size_t size));
 /// True while a computer is connected over Bluetooth.
 bool bleActive();
+/// Complete frames sent to the display so far (for measuring).
+uint32_t framesDrawn();
 
 /// Next USB-MIDI event packet from the host, false if none is waiting.
 bool midiRead(uint8_t packet[4]);

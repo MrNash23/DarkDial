@@ -12,6 +12,7 @@
 #include <lvgl.h>
 
 #include "core/ble_midi.h"
+#include "core/rotate.h"
 #include "core/encoder.h"
 #include "core/protocol.h"
 #include "panel_crowpanel.h"
@@ -167,13 +168,63 @@ void sampleEncoder(void *) {
   if (steps) encoderCount += steps * kEncoderDirection;
 }
 
+// A turned picture: LVGL draws the whole upright frame into PSRAM (direct
+// mode), and the changed part is turned row by row into small DMA bands on
+// its way to the display. Turning every object on its own in LVGL was far
+// too slow (about 5 frames per second).
+void flushedFramesCounter();
+lv_display_t *lvDisplayHandle = nullptr;
+void *partialBuffers[2] = {};
+size_t partialSize = 0;
+uint16_t *uprightFrame = nullptr;
+uint16_t *bands[2] = {};
+constexpr int kBandLines = 24;
+dd::FrameRotation rotation;
+int currentAngle = 0;
+bool dirtyAny = false;
+lv_area_t dirty;
+
+void flushTurned(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *) {
+  if (!dirtyAny) {
+    dirty = *area;
+    dirtyAny = true;
+  } else {
+    dirty.x1 = LV_MIN(dirty.x1, area->x1);
+    dirty.y1 = LV_MIN(dirty.y1, area->y1);
+    dirty.x2 = LV_MAX(dirty.x2, area->x2);
+    dirty.y2 = LV_MAX(dirty.y2, area->y2);
+  }
+  if (lv_display_flush_is_last(lvDisplay)) {
+    int x0, y0, x1, y1;
+    rotation.bounds(dirty.x1, dirty.y1, dirty.x2 + 1, dirty.y2 + 1, x0, y0, x1, y1);
+    if (display.getStartCount() == 0) display.startWrite();
+    int which = 0;
+    for (int y = y0; y < y1; y += kBandLines) {
+      const int lines = (y1 - y < kBandLines) ? y1 - y : kBandLines;
+      uint16_t *band = bands[which];
+      // The other band may still be on its way; this one is free again
+      // because pushImageDMA waited for it before starting the last one.
+      for (int i = 0; i < lines; i++) rotation.row(uprightFrame, y + i, x0, x1, band + i * (x1 - x0));
+      display.pushImageDMA(x0, y, x1 - x0, lines, reinterpret_cast<lgfx::rgb565_t *>(band));
+      which ^= 1;
+    }
+    dirtyAny = false;
+    flushedFramesCounter();
+  }
+  lv_display_flush_ready(lvDisplay);
+}
+
+// Two buffers: LVGL draws into one while DMA sends the other. pushImageDMA
+// waits for the previous transfer before it starts, so a buffer is never
+// overwritten while it is still being sent.
+uint32_t flushedFrames = 0;
+void flushedFramesCounter() { flushedFrames++; }
 void flushDisplay(lv_display_t *lvDisplay, const lv_area_t *area, uint8_t *pixels) {
   const int32_t width = area->x2 - area->x1 + 1;
   const int32_t height = area->y2 - area->y1 + 1;
-  display.startWrite();
+  if (display.getStartCount() == 0) display.startWrite();
   display.pushImageDMA(area->x1, area->y1, width, height, reinterpret_cast<lgfx::rgb565_t *>(pixels));
-  display.waitDMA();
-  display.endWrite();
+  if (lv_display_flush_is_last(lvDisplay)) flushedFrames++;
   lv_display_flush_ready(lvDisplay);
 }
 
@@ -260,10 +311,15 @@ void begin() {
   // A partial buffer in internal RAM: DMA-capable and no PSRAM needed.
   const size_t bufferSize = kDisplaySize * kBufferLines * 2;
   void *buffer = heap_caps_malloc(bufferSize, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  void *buffer2 = heap_caps_malloc(bufferSize, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  partialBuffers[0] = buffer;
+  partialBuffers[1] = buffer2;
+  partialSize = bufferSize;
   lv_display_t *lvDisplay = lv_display_create(kDisplaySize, kDisplaySize);
   lv_display_set_color_format(lvDisplay, LV_COLOR_FORMAT_RGB565);
   lv_display_set_flush_cb(lvDisplay, flushDisplay);
-  lv_display_set_buffers(lvDisplay, buffer, nullptr, bufferSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  lv_display_set_buffers(lvDisplay, buffer, buffer2, bufferSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  lvDisplayHandle = lvDisplay;
 
   lv_indev_t *touch = lv_indev_create();
   lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
@@ -365,6 +421,35 @@ void bleUpdate(void (*deliver)(const uint8_t *message, size_t size)) {
 }
 
 bool bleActive() { return bleConnected; }
+
+uint32_t framesDrawn() { return flushedFrames; }
+
+void setDisplayAngle(int degrees) {
+  degrees = ((degrees % 360) + 360) % 360;
+  if (degrees == currentAngle || !lvDisplayHandle) return;
+  if (degrees != 0 && !uprightFrame) {
+    uprightFrame = static_cast<uint16_t *>(
+        heap_caps_malloc(kDisplaySize * kDisplaySize * 2, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    for (uint16_t *&band : bands) {
+      band = static_cast<uint16_t *>(heap_caps_malloc(kDisplaySize * kBandLines * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    }
+    if (!uprightFrame || !bands[0] || !bands[1]) return;  // no memory: stay upright
+  }
+  display.waitDMA();
+  currentAngle = degrees;
+  if (degrees == 0) {
+    lv_display_set_flush_cb(lvDisplayHandle, flushDisplay);
+    lv_display_set_buffers(lvDisplayHandle, partialBuffers[0], partialBuffers[1], partialSize,
+                           LV_DISPLAY_RENDER_MODE_PARTIAL);
+  } else {
+    rotation.set(degrees, kDisplaySize);
+    lv_display_set_flush_cb(lvDisplayHandle, flushTurned);
+    lv_display_set_buffers(lvDisplayHandle, uprightFrame, nullptr, kDisplaySize * kDisplaySize * 2,
+                           LV_DISPLAY_RENDER_MODE_DIRECT);
+  }
+  dirtyAny = false;
+  lv_obj_invalidate(lv_screen_active());
+}
 
 bool midiRead(uint8_t packet[4]) {
   midiEventPacket_t event;

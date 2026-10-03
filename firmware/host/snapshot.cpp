@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "../darkdial/src/core/rotate.h"
 #include "../darkdial/src/ui.h"
 #include "testing.h"
 
@@ -34,7 +35,19 @@ static void run(dd::Device &device, uint32_t ms) {
   }
 }
 
+// The device whose picture is saved: a turned one is turned here, as the
+// firmware does on its way to the display.
+static dd::Device *shown = nullptr;
+static uint16_t turned[kSize * kSize];
+
 static void save(const char *name) {
+  const uint16_t *frame = framebuffer;
+  if (shown && shown->displayAngle() != 0) {
+    dd::FrameRotation rotation;
+    rotation.set(shown->displayAngle(), kSize);
+    for (int y = 0; y < kSize; y++) rotation.row(framebuffer, y, 0, kSize, turned + y * kSize);
+    frame = turned;
+  }
   const std::string path = outDir + "/" + name + ".ppm";
   FILE *file = fopen(path.c_str(), "wb");
   if (!file) {
@@ -43,7 +56,7 @@ static void save(const char *name) {
   }
   fprintf(file, "P6\n%d %d\n255\n", kSize, kSize);
   for (int i = 0; i < kSize * kSize; i++) {
-    const uint16_t p = framebuffer[i];
+    const uint16_t p = frame[i];
     const uint8_t rgb[3] = {static_cast<uint8_t>(((p >> 11) & 0x1F) * 255 / 31),
                             static_cast<uint8_t>(((p >> 5) & 0x3F) * 255 / 63),
                             static_cast<uint8_t>((p & 0x1F) * 255 / 31)};
@@ -71,6 +84,7 @@ int main(int argc, char **argv) {
   RecordingHost host;
   const uint8_t serial[6] = {2, 0, 0x51, 0x4D, 0, 1};
   dd::Device device(host, 0, 1, 0, serial);
+  shown = &device;
   ui_init(nullptr, nullptr, nowMs);
 
   const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
