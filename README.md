@@ -4,8 +4,9 @@
 
 Darkdial turns a small round touch display with a knob into a dedicated tool
 for developing photos: pick a slider, turn, and watch the value ring follow.
+In the Library the same knob goes through your photos and a tap rates them.
 A long press switches to a stopwatch for your jobs, so the hours you spend
-editing are recorded where you spend them.
+editing are recorded where you spend them. On a cable or over Bluetooth.
 
 <!-- Photo: the device on a desk next to a keyboard, Lightroom in the background -->
 
@@ -135,8 +136,10 @@ and lets Darkdial start when you log in. Restart Lightroom afterwards.
 
 ### 2. Update the device
 
-The app brings the matching firmware. Plug in the device, open the app's
-section **Device** and click **Update** under "Firmware". The app restarts
+The app brings the matching firmware. Connect the device to the Mac with a
+USB cable, open the app's section **Device** and click **Update** under
+"Firmware". This also works for a new board that still runs Elecrow's
+firmware. The app restarts
 the device into its bootloader, writes the firmware, checks it and restarts
 it; this takes about 30 seconds. Settings and orientation are kept. The
 section shows when the app has newer firmware than the device.
@@ -157,8 +160,10 @@ Developers can build and flash from source instead, see below.
 
 ### 3. Use it
 
-Plug in the device. The menu-bar icon shows a filled dot when both the device
-and Lightroom are connected.
+Plug the device into the Mac, or into a power supply to use it over
+Bluetooth (macOS asks once whether Darkdial may use Bluetooth). The
+menu-bar icon shows a filled dot when both the device and Lightroom are
+connected; the section **Device** says whether it is on USB or Bluetooth.
 
 | On the device | Does |
 | --- | --- |
@@ -195,10 +200,11 @@ app; on the device you choose among them.
 ## How it works
 
 ```
-Device  ⇄  USB-MIDI  ⇄  Darkdial app  ⇄  localhost socket  ⇄  Lightroom plug-in
+Device  ⇄  USB-MIDI or BLE-MIDI  ⇄  Darkdial app  ⇄  localhost socket  ⇄  Lightroom plug-in
 ```
 
-The device is a class-compliant USB-MIDI device and needs no driver. The app
+The device is a class-compliant USB-MIDI device and a standard BLE-MIDI
+device; it needs no driver. The app
 in the menu bar holds all the logic: which sliders exist, step sizes, units,
 jobs and times. The Lightroom plug-in is a thin translator that reads and
 sets Develop values. The device shows what it is told and reports what you
@@ -214,14 +220,16 @@ The wire format of both links is specified in
 
 ## Status
 
-Darkdial is young. It is in use on one device with macOS and Lightroom
+Darkdial is young. It is in use on a few devices with macOS and Lightroom
 Classic 15, and it has automated tests from the firmware core up to the app,
 but expect rough edges:
 
 - The icons of the time tracking menu are placeholders.
-- Windows is not supported yet.
-- Updating the firmware from the app works on macOS; Windows is not
-  supported yet.
+- Windows is not supported yet (app, firmware update and Bluetooth are
+  prepared for it, but not built or tested there).
+- Over Bluetooth the knob reacts a little later than over USB.
+- The board has no battery: without a cable to the Mac it needs a power
+  supply or a power bank.
 
 Bug reports and ideas are welcome in the
 [issues](https://github.com/MrNash23/DarkDial/issues).
@@ -232,10 +240,10 @@ Bug reports and ideas are welcome in the
 
 | Folder | What | Language |
 | --- | --- | --- |
-| `firmware/` | Device firmware: carousel, value ring, menu, USB-MIDI | C++ (Arduino core 3.x, LVGL 9) |
+| `firmware/` | Device firmware: carousel, value ring, menu, Library, USB- and BLE-MIDI, encoder decoder | C++ (Arduino core 3.x, LVGL 9) |
 | `plugin/` | Lightroom Classic plug-in | Lua |
-| `app/` | Menu-bar app: configuration, time tracking | Dart (Flutter) |
-| `app/packages/darkdial_core/` | Protocol, engine, time tracking; no Flutter | Dart |
+| `app/` | Menu-bar app: configuration, time tracking, firmware update | Dart (Flutter) |
+| `app/packages/darkdial_core/` | Protocol, engine, time tracking, ESP32 flasher; no Flutter | Dart |
 | `protocol/` | `params.json`, the single source for all sliders | JSON |
 | `tools/` | Generators, build and test scripts | Python, shell, Swift |
 | `docs/` | Protocol, design documents (German), hardware bring-up | Markdown |
@@ -248,12 +256,14 @@ tools/check.sh          # every automated check
 
 The firmware's state machine is plain C++ and also runs on the host, where
 the tests of the Dart engine drive it over the real wire format. The LVGL
-screens are rendered headless into `firmware/host/snapshots/`.
+screens are rendered headless into `firmware/host/snapshots/`. The encoder
+decoder is tested against recordings of the real knob
+(`firmware/host/fixtures/`).
 
 | Task | Command |
 | --- | --- |
 | Run the app | `cd app && flutter run -d macos` |
-| Try it without hardware | in a debug build (`flutter run`), switch on "Simulator" in the info section; the preview is the device (scroll = turn, click = press, long click = time tracking) |
+| Try it without hardware | in a debug build (`flutter run`), switch on "Simulator" in the info section; the preview is the device (scroll = turn, click = tap, double click = double tap, right click = press the knob, long click = time tracking) |
 | Try the real MIDI path without hardware | `swift tools/virtual_device.swift` creates a macOS MIDI device "Darkdial" backed by the firmware core |
 | Try it without Lightroom | `cd app/packages/darkdial_core && dart run darkdial_core:fake_lr` |
 | Install the plug-in for development | `tools/install_plugin.sh`, then reload it in Lightroom's Plug-in Manager |
@@ -266,7 +276,7 @@ screens are rendered headless into `firmware/host/snapshots/`.
 | Regenerate tables, icons, fonts | `tools/gen_params.py`, `tools/gen_icons.py`, `tools/gen_fonts.sh` |
 
 You need Flutter 3.44 or newer, arduino-cli with the esp32 core 3.x and the
-libraries lvgl 9.6 and LovyanGFX, Python 3 (`tools/.venv` with Pillow for the
+libraries lvgl 9.6, LovyanGFX and NimBLE-Arduino 2.x, Python 3 (`tools/.venv` with Pillow for the
 icons), and LuaJIT for the plug-in tests. Notes from the first run on real
 hardware are in [docs/BRINGUP.md](docs/BRINGUP.md).
 
