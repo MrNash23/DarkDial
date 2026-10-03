@@ -7,7 +7,7 @@
 <meta name="description" content="Darkdial turns a round touch display with a knob into a controller for Adobe Lightroom Classic: develop with the knob, cull in the Library, track your time. Free and open source.">
 <meta property="og:title" content="Darkdial – a rotary controller for Lightroom Classic">
 <meta property="og:description" content="Develop with a knob, cull in the Library, track your time. One device, one app – the firmware comes with it.">
-<meta property="og:image" content="https://mrnash23.github.io/DarkDial/assets/device.jpg">
+<meta property="og:image" content="https://mrnash23.github.io/DarkDial/assets/banner.jpg">
 <link rel="icon" href="assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,7 +51,9 @@
   nav .links a:hover { color: var(--text); text-decoration: none; }
 
   /* Hero */
-  .hero { padding: 72px 0 40px; display: grid; grid-template-columns: 1fr 1.15fr; gap: 48px; align-items: center; }
+  .banner { margin: 28px auto 0; max-width: 1400px; padding: 0 24px; }
+  .banner img { width: 100%; border-radius: var(--radius); box-shadow: 0 40px 90px rgba(0, 0, 0, 0.65); }
+  .hero { padding: 48px 0 40px; display: grid; grid-template-columns: 1.3fr 1fr; gap: 48px; align-items: end; }
   .eyebrow { color: var(--accent); font-size: 13px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; }
   h1 { font-size: clamp(36px, 5vw, 58px); line-height: 1.08; font-weight: 600; margin: 14px 0 20px; letter-spacing: -0.01em; }
   h1 span { color: var(--muted); font-weight: 300; }
@@ -66,7 +68,9 @@
   .button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
   .button.ghost:hover { border-color: var(--muted); }
   .small { color: var(--muted); font-size: 14px; }
-  .hero-photo { border-radius: var(--radius); overflow: hidden; box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6); }
+  .hero-side { display: grid; gap: 12px; }
+  .fact { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; color: var(--muted); }
+  .fact strong { color: var(--accent); font-size: 22px; font-weight: 600; margin-right: 8px; }
 
   /* Sections */
   section { padding: 72px 0; border-top: 1px solid var(--line); }
@@ -147,6 +151,8 @@
   </div>
 </nav>
 
+<div class="banner"><img src="assets/banner.jpg" alt="Darkdial – a rotary controller for Lightroom Classic"></div>
+
 <header class="wrap hero">
   <div>
     <div class="eyebrow">For Adobe Lightroom Classic</div>
@@ -165,7 +171,12 @@
     </div>
     <p class="small" style="margin-top:16px">Free and open source · signed and notarised by Apple · macOS 13 or newer</p>
   </div>
-  <div class="hero-photo"><img src="assets/device.jpg" alt="The Darkdial on a wooden desk next to a laptop, showing Saturation −16"></div>
+  <div class="hero-side">
+    <div class="fact"><strong>1</strong> device</div>
+    <div class="fact"><strong>1</strong> app – firmware included</div>
+    <div class="fact"><strong>46</strong> Lightroom sliders</div>
+    <div class="fact"><strong>USB</strong> or Bluetooth</div>
+  </div>
 </header>
 
 <section id="install">

@@ -3,6 +3,7 @@
 // turns them into PNGs.
 #include <lvgl.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <string>
 
@@ -12,7 +13,7 @@
 using namespace testing;
 
 static const int kSize = 360;
-static uint16_t framebuffer[kSize * kSize];
+alignas(64) static uint16_t framebuffer[kSize * kSize];
 static uint32_t nowMs = 0;
 static std::string outDir = ".";
 // Status sent once a second while a scene runs, like the service does; -1 = none.
@@ -52,8 +53,13 @@ static void save(const char *name) {
   printf("%s\n", name);
 }
 
+// "en" as the second argument renders the English screens (for the website).
+static bool english = false;
+static const char *T(const char *de, const char *en) { return english ? en : de; }
+
 int main(int argc, char **argv) {
   if (argc > 1) outDir = argv[1];
+  if (argc > 2) english = strcmp(argv[2], "en") == 0;
 
   lv_init();
   lv_tick_set_cb(tick);
@@ -77,15 +83,15 @@ int main(int argc, char **argv) {
 
   configure(device,
             {
-                {3, 3, true, 0, "Belichtung"},
-                {13, 13, true, 0, "S\xC3\xA4ttigung"},
-                {1, 1, true, 0, "Temperatur"},
-                {14, 14, false, 0, "Sch\xC3\xA4rfen"},
-                {32, 22, true, 0xFA3A31, "Farbton"},
-                {45, 23, true, 0x5394FC, "S\xC3\xA4ttigung"},
-                {18, 18, true, 0, "Lichter"},
+                {3, 3, true, 0, T("Belichtung", "Exposure")},
+                {13, 13, true, 0, T("S\xC3\xA4ttigung", "Saturation")},
+                {1, 1, true, 0, T("Temperatur", "Temp")},
+                {14, 14, false, 0, T("Sch\xC3\xA4rfen", "Sharpen")},
+                {32, 22, true, 0xFA3A31, T("Farbton", "Hue")},
+                {45, 23, true, 0x5394FC, T("S\xC3\xA4ttigung", "Saturation")},
+                {18, 18, true, 0, T("Lichter", "Lights")},
             },
-            0, nowMs);
+            english ? 1 : 0, nowMs);
   feed(device, status(all), nowMs);
   run(device, 300);
   save("03_config_loaded");
@@ -150,8 +156,8 @@ int main(int argc, char **argv) {
   device.buttonUp(nowMs);
   run(device, 100);
   save("21_menu_waiting_for_page");
-  sendMenu(device, 1, "Kunde w\xC3\xA4hlen",
-           {{29, 1, "Hochzeit"}, {32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {32, 8 | 16, ""}}, nowMs);
+  sendMenu(device, 1, T("Kunde w\xC3\xA4hlen", "Choose client"),
+           {{29, 1, T("Hochzeit", "Wedding")}, {32, 4, T("Fam. M\xC3\xBCller", "Smith family")}, {32, 4, T("Verlag", "Publisher")}, {32, 8 | 16, ""}}, nowMs);
   run(device, 300);
   save("22_menu_suggested_job");
   device.rotate(1, nowMs);
@@ -162,28 +168,28 @@ int main(int argc, char **argv) {
   save("24_menu_help_last");
   device.rotate(-2, nowMs);
   device.click();
-  sendMenu(device, 3, "Fam. M\xC3\xBCller",
-           {{29, 0, "Hochzeit"}, {29, 0, "Album"}, {30, 0, "Neuer Job"}, {33, 0, "Zur\xC3\xBC" "ck"}}, nowMs);
+  sendMenu(device, 3, T("Fam. M\xC3\xBCller", "Smith family"),
+           {{29, 0, T("Hochzeit", "Wedding")}, {29, 0, "Album"}, {30, 0, T("Neuer Job", "New job")}, {33, 0, T("Zur\xC3\xBC" "ck", "Back")}}, nowMs);
   run(device, 300);
   save("25_menu_jobs_of_client");
   device.click();
   feed(device, timerResult(0), nowMs);
-  feed(device, timerState(true, 7, 0, "Hochzeit"), nowMs);
+  feed(device, timerState(true, 7, 0, T("Hochzeit", "Wedding")), nowMs);
   run(device, 300);
   save("26_notice_started");
   run(device, 1500);
-  feed(device, timerState(true, 7, 754, "Hochzeit"), nowMs);
+  feed(device, timerState(true, 7, 754, T("Hochzeit", "Wedding")), nowMs);
   run(device, 300);
   save("27_slot_with_running_time");
   device.buttonDown(nowMs);
   run(device, 700);
   device.buttonUp(nowMs);
-  sendMenu(device, 4, "Kunde w\xC3\xA4hlen",
-           {{31, 2, "Stopp"}, {29, 3, "Hochzeit"}, {32, 4, "Fam. M\xC3\xBCller"}, {32, 4, "Verlag"}, {32, 8 | 16, ""}},
+  sendMenu(device, 4, T("Kunde w\xC3\xA4hlen", "Choose client"),
+           {{31, 2, T("Stopp", "Stop")}, {29, 3, T("Hochzeit", "Wedding")}, {32, 4, T("Fam. M\xC3\xBCller", "Smith family")}, {32, 4, T("Verlag", "Publisher")}, {32, 8 | 16, ""}},
            nowMs);
   run(device, 300);
   save("28_menu_stop_with_time");
-  feed(device, timerState(true, 7, 4 * 3600 + 7 * 60, "Hochzeit"), nowMs);
+  feed(device, timerState(true, 7, 4 * 3600 + 7 * 60, T("Hochzeit", "Wedding")), nowMs);
   device.rotate(1, nowMs);
   run(device, 400);
   save("29_menu_running_job_hours");
@@ -226,7 +232,7 @@ int main(int argc, char **argv) {
   feed(device, library(dd::kLibraryActive | dd::kLibraryRejected, 0, 0, "IMG_0043.CR3"), nowMs);
   run(device, 300);
   save("35_library_rejected");
-  feed(device, library(dd::kLibraryActive, 5, 1, "Hochzeit_M\xC3\xBCller_0815"), nowMs);
+  feed(device, library(dd::kLibraryActive, 5, 1, T("Hochzeit_M\xC3\xBCller_0815", "Wedding_Smith_0815")), nowMs);
   run(device, 300);
   save("36_library_stars");
   feed(device, library(0), nowMs);

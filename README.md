@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/assets/logo.png" width="140" alt="Darkdial logo"></p>
+<p align="center"><img src="docs/assets/banner.jpg" alt="Darkdial – a rotary controller for Lightroom Classic"></p>
 
 # Darkdial
 
@@ -9,8 +9,6 @@ for developing photos: pick a slider, turn, and watch the value ring follow.
 In the Library the same knob goes through your photos and a tap rates them.
 A long press switches to a stopwatch for your jobs, so the hours you spend
 editing are recorded where you spend them. On a cable or over Bluetooth.
-
-<p align="center"><img src="docs/assets/device.jpg" width="760" alt="The Darkdial on a desk, showing Saturation −16"></p>
 
 **Easy to install:** all you need is the device and the app. The DMG
 contains the firmware and puts it on the device with one click, and it
