@@ -126,13 +126,10 @@ class DialPreview extends StatelessWidget {
       );
     }
 
-    // The whole picture is turned as on the device.
-    return Transform.rotate(
-      key: const Key('preview-turned'),
-      angle: angle * math.pi / 180,
-      child: _dial(context, content, slot, statusIcon != null || inLibrary || adjusting, ringColor, model, inMenu,
-          menuInfo, clock, adjusting),
-    );
+    // The preview stays upright even when the device's picture is turned:
+    // the screen in front of the user is not turned.
+    return _dial(context, content, slot, statusIcon != null || inLibrary || adjusting, ringColor, model, inMenu,
+        menuInfo, clock, adjusting);
   }
 
   Widget _dial(

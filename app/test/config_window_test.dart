@@ -427,8 +427,9 @@ void main() {
     await settle(tester, () => controller.state.displayAngle == 30, '30 degrees');
     expect(find.textContaining('30°'), findsOneWidget);
     await show('preview-rotate', -120);
-    final turned = tester.widget<Transform>(find.byKey(const Key('preview-turned')));
-    expect(turned.transform.getRotation().entry(1, 0), closeTo(0.5, 0.001), reason: 'sin 30°');
+    // The preview shows the angle but is not turned itself.
+    expect(find.descendant(of: find.byType(DialPreview), matching: find.text('30')), findsOneWidget);
+    expect(find.descendant(of: find.byType(DialPreview), matching: find.byType(Transform)), findsNothing);
     await screenshot(tester, 'rotate');
 
     // Cancel: back to upright, nothing stored.
