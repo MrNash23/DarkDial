@@ -170,6 +170,13 @@ void begin() {
   digitalWrite(kPinTouchReset, HIGH);
   delay(50);
   Wire.begin(kPinTouchSda, kPinTouchScl, 400000);
+  // The CST816T sleeps as soon as nothing touches it and needs a moment to
+  // wake on the next touch; a quick second tap of a double tap was lost that
+  // way. Register 0xFE = 1 keeps it awake.
+  Wire.beginTransmission(kTouchAddress);
+  Wire.write(0xFE);
+  Wire.write(0x01);
+  Wire.endTransmission();
 
   pinMode(kPinEncoderA, INPUT);
   pinMode(kPinEncoderB, INPUT);
@@ -199,6 +206,9 @@ void begin() {
   lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(touch, readTouch);
   lv_indev_set_long_press_time(touch, 600);
+  // Read the touch every 10 ms instead of every 33 ms, so a short tap is not
+  // over between two reads.
+  lv_timer_set_period(lv_indev_get_read_timer(touch), 10);
 
   preferences.begin("darkdial", false);
   midi.begin();
