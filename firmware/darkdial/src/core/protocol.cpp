@@ -37,6 +37,7 @@ constexpr uint8_t kTypeTimerResult = 0x4B;
 constexpr uint8_t kTypeSlotGoto = 0x4C;
 constexpr uint8_t kTypeLibrary = 0x4D;
 constexpr uint8_t kTypeDisplayRotation = 0x4E;
+constexpr uint8_t kTypeIdleTimes = 0x4F;
 
 uint32_t readU32(const uint8_t *p) {
   return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16) |
@@ -226,6 +227,12 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
       out.libraryColor = p[2] > 5 ? 0 : p[2];
       if (!readString(p, size, 3, out.text, kMaxLabelBytes)) return false;
       out.type = MessageType::Library;
+      return true;
+    case kTypeIdleTimes:
+      if (size < 4) return false;
+      out.logoSeconds = static_cast<uint16_t>((p[0] << 8) | p[1]);
+      out.sleepSeconds = static_cast<uint16_t>((p[2] << 8) | p[3]);
+      out.type = MessageType::IdleTimes;
       return true;
     case kTypeDisplayRotation:
       if (size < 3) return false;

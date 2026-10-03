@@ -56,6 +56,11 @@ inline Bytes library(uint8_t flags, uint8_t rating = 0, uint8_t color = 0, const
   return frame(0x4D, p);
 }
 
+inline Bytes idleTimes(uint16_t logoSeconds, uint16_t sleepSeconds) {
+  return frame(0x4F, {static_cast<uint8_t>(logoSeconds >> 8), static_cast<uint8_t>(logoSeconds & 0xFF),
+                      static_cast<uint8_t>(sleepSeconds >> 8), static_cast<uint8_t>(sleepSeconds & 0xFF)});
+}
+
 // Mode: 0 cancel, 1 begin, 2 save, 3 set to `degrees`, 4 query.
 inline Bytes displayRotation(uint8_t mode, uint16_t degrees = 0) {
   return frame(0x4E, {mode, static_cast<uint8_t>(degrees >> 8), static_cast<uint8_t>(degrees & 0xFF)});

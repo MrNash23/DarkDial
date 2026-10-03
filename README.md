@@ -29,7 +29,8 @@ Darkdial is free and open source. It is powered by
 ### Develop with a knob
 
 - **Turn** to move through your sliders: Exposure, Contrast, Highlights,
-  Shadows, Temperature, and so on. Each has its own icon and a short name.
+  Shadows, Temperature, and so on. Each has its own icon and a short name;
+  the previous and the next one show small beside it.
 - **Tap** the display to select one, then **turn** to change it. Slow turns make small
   steps, a quick spin covers a lot of ground.
 - The **ring** around the display shows the value: from the top to either side
@@ -195,8 +196,10 @@ connected; the section **Device** says whether it is on USB or Bluetooth.
 With the Library mode switched off in the app, or without Lightroom, the
 press selects a slider like a tap.
 
-Left alone for three minutes, the display shows the Darkdial logo. The next
-turn, press or touch brings it back; that first input does nothing else.
+Left alone for three minutes, the display shows the Darkdial logo; after ten
+minutes it goes dark. The next turn, press or touch brings it back, and that
+first input does nothing else. Both times can be changed in the app
+(section "Device").
 
 If the device does not stand upright, for example to lead the cable away
 neatly, the picture can be turned: in the app, section "Device" →

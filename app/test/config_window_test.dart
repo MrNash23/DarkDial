@@ -179,6 +179,8 @@ void main() {
     expect(find.text('Einrichten'), findsNothing);
     expect(find.descendant(of: find.byType(DialPreview), matching: find.text('Belichtung')), findsOneWidget);
     expect(find.descendant(of: find.byType(DialPreview), matching: find.text('0.00')), findsOneWidget);
+    // Two sliders while turning through them: the other one shows beside it.
+    expect(find.byKey(const Key('preview-neighbours')), findsOneWidget);
 
     // Click the knob (tap on the preview), then turn it with the scroll wheel.
     await tester.tap(find.byType(DialPreview));
@@ -284,6 +286,9 @@ void main() {
     );
     expect(controller.config.slots.firstWhere((s) => s.paramId == 4).fast, FastTurn.step);
 
+    // One slider only: no neighbours beside it in the preview.
+    expect(find.byKey(const Key('preview-neighbours')), findsNothing);
+
     // Slow detents are steps of 1, a fast one is a step of 10.
     model.tap();
     await settle(tester, () => controller.state.editing, 'edit mode');
@@ -342,8 +347,24 @@ void main() {
     expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Send to device')).onPressed, isNotNull);
     await screenshot(tester, 'device');
 
+    // Idle times: logo after 5 minutes, dark never; the device gets them.
+    await tester.ensureVisible(find.byKey(const Key('logo-after')));
+    await tester.pump();
+    await tester.tap(find.descendant(of: find.byKey(const Key('logo-after')), matching: find.byType(DropdownButton<int>)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('5 minutes').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: find.byKey(const Key('sleep-after')), matching: find.byType(DropdownButton<int>)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('never').last);
+    await tester.pumpAndSettle();
+    expect(controller.config.logoMinutes, 5);
+    expect(controller.config.sleepMinutes, 0);
+    await settle(tester, () => model.idleAfter == const Duration(minutes: 5) && model.sleepAfter == null, 'times on device');
+
     // Bluetooth can be switched off; the choice is saved.
-    await tester.ensureVisible(find.byKey(const Key('use-bluetooth')));
+    await tester.scrollUntilVisible(find.byKey(const Key('use-bluetooth')), -150,
+        scrollable: find.descendant(of: find.byKey(const Key('device-settings')), matching: find.byType(Scrollable)).first);
     await tester.pump();
     await tester.tap(find.byKey(const Key('use-bluetooth')));
     await settle(tester, () => !controller.config.useBluetooth, 'bluetooth off');

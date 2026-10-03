@@ -7,7 +7,7 @@
 namespace dd {
 
 constexpr uint8_t kProtocolMajor = 1;
-constexpr uint8_t kProtocolMinor = 5;
+constexpr uint8_t kProtocolMinor = 6;
 constexpr uint8_t kMaxSlots = 48;
 constexpr uint8_t kMaxLabelBytes = 20;
 constexpr uint8_t kMaxTextBytes = 8;
@@ -71,6 +71,7 @@ enum class MessageType : uint8_t {
   SlotGoto,
   Library,
   DisplayRotation,
+  IdleTimes,
 };
 
 // What a DisplayRotation message asks for.
@@ -124,6 +125,10 @@ struct Message {
   uint8_t libraryFlags = 0;
   uint8_t libraryRating = 0;
   uint8_t libraryColor = 0;
+  // IdleTimes: seconds without use until the logo and until the display
+  // goes dark; 0 = never.
+  uint16_t logoSeconds = 0;
+  uint16_t sleepSeconds = 0;
   // HelloRequest: the service's protocol minor.
   uint8_t serviceMinor = 0;
   // DisplayRotation: what to do, and the angle in degrees for kRotationSet.

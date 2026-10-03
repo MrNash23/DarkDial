@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
 import '../firmware/firmware_updater.dart';
+import '../strings.dart';
 import 'config_window.dart';
 
 /// Settings of the device itself: how its picture is oriented, the language
@@ -77,6 +78,24 @@ class _DeviceWindowState extends State<DeviceWindow> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    _MinutesRow(
+                      key: const Key('logo-after'),
+                      label: s.logoAfter,
+                      value: c.config.logoMinutes,
+                      options: const [1, 2, 3, 5, 10, 15, 30, 0],
+                      strings: s,
+                      onChanged: (v) => c.setConfig(c.config.copyWith(logoMinutes: v)),
+                    ),
+                    _MinutesRow(
+                      key: const Key('sleep-after'),
+                      label: s.sleepAfter,
+                      value: c.config.sleepMinutes,
+                      options: const [5, 10, 15, 30, 60, 120, 0],
+                      strings: s,
+                      onChanged: (v) => c.setConfig(c.config.copyWith(sleepMinutes: v)),
+                    ),
+                    Padding(padding: const EdgeInsets.only(top: 4), child: Text(s.idleHint, style: small)),
                     const Divider(height: 40),
                     SectionTitle(s.deviceBehaviour),
                     SwitchListTile(
@@ -295,6 +314,46 @@ class _FirmwareSection extends StatelessWidget {
         const SizedBox(height: 12),
         action,
       ],
+    );
+  }
+}
+
+/// A choice of minutes, "never" included.
+class _MinutesRow extends StatelessWidget {
+  const _MinutesRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.strings,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final List<int> options;
+  final Strings strings;
+  final void Function(int value) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final choices = options.contains(value) ? options : [...options, value];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          SizedBox(
+            width: 180,
+            child: DropdownButton<int>(
+              value: value,
+              isExpanded: true,
+              onChanged: (v) => onChanged(v ?? value),
+              items: [for (final m in choices) DropdownMenuItem(value: m, child: Text(strings.minutes(m)))],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

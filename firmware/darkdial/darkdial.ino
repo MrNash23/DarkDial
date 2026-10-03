@@ -59,7 +59,7 @@ void reportMenu() {
 void updateLeds() {
   static uint32_t shown = 0xFFFFFFFF;
   uint32_t color = 0x000000;
-  if (device->serviceConnected()) {
+  if (device->serviceConnected() && !device->asleep()) {
     color = 0x0C0C0C;
     if (device->mode() == dd::Mode::Edit && device->slotCount()) {
       const dd::Slot &slot = device->slot(device->index());
@@ -146,6 +146,12 @@ void loop() {
   reportMenu();
   ui_update(*device, now);
   updateLeds();
+  // Asleep: the display goes dark; touch and knob still wake it.
+  static bool dark = false;
+  if (device->asleep() != dark) {
+    dark = device->asleep();
+    board::setBacklight(dark ? 0 : 80);
+  }
   lv_timer_handler();
   delay(2);
 }

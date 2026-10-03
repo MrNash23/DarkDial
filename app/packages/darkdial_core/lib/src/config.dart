@@ -198,6 +198,8 @@ class AppConfig {
     this.followLightroom = true,
     this.library = const LibrarySettings(),
     this.useBluetooth = true,
+    this.logoMinutes = 3,
+    this.sleepMinutes = 10,
   });
 
   final Language language;
@@ -210,6 +212,11 @@ class AppConfig {
 
   /// Look for the device over Bluetooth too (USB is preferred).
   final bool useBluetooth;
+
+  /// Minutes without use until the device shows its logo, and until its
+  /// display goes dark; 0 = never.
+  final int logoMinutes;
+  final int sleepMinutes;
 
   factory AppConfig.defaults([Language language = Language.de]) => AppConfig(
         language: language,
@@ -225,6 +232,8 @@ class AppConfig {
     bool? followLightroom,
     LibrarySettings? library,
     bool? useBluetooth,
+    int? logoMinutes,
+    int? sleepMinutes,
   }) =>
       AppConfig(
         language: language ?? this.language,
@@ -232,6 +241,8 @@ class AppConfig {
         followLightroom: followLightroom ?? this.followLightroom,
         library: library ?? this.library,
         useBluetooth: useBluetooth ?? this.useBluetooth,
+        logoMinutes: logoMinutes ?? this.logoMinutes,
+        sleepMinutes: sleepMinutes ?? this.sleepMinutes,
       );
 
   /// What is sent to the device for the active slots.
@@ -256,6 +267,8 @@ class AppConfig {
         'follow': followLightroom,
         'library': library.toJson(),
         'bluetooth': useBluetooth,
+        'logoMinutes': logoMinutes,
+        'sleepMinutes': sleepMinutes,
         'slots': [for (final s in slots) s.toJson()],
       };
 
@@ -283,6 +296,8 @@ class AppConfig {
       followLightroom: json['follow'] != false,
       library: LibrarySettings.fromJson(json['library']),
       useBluetooth: json['bluetooth'] != false,
+      logoMinutes: (json['logoMinutes'] as num?)?.toInt() ?? 3,
+      sleepMinutes: (json['sleepMinutes'] as num?)?.toInt() ?? 10,
     );
   }
 }

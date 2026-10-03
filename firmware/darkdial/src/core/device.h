@@ -47,8 +47,10 @@ constexpr uint32_t kTapConfirmMs = 200;
 constexpr uint32_t kMenuTimeoutMs = 20000;
 // One detent turns the picture by this many degrees while it is adjusted.
 constexpr int kRotationStepDegrees = 5;
-// Without knob or touch input for this long the display shows the logo.
+// Without knob or touch input for this long the display shows the logo, and
+// after the second time it goes dark (the app can change both; 0 = never).
 constexpr uint32_t kIdleMs = 180000;
+constexpr uint32_t kSleepMs = 600000;
 
 /// Writes the time for the display: mm:ss below one hour, then h:mm.
 /// `out` needs 12 bytes.
@@ -127,6 +129,9 @@ class Device {
   /// True while the logo is shown because nobody used knob or touch for
   /// kIdleMs. The next input only brings the display back; it is not acted on.
   bool idle() const { return idle_; }
+  /// True while the display is dark because nobody used the device for the
+  /// sleep time; touch and knob still wake it (the first input only wakes).
+  bool asleep() const { return asleep_; }
   /// 0 … 1 while the knob is held towards a long press, else 0.
   float holdProgress(uint32_t nowMs) const;
   /// One complete MIDI message from the service.
@@ -244,6 +249,9 @@ class Device {
 
   // Idle logo.
   bool idle_ = false;
+  bool asleep_ = false;
+  uint32_t idleAfterMs_ = kIdleMs;
+  uint32_t sleepAfterMs_ = kSleepMs;
   uint32_t lastInputMs_ = 0;
   bool swallowPress_ = false;
   bool knobDown_ = false;  // physically held, whether or not the press counts

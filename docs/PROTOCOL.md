@@ -1,6 +1,6 @@
 # Darkdial protocol
 
-Protocol version **1.5** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5; 1.4 lets the picture of the device be turned, section 1.9; 1.5 moves the acceleration of fast turns to the service, section 1.1). Two links, both bidirectional:
+Protocol version **1.6** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5; 1.4 lets the picture of the device be turned, section 1.9; 1.5 moves the acceleration of fast turns to the service, section 1.1; 1.6 lets the service set the idle times). Two links, both bidirectional:
 
 ```
 Device  ⇄  USB-MIDI  ⇄  Service (desktop app)  ⇄  LrSocket / TCP localhost  ⇄  Plugin
@@ -122,6 +122,7 @@ A SysEx message is at most 64 bytes on the wire including `F0` and `F7`.
 | `0x4B` | TimerResult | `u8 code`, `str text` | *1.1.* The chosen action is done: the device closes the menu and shows the result briefly. Code 0 started, 1 stopped, ≥ 2 error with `text` (≤ 20 bytes) to show. |
 | `0x4D` | Library | `u8 flags`, `u8 rating`, `u8 color`, `str name` | *1.3.* Flags bit 0: Lightroom shows the Library, the device is in Library mode; bit 1: a tap has an action; bit 2: a double tap has an action; bit 3: the photo is flagged as pick; bit 4: as rejected; bit 5: the Library mode is on offer, a click of the knob switches the module. `rating` 0 … 5 stars. `color` 0 none, 1 red, 2 yellow, 3 green, 4 blue, 5 purple. `name` is the file name, ≤ 20 bytes. Sent on every change. |
 | `0x4E` | DisplayRotation | `u8 mode`, `u16 degrees` | *1.4.* Mode 0: stop adjusting, back to the stored angle; 1: begin adjusting; 2: store the angle shown and stop; 3: store `degrees`; 4: just report. The device answers with DisplayAngle. |
+| `0x4F` | IdleTimes | `u16 logoSeconds`, `u16 sleepSeconds` | *1.6.* Without knob or touch input for `logoSeconds` the device shows its logo, after `sleepSeconds` its backlight and LEDs go off; 0 = never. The first input after either only wakes the device. Sent after the configuration; until then 180 and 600 apply. |
 
 **CRC.** CRC-16/CCITT-FALSE (poly `0x1021`, init `0xFFFF`, no reflection, no
 final XOR) over the concatenation of the unpacked payloads of all ConfigSlot

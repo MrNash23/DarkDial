@@ -102,7 +102,7 @@ uint16_t Device::configCrc() const {
 }
 
 Screen Device::screen() const {
-  if (idle_) return Screen::Idle;
+  if (idle_ || asleep_) return Screen::Idle;
   if (adjusting_) return Screen::Rotate;
   if (menuOpen_) return Screen::JobMenu;
   if (timerNotice_) return Screen::TimerNotice;
@@ -123,8 +123,9 @@ uint32_t Device::timerSeconds(uint32_t nowMs) const {
 /// input is used up by that: returns true, and the caller does nothing else.
 bool Device::wake(uint32_t nowMs) {
   lastInputMs_ = nowMs;
-  if (!idle_) return false;
+  if (!idle_ && !asleep_) return false;
   idle_ = false;
+  asleep_ = false;
   changed();
   return true;
 }
@@ -379,10 +380,19 @@ void Device::tick(uint32_t nowMs) {
     longPress(nowMs);
   }
   if (menuOpen_ && nowMs - menuActivityMs_ > kMenuTimeoutMs) closeMenu();
-  if (!idle_ && !knobDown_ && nowMs - lastInputMs_ >= kIdleMs) {
-    idle_ = true;
-    tapPending_ = false;
-    changed();
+  if (!knobDown_) {
+    const uint32_t unused = nowMs - lastInputMs_;
+    if (!idle_ && !asleep_ && idleAfterMs_ && unused >= idleAfterMs_) {
+      idle_ = true;
+      tapPending_ = false;
+      changed();
+    }
+    if (!asleep_ && sleepAfterMs_ && unused >= sleepAfterMs_) {
+      asleep_ = true;
+      idle_ = false;
+      tapPending_ = false;
+      changed();
+    }
   }
   if (serviceConnected_ && nowMs - lastStatusMs_ > kHeartbeatTimeoutMs) {
     serviceConnected_ = false;
@@ -545,6 +555,11 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       changed();
       break;
 
+    case MessageType::IdleTimes:
+      idleAfterMs_ = static_cast<uint32_t>(message.logoSeconds) * 1000;
+      sleepAfterMs_ = static_cast<uint32_t>(message.sleepSeconds) * 1000;
+      break;
+
     case MessageType::DisplayRotation:
       switch (message.rotationMode) {
         case kRotationBegin:
@@ -552,6 +567,7 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
             adjusting_ = true;
             adjustAngle_ = rotation_;
             idle_ = false;
+            asleep_ = false;
             lastInputMs_ = nowMs;
             menuOpen_ = false;
             tapPending_ = false;

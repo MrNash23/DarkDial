@@ -60,6 +60,13 @@ lv_obj_t *value = nullptr;
 lv_obj_t *gapTime = nullptr;
 lv_obj_t *menuTitle = nullptr;
 lv_obj_t *infoText = nullptr;
+// The previous and the next slider, small and dim beside the current one,
+// while turning through them.
+lv_obj_t *prevIcon = nullptr;
+lv_obj_t *nextIcon = nullptr;
+constexpr int kNeighborOffset = 96;
+constexpr int kNeighborScale = 112;  // 256 = full size; small enough to stay clear of the ring
+constexpr lv_opa_t kNeighborOpa = 90;
 lv_obj_t *stars[5] = {};
 lv_obj_t *colorBar = nullptr;
 lv_obj_t *flagText = nullptr;
@@ -135,6 +142,12 @@ void setOpacity(void *object, int32_t opacity) {
   lv_obj_set_style_opa(static_cast<lv_obj_t *>(object), static_cast<lv_opa_t>(opacity), 0);
 }
 
+// Image opacity blends pixel by pixel; object opacity would draw through a
+// layer and show the corners of the scaled icon's box.
+void setImageOpacity(void *object, int32_t opacity) {
+  lv_obj_set_style_image_opa(static_cast<lv_obj_t *>(object), static_cast<lv_opa_t>(opacity), 0);
+}
+
 void setRingOpacity(void *object, int32_t opacity) {
   lv_obj_set_style_arc_opa(static_cast<lv_obj_t *>(object), static_cast<lv_opa_t>(opacity), LV_PART_INDICATOR);
 }
@@ -155,6 +168,8 @@ void animate(lv_obj_t *object, lv_anim_exec_xcb_t exec, int32_t from, int32_t to
 void startSlide(int direction, bool withRing) {
   animate(iconBox, setTranslateX, direction * kSlideDistance, 0, kSlideMs);
   animate(iconBox, setOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kSlideMs);
+  animate(prevIcon, setImageOpacity, LV_OPA_TRANSP, kNeighborOpa, kSlideMs + 80);
+  animate(nextIcon, setImageOpacity, LV_OPA_TRANSP, kNeighborOpa, kSlideMs + 80);
   if (withRing) animate(ring, setRingOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kSlideMs + 60);
 }
 
@@ -316,6 +331,21 @@ void showSlot(const dd::Device &device) {
   lv_label_set_text(label, slot.label);
   lv_label_set_text(value, current.valid ? current.text : "--");
 
+  // Turning through the sliders: the neighbours on either side.
+  if (device.mode() == dd::Mode::Select && device.slotCount() >= 2) {
+    const uint8_t count = device.slotCount();
+    const uint8_t next = static_cast<uint8_t>((device.index() + 1) % count);
+    const uint8_t prev = static_cast<uint8_t>((device.index() + count - 1) % count);
+    auto show = [](lv_obj_t *image, uint8_t iconId) {
+      const lv_image_dsc_t *source = iconId < DD_ICON_TABLE_SIZE ? dd_icons[iconId] : nullptr;
+      if (!source) return;
+      lv_image_set_src(image, source);
+      lv_obj_set_hidden(image, false);
+    };
+    show(nextIcon, device.slot(next).iconId);
+    if (count >= 3) show(prevIcon, device.slot(prev).iconId);
+  }
+
   if (!current.valid || !device.lightroomConnected()) {
     hideIndicator();
     return;
@@ -415,6 +445,17 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   place(infoText, 0, kInfoTop);
   lv_label_set_text(infoText, "");
 
+  lv_obj_t **neighbors[2] = {&prevIcon, &nextIcon};
+  for (lv_obj_t **neighbor : neighbors) {
+    *neighbor = lv_image_create(screen);
+    lv_image_set_scale(*neighbor, kNeighborScale);
+    lv_obj_set_style_image_opa(*neighbor, kNeighborOpa, 0);
+    lv_obj_set_clickable(*neighbor, false);
+    lv_obj_set_hidden(*neighbor, true);
+  }
+  place(prevIcon, -kNeighborOffset, kIconTop);
+  place(nextIcon, kNeighborOffset, kIconTop);
+
   for (int i = 0; i < 5; i++) {
     stars[i] = lv_obj_create(screen);
     lv_obj_remove_style_all(stars[i]);
@@ -467,6 +508,8 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   lv_label_set_text(infoText, "");
   lv_label_set_text(flagText, "");
   for (lv_obj_t *star : stars) lv_obj_set_hidden(star, true);
+  lv_obj_set_hidden(prevIcon, true);
+  lv_obj_set_hidden(nextIcon, true);
   lv_obj_set_hidden(colorBar, true);
   const dd::Screen screen = device.screen();
   // What the carousel animation compares: slots and menu entries slide, a

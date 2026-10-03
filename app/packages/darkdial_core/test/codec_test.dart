@@ -25,6 +25,11 @@ void main() {
   });
 
   group('messages', () {
+    test('idle times', () {
+      final m = decodeMessage(encodeMessage(const IdleTimes(180, 600))) as IdleTimes;
+      expect([m.logoSeconds, m.sleepSeconds], [180, 600]);
+    });
+
     test('rotation is a relative CC', () {
       expect(encodeMessage(const Rotation(3)), [0xB0, 0x10, 67]);
       expect(encodeMessage(const Rotation(-3)), [0xB0, 0x10, 61]);

@@ -622,6 +622,54 @@ static void testTouchWithKnob() {
   CHECK(device.mode() == dd::Mode::Select && !device.longTouch(7000));
 }
 
+static void testSleep() {
+  RecordingHost host;
+  dd::Device device(host, 0, 1, 0, kSerial);
+  const uint8_t all = dd::kStatusLightroom | dd::kStatusDevelop | dd::kStatusPhoto;
+  auto heartbeat = [&](uint32_t from, uint32_t to) {
+    for (uint32_t t = from; t <= to; t += 2000) {
+      feed(device, status(all), t);
+      device.tick(t);
+    }
+  };
+
+  // Defaults: the logo after 3 minutes, dark after 10.
+  device.rotate(1, 1000);
+  heartbeat(1000, 1000 + dd::kIdleMs);
+  CHECK(device.idle() && !device.asleep());
+  heartbeat(1000 + dd::kIdleMs, 1000 + dd::kSleepMs);
+  CHECK(device.asleep() && !device.idle() && device.screen() == dd::Screen::Idle);
+  // A touch wakes it and does nothing else.
+  host.sent.clear();
+  CHECK(device.tap(1000 + dd::kSleepMs + 500));
+  device.tick(1000 + dd::kSleepMs + 1500);
+  CHECK(!device.asleep() && !device.idle() && host.sent.empty() && device.mode() == dd::Mode::Select);
+
+  // From the app: logo after 1 minute, dark after 2.
+  uint32_t now = 1000 + dd::kSleepMs + 2000;
+  feed(device, idleTimes(60, 120), now);
+  device.rotate(1, now);
+  heartbeat(now, now + 60000);
+  CHECK(device.idle());
+  heartbeat(now + 60000, now + 120000);
+  CHECK(device.asleep());
+  device.rotate(1, now + 121000);  // the knob wakes it too
+  CHECK(!device.asleep());
+
+  // Never: no logo, no dark display.
+  now += 130000;
+  feed(device, idleTimes(0, 0), now);
+  heartbeat(now, now + 2 * dd::kSleepMs);
+  CHECK(!device.idle() && !device.asleep());
+  // Only dark, no logo before.
+  feed(device, idleTimes(0, 300), now + 2 * dd::kSleepMs);
+  device.rotate(1, now + 2 * dd::kSleepMs);
+  heartbeat(now + 2 * dd::kSleepMs, now + 2 * dd::kSleepMs + 290000);
+  CHECK(!device.idle() && !device.asleep());
+  heartbeat(now + 2 * dd::kSleepMs + 290000, now + 2 * dd::kSleepMs + 302000);
+  CHECK(device.asleep());
+}
+
 static void testIdle() {
   RecordingHost host;
   dd::Device device(host, 0, 1, 0, kSerial);
@@ -1135,6 +1183,7 @@ int main(int argc, char **argv) {
   if (argc > 1) testEncoderRecording(argv[1]);
   testFollowLightroom();
   testIdle();
+  testSleep();
   testTouchWithKnob();
   testDoubleTap();
   testLongPress();

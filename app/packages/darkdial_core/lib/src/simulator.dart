@@ -30,8 +30,14 @@ class DeviceModel {
   static const Duration heartbeatTimeout = Duration(seconds: 5);
   static const Duration noticeTime = Duration(milliseconds: 1200);
 
-  /// Without input for this long the display shows the logo.
-  static const Duration idleAfter = Duration(minutes: 3);
+  /// Without input for this long the display shows the logo, and after
+  /// [sleepAfter] it goes dark (null = never); the service may change both.
+  Duration? idleAfter = const Duration(minutes: 3);
+  Duration? sleepAfter = const Duration(minutes: 10);
+
+  /// True while the display is dark; the next input only wakes it.
+  bool asleep = false;
+  Timer? _sleepTimer;
 
   List<ConfigSlot> slots = [];
   List<SlotValue> values = [];
@@ -119,12 +125,25 @@ class DeviceModel {
   /// used up by bringing the display back.
   bool _wake() {
     _idleTimer?.cancel();
-    _idleTimer = Timer(idleAfter, () {
-      idle = true;
-      onChanged();
-    });
-    if (!idle) return false;
+    _sleepTimer?.cancel();
+    final logo = idleAfter, dark = sleepAfter;
+    if (logo != null) {
+      _idleTimer = Timer(logo, () {
+        if (asleep) return;
+        idle = true;
+        onChanged();
+      });
+    }
+    if (dark != null) {
+      _sleepTimer = Timer(dark, () {
+        asleep = true;
+        idle = false;
+        onChanged();
+      });
+    }
+    if (!idle && !asleep) return false;
     idle = false;
+    asleep = false;
     onChanged();
     return true;
   }
@@ -268,6 +287,7 @@ class DeviceModel {
   void dispose() {
     _noticeTimer?.cancel();
     _idleTimer?.cancel();
+    _sleepTimer?.cancel();
   }
 
   /// Handles a message from the service.
@@ -376,6 +396,9 @@ class DeviceModel {
       case Library():
         library = message;
         onChanged();
+      case IdleTimes(:final logoSeconds, :final sleepSeconds):
+        idleAfter = logoSeconds == 0 ? null : Duration(seconds: logoSeconds);
+        sleepAfter = sleepSeconds == 0 ? null : Duration(seconds: sleepSeconds);
       case DisplayRotation(:final mode, :final degrees):
         switch (mode) {
           case DisplayRotation.begin:

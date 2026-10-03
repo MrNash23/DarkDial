@@ -124,6 +124,33 @@ class DialPreview extends StatelessWidget {
         label: slot.slot.label,
         value: slot.text,
       );
+      // Turning through the sliders: the neighbours, small and dim, as on the device.
+      final count = state.slots.length;
+      if (!state.editing && count >= 2) {
+        final unit = size / 360;
+        final small = iconSize * 112 / 256;
+        Widget neighbor(int index, double dx) => Positioned(
+              left: size / 2 + dx * unit - small / 2,
+              top: 117 * unit - small / 2,
+              child: Opacity(
+                opacity: 90 / 255,
+                child: Image.asset(
+                  'assets/icons/icon_${state.slots[index].slot.iconId.toString().padLeft(2, '0')}.png',
+                  width: small,
+                  height: small,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+            );
+        content = Stack(
+          key: const Key('preview-neighbours'),
+          children: [
+            Positioned.fill(child: content),
+            neighbor((state.activeSlot + 1) % count, 96),
+            if (count >= 3) neighbor((state.activeSlot + count - 1) % count, -96),
+          ],
+        );
+      }
     }
 
     // The preview stays upright even when the device's picture is turned:
@@ -159,6 +186,11 @@ class DialPreview extends StatelessWidget {
           children: [
             Positioned.fill(child: content),
             // Idle: the logo covers the display, as on the device.
+            // Asleep: the display is dark until the next input.
+            if (model != null && model.asleep)
+              Positioned.fill(
+                child: ClipOval(child: ColoredBox(key: const Key('preview-asleep'), color: Colors.black)),
+              ),
             if (model != null && model.idle)
               Positioned.fill(
                 child: ClipOval(

@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolMajor = 1;
-const int protocolMinor = 5;
+const int protocolMinor = 6;
 
 const int _sysexStart = 0xF0;
 const int _sysexEnd = 0xF7;
@@ -451,6 +451,14 @@ class DisplayRotation extends DeviceMessage {
   final int degrees;
 }
 
+/// How long without use until the logo and until the display goes dark, in
+/// seconds; 0 = never.
+class IdleTimes extends DeviceMessage {
+  const IdleTimes(this.logoSeconds, this.sleepSeconds);
+  final int logoSeconds;
+  final int sleepSeconds;
+}
+
 class TimerResult extends DeviceMessage {
   const TimerResult(this.code, [this.text = '']);
 
@@ -568,6 +576,8 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
       LibraryAction(:final action) => _frame(0x0A, [action]),
       DisplayAngle(:final degrees, :final adjusting) => _frame(0x0B, [..._u16(degrees % 360), adjusting ? 1 : 0]),
       DisplayRotation(:final mode, :final degrees) => _frame(0x4E, [mode, ..._u16(degrees % 360)]),
+      IdleTimes(:final logoSeconds, :final sleepSeconds) =>
+        _frame(0x4F, [..._u16(logoSeconds.clamp(0, 0xFFFF)), ..._u16(sleepSeconds.clamp(0, 0xFFFF))]),
       Library() => _frame(0x4D, [
           message.flags,
           message.rating.clamp(0, 5),
@@ -700,6 +710,8 @@ DeviceMessage? decodeMessage(List<int> bytes) {
       return p.length < 3 ? null : DisplayAngle(((p[0] << 8) | p[1]) % 360, adjusting: p[2] != 0);
     case 0x4E:
       return p.length < 3 ? null : DisplayRotation(p[0], ((p[1] << 8) | p[2]) % 360);
+    case 0x4F:
+      return p.length < 4 ? null : IdleTimes((p[0] << 8) | p[1], (p[2] << 8) | p[3]);
     case 0x4D:
       final name = p.length < 4 ? null : str(3);
       if (name == null) return null;

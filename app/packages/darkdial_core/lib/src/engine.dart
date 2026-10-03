@@ -270,6 +270,9 @@ class Engine {
       _sendTimerState(force: true);
       _sendLibrary(force: true);
       if (_deviceTurns) session.send(const DisplayRotation(DisplayRotation.query));
+      if ((session.hello.minor) >= 6) {
+        session.send(IdleTimes(_config.logoMinutes * 60, _config.sleepMinutes * 60));
+      }
     }
     return ok;
   }

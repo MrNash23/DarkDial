@@ -113,6 +113,15 @@ class Strings {
       );
   String get firmwareNeedsCable => _t('Firmware-Update nur per USB-Kabel zum Mac.', 'Firmware updates need the USB cable to the Mac.');
   String get deviceDisplay => _t('Anzeige', 'Display');
+  String get logoAfter => _t('Logo zeigen nach', 'Show the logo after');
+  String get sleepAfter => _t('Display aus nach', 'Turn the display off after');
+  String minutes(int value) => value == 0 ? _t('nie', 'never') : (value == 1 ? '1 Minute' : _t('$value Minuten', '$value minutes'));
+  String get idleHint => _t(
+        'Ohne Benutzung zeigt das Gerät erst das Logo, später geht das Display aus. Drehen, Drücken oder Tippen '
+            'weckt es; diese erste Eingabe bewirkt sonst nichts.',
+        'Unused, the device first shows its logo, later its display goes dark. Turning, pressing or tapping wakes '
+            'it; that first input does nothing else.',
+      );
   String get deviceBehaviour => _t('Verhalten', 'Behaviour');
   String get deviceTransfer => _t('Übertragung', 'Transfer');
   String get followLightroomHint => _t(

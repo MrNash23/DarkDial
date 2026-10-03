@@ -271,6 +271,14 @@ void engineTests() {
     await until(() => rig.plugin.values['Contrast'] == 3, 'Contrast 3');
   });
 
+  test('the idle times of the configuration reach the device', () async {
+    await rig.start(config: AppConfig.defaults(Language.en).copyWith(logoMinutes: 1, sleepMinutes: 0));
+    await until(() => rig.model.idleAfter == const Duration(minutes: 1) && rig.model.sleepAfter == null, 'times');
+    await rig.engine.updateConfig(rig.engine.config.copyWith(logoMinutes: 5, sleepMinutes: 30));
+    await until(() => rig.model.idleAfter == const Duration(minutes: 5), 'logo time');
+    expect(rig.model.sleepAfter, const Duration(minutes: 30));
+  });
+
   test('fast turning: automatic, off, or a step of its own per slider', () async {
     final config = AppConfig.defaults(Language.en);
     final slots = [
@@ -548,6 +556,22 @@ void deviceTests() {
     model.idle = true;
     model.longPress();
     expect(model.menuOpen, isFalse);
+    model.dispose();
+  });
+
+  test('device model: asleep, the first input only wakes the display', () {
+    final model = DeviceModel();
+    final sent = <DeviceMessage>[];
+    model.emit = sent.add;
+    model.asleep = true; // as the timer would set it after ten minutes
+    model.rotate(1);
+    expect(model.asleep, isFalse);
+    expect(model.index, 0);
+    expect(sent, isEmpty);
+    // Times from the service; 0 = never.
+    model.handle(const IdleTimes(60, 0));
+    expect(model.idleAfter, const Duration(minutes: 1));
+    expect(model.sleepAfter, isNull);
     model.dispose();
   });
 
