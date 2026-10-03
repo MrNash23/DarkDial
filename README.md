@@ -226,8 +226,8 @@ jobs and times. The Lightroom plug-in is a thin translator that reads and
 sets Develop values. The device shows what it is told and reports what you
 turn and press.
 
-Darkdial talks only to its own plug-in and its own device. It does not use
-or replace MIDI2LR, and both can be installed side by side.
+Darkdial talks only to its own plug-in and its own device; nothing else is
+needed.
 
 The wire format of both links is specified in
 [docs/PROTOCOL.md](docs/PROTOCOL.md).
