@@ -1,7 +1,7 @@
 name: darkdial
 description: Menu-bar service of the Darkdial Lightroom controller.
 publish_to: none
-version: 0.7.1+17
+version: 0.7.2+18
 
 environment:
   sdk: ^3.12.2

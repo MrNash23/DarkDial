@@ -104,15 +104,29 @@ class PosixSerialPort {
     return port;
   }
 
-  void setSignals({required bool dtr, required bool rts}) {
+  void _line(int bit, bool on) {
     final bits = calloc<Int32>();
     try {
-      bits.value = _tiocmDtr;
-      _ioctlInt(_fd, dtr ? _tiocmbis : _tiocmbic, bits);
-      bits.value = _tiocmRts;
-      _ioctlInt(_fd, rts ? _tiocmbis : _tiocmbic, bits);
+      bits.value = bit;
+      _ioctlInt(_fd, on ? _tiocmbis : _tiocmbic, bits);
     } finally {
       calloc.free(bits);
+    }
+  }
+
+  void setDtr(bool on) => _line(_tiocmDtr, on);
+  void setRts(bool on) => _line(_tiocmRts, on);
+
+  /// Sets both lines without passing through RTS on and DTR off: on the
+  /// chip's built-in USB port that combination is "reset", and the chip
+  /// would leave its bootloader.
+  void setSignals({required bool dtr, required bool rts}) {
+    if (rts) {
+      setDtr(dtr);
+      setRts(true);
+    } else {
+      setRts(false);
+      setDtr(dtr);
     }
   }
 

@@ -44,6 +44,44 @@ void _touch(String name) {
   }
 }
 
+/// esptool's reset into the bootloader for the chip's built-in USB port (a
+/// device with its factory firmware): DTR holds the boot pin low while RTS
+/// pulses reset. A running Darkdial understands the same sequence.
+void _strapReset(String name) {
+  try {
+    final port = PosixSerialPort.open(name);
+    port.setRts(false);
+    port.setDtr(false);
+    sleep(const Duration(milliseconds: 100));
+    port.setDtr(true);
+    port.setRts(false);
+    sleep(const Duration(milliseconds: 100));
+    port.setRts(true);
+    port.setDtr(false);
+    port.setRts(true);
+    sleep(const Duration(milliseconds: 100));
+    port.setDtr(false);
+    port.setRts(false);
+    port.close();
+  } on SerialError {
+    // The port went away with the reset.
+  }
+}
+
+/// Waits up to [within] for any port to answer as a bootloader.
+Future<(PosixSerialPort, EspFlasher)?> _findBootloader(Duration within) async {
+  final deadline = DateTime.now().add(within);
+  await Future<void>.delayed(const Duration(milliseconds: 1200));
+  while (DateTime.now().isBefore(deadline)) {
+    for (final name in PosixSerialPort.usbModemPorts()) {
+      final open = await _openBootloader(name, const Duration(seconds: 2));
+      if (open != null) return open;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  }
+  return null;
+}
+
 /// Opens [name] and talks to the bootloader on it; null if it does not
 /// answer within [within].
 Future<(PosixSerialPort, EspFlasher)?> _openBootloader(String name, Duration within) async {
@@ -93,24 +131,26 @@ Future<void> flashDevice(Uint8List merged, {void Function(FlashProgress progress
   }
 
   // A device already in its bootloader (e.g. after an interrupted update)
-  // answers right away; a running one is sent there first.
+  // answers right away. Otherwise it is sent there: first the way esptool
+  // does it (works with the factory firmware and with Darkdial, and wakes a
+  // bootloader that stopped answering), then by opening the port at 1200
+  // baud (Darkdial's USB stack).
   (PosixSerialPort, EspFlasher)? open;
   for (final name in ports) {
     open = await _openBootloader(name, const Duration(milliseconds: 600));
     if (open != null) break;
   }
   if (open == null) {
-    _touch(ports.first);
-    final deadline = DateTime.now().add(const Duration(seconds: 15));
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
-    while (open == null && DateTime.now().isBefore(deadline)) {
-      ports = PosixSerialPort.usbModemPorts();
-      for (final name in ports) {
-        open = await _openBootloader(name, const Duration(seconds: 2));
-        if (open != null) break;
-      }
-      if (open == null) await Future<void>.delayed(const Duration(milliseconds: 500));
+    for (final name in ports) {
+      _strapReset(name);
     }
+    open = await _findBootloader(const Duration(seconds: 8));
+  }
+  if (open == null) {
+    for (final name in PosixSerialPort.usbModemPorts()) {
+      _touch(name);
+    }
+    open = await _findBootloader(const Duration(seconds: 15));
   }
   if (open == null) throw FlashException('the device did not start its bootloader', FlashFailure.noBootloader);
 
