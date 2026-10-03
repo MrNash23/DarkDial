@@ -76,7 +76,9 @@ class Host {
 class Accelerator {
  public:
   int apply(int detents, uint32_t nowMs);
-  int speed(uint32_t nowMs);
+  /// Speed from the time per detent: the encoder often reports two detents
+  /// at once when the knob spins.
+  int speed(int detents, uint32_t nowMs);
 
  private:
   uint32_t lastMs_ = 0;

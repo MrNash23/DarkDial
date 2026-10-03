@@ -314,6 +314,40 @@ void engineTests() {
     expect(restored.slots.firstWhere((s) => s.param.lr == 'Highlights').fast, FastTurn.off);
   });
 
+  test('fast turning with other steps than 1', () async {
+    final config = AppConfig.defaults(Language.en);
+    final slots = [
+      for (final s in config.slots)
+        switch (s.param.lr) {
+          'Contrast' => s.copyWith(step: () => 2, fast: FastTurn.step, fastStep: () => 10),
+          'Exposure' => s.copyWith(fast: FastTurn.step, fastStep: () => 0.5),
+          'Highlights' => s.copyWith(step: () => 5),
+          _ => s,
+        },
+    ];
+    await rig.start(config: config.copyWith(slots: slots));
+    await rig.ready();
+
+    await rig.edit('Contrast');
+    rig.model.rotate(1);
+    await until(() => rig.plugin.values['Contrast'] == 2, 'slow step of 2');
+    rig.model.rotate(1, speed: 1);
+    await until(() => rig.plugin.values['Contrast'] == 12, 'fast step of 10');
+
+    await rig.edit('Exposure');
+    rig.model.rotate(1);
+    await until(() => (rig.plugin.values['Exposure']! - 0.05).abs() < 1e-9, 'slow 0.05 EV');
+    rig.model.rotate(1, speed: 2);
+    await until(() => (rig.plugin.values['Exposure']! - 0.55).abs() < 1e-9, 'fast 0.5 EV');
+
+    // Automatic with a step of 5: ×2 at speed 1.
+    await rig.edit('Highlights');
+    rig.model.rotate(1);
+    await until(() => rig.plugin.values['Highlights'] == 5, 'slow step of 5');
+    rig.model.rotate(1, speed: 1);
+    await until(() => rig.plugin.values['Highlights'] == 15, 'fast ×2');
+  });
+
   test('outside Develop the device is told about the module switch', () async {
     await rig.start(plugin: FakePlugin(module: 'library'));
     await until(() => rig.engine.state.lightroomConnected, 'lightroom');

@@ -186,15 +186,20 @@ static void testCarouselAndEdit() {
   host.sent.clear();
   device.rotate(1, 2000);
   device.rotate(1, 2040);
-  device.rotate(-2, 2060);
+  device.rotate(-1, 2060);
   device.rotate(1, 2070);
   device.rotate(1, 2300);
-  CHECK(host.sent.size() == 5);
+  // Two detents in one report count per detent: 70 ms for two is fast.
+  device.rotate(2, 2370);
+  device.rotate(2, 2500);
+  CHECK(host.sent.size() == 7);
   CHECK(host.sent[0] == Bytes({0xB0, 0x10, 65}));
   CHECK(host.sent[1] == Bytes({0xB0, 0x11, 65}));
-  CHECK(host.sent[2] == Bytes({0xB0, 0x12, 62}));
+  CHECK(host.sent[2] == Bytes({0xB0, 0x12, 63}));
   CHECK(host.sent[3] == Bytes({0xB0, 0x13, 65}));
   CHECK(host.sent[4] == Bytes({0xB0, 0x10, 65}));
+  CHECK(host.sent[5] == Bytes({0xB0, 0x11, 66}));
+  CHECK(host.sent[6] == Bytes({0xB0, 0x10, 66}));
 
   device.click();
   CHECK(device.mode() == dd::Mode::Select && host.sent.back()[5] == 0x03);

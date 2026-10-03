@@ -42,7 +42,7 @@ moves the carousel on the device and is not sent.
 **Speed (1.5).** A device talking to a service of minor ≥ 5 (as told by
 HelloRequest) sends the raw detents and says how fast the knob turned
 through the controller number: `0x10` slow, `0x11` … `0x13` faster and
-faster (time since the previous detent below 60, 30 and 15 ms). The service
+faster (time per detent since the previous report below 60, 30 and 15 ms). The service
 decides what a fast detent is worth, per slider: automatic (×2, ×4, ×8),
 nothing extra, or a step of its own. To older services the device sends
 `0x10` only, with the detents already multiplied by 2, 4 or 8.

@@ -7,21 +7,25 @@
 
 namespace dd {
 
-int Accelerator::speed(uint32_t nowMs) {
-  const uint32_t gap = nowMs - lastMs_;
+int Accelerator::speed(int detents, uint32_t nowMs) {
+  const uint32_t count = static_cast<uint32_t>(detents < 0 ? -detents : detents);
+  const uint32_t gap = (nowMs - lastMs_) / (count ? count : 1);
   lastMs_ = nowMs;
   if (!primed_) {
     primed_ = true;
     return 0;
   }
-  // Time between two detents decides.
+  // Time per detent decides.
   if (gap < 15) return 3;
   if (gap < 30) return 2;
   if (gap < 60) return 1;
   return 0;
 }
 
-int Accelerator::apply(int detents, uint32_t nowMs) { return detents << speed(nowMs); }
+int Accelerator::apply(int detents, uint32_t nowMs) {
+  const int factor = 1 << speed(detents, nowMs);
+  return detents * factor;
+}
 
 void formatElapsed(uint32_t seconds, char *out) {
   if (seconds < 3600) {
@@ -339,7 +343,7 @@ void Device::rotate(int detents, uint32_t nowMs) {
     changed();
   } else {
     if (serviceMinor_ >= 5) {
-      host_.send(out, buildRotation(out, detents, accelerator_.speed(nowMs)));
+      host_.send(out, buildRotation(out, detents, accelerator_.speed(detents, nowMs)));
     } else {
       host_.send(out, buildRotation(out, accelerator_.apply(detents, nowMs)));
     }
