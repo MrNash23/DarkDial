@@ -123,7 +123,9 @@ messages in index order.
 
 **Detection** (service, for every MIDI port that appears):
 
-1. Port name contains `Darkdial`, otherwise ignore the port.
+1. Port name contains `Darkdial`, or is the generic name macOS gives a USB
+   MIDI device whose name it could not read (`USB-MIDI-Gerät`, `USB MIDI
+   Device`); otherwise ignore the port. The next two stages decide.
 2. Send Identity Request; expect the reply from 1.2 within 1 s.
 3. Send HelloRequest; expect Hello with signature `DARKDIAL` and the same
    major version within 1 s.

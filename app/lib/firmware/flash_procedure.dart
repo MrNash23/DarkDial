@@ -144,7 +144,7 @@ Future<void> flashDevice(Uint8List merged, {void Function(FlashProgress progress
     for (final name in ports) {
       _strapReset(name);
     }
-    open = await _findBootloader(const Duration(seconds: 8));
+    open = await _findBootloader(const Duration(seconds: 5));
   }
   if (open == null) {
     for (final name in PosixSerialPort.usbModemPorts()) {

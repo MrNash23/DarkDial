@@ -4,9 +4,9 @@ import 'dart:typed_data';
 import 'package:darkdial_core/darkdial_core.dart';
 import 'package:flutter_midi_command/flutter_midi_command.dart' as fmc;
 
-/// USB-MIDI through flutter_midi_command. Only ports whose name contains
-/// "Darkdial" are opened (detection stage 1); other MIDI devices are never
-/// touched.
+/// USB-MIDI through flutter_midi_command. Only ports that may be a Darkdial
+/// are opened (detection stage 1, see [mayBeDarkdial]); other MIDI devices
+/// are never touched.
 class FlutterMidiTransport implements MidiTransport {
   final fmc.MidiCommand _midi = fmc.MidiCommand();
   final StreamController<MidiConnection> _connections = StreamController<MidiConnection>();
@@ -44,7 +44,7 @@ class FlutterMidiTransport implements MidiTransport {
       }
       final present = <String>{};
       for (final device in devices) {
-        if (!device.name.toLowerCase().contains('darkdial')) continue;
+        if (!mayBeDarkdial(device.name)) continue;
         present.add(device.id);
         if (_ports.containsKey(device.id)) continue;
         try {

@@ -39,6 +39,15 @@ enum HandshakeResult {
   incompatible,
 }
 
+/// True for a MIDI port that may be a Darkdial: one named so, or one with
+/// the generic name macOS gives a class-compliant USB MIDI device whose name
+/// it could not read ("USB-MIDI-Gerät", "USB MIDI Device"). The identity
+/// request and Hello decide; other devices are never sent anything.
+bool mayBeDarkdial(String portName) {
+  final name = portName.toLowerCase();
+  return name.contains('darkdial') || name.contains('usb-midi') || name.contains('usb midi');
+}
+
 /// A device that passed the three-stage detection of PROTOCOL.md 1.6.
 class DeviceSession {
   DeviceSession._(this._connection, this._messages, this._subscription);
@@ -61,7 +70,7 @@ class DeviceSession {
     required List<int> appVersion,
     Duration timeout = const Duration(seconds: 1),
   }) async {
-    if (!connection.name.toLowerCase().contains('darkdial')) {
+    if (!mayBeDarkdial(connection.name)) {
       await connection.close();
       return (HandshakeResult.notDarkdial, null);
     }

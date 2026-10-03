@@ -387,6 +387,26 @@ void deviceTests() {
     expect(result2, HandshakeResult.notDarkdial);
   });
 
+  test('a port with the generic name macOS gives an unnamed USB MIDI device is probed', () async {
+    expect(mayBeDarkdial('Darkdial'), isTrue);
+    expect(mayBeDarkdial('USB-MIDI-Gerät'), isTrue);
+    expect(mayBeDarkdial('USB MIDI Device'), isTrue);
+    expect(mayBeDarkdial('Some Synth'), isFalse);
+    expect(mayBeDarkdial('MIDI2LR'), isFalse);
+
+    // Probed with the identity request; without the Darkdial answer it is
+    // left alone like any other device.
+    final port = _SilentPort('USB-MIDI-Gerät');
+    final (result, session) = await DeviceSession.open(
+      port,
+      appVersion: const [0, 1, 0],
+      timeout: const Duration(milliseconds: 50),
+    );
+    expect(result, HandshakeResult.notDarkdial);
+    expect(session, isNull);
+    expect(port.sent, hasLength(1), reason: 'only the identity request');
+  });
+
   test('device with another protocol major is incompatible', () async {
     final port = _IdentityOnlyPort();
     final (result, _) = await DeviceSession.open(
