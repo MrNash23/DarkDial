@@ -124,11 +124,17 @@ Darkdial lives in the menu bar; it has no Dock icon. On its first start it
 opens a window and offers to **set up**: this installs the Lightroom plug-in
 and lets Darkdial start when you log in. Restart Lightroom afterwards.
 
-### 2. Flash the device
+### 2. Update the device
 
-Download `darkdial-firmware-<version>.zip` from the same release and unpack it.
-With the device connected by USB, write the file to the board with
-[esptool](https://docs.espressif.com/projects/esptool/):
+The app brings the matching firmware. Plug in the device, open the app's
+section **Device** and click **Update** under "Firmware". The app restarts
+the device into its bootloader, writes the firmware, checks it and restarts
+it; this takes about 30 seconds. Settings and orientation are kept. The
+section shows when the app has newer firmware than the device.
+
+Without the app, the firmware can also be written with
+[esptool](https://docs.espressif.com/projects/esptool/): download
+`darkdial-firmware-<version>.zip` from the release and run
 
 ```sh
 esptool.py --chip esp32s3 write_flash 0x0 darkdial-firmware-<version>.bin
@@ -205,8 +211,8 @@ but expect rough edges:
 
 - The icons of the time tracking menu are placeholders.
 - Windows is not supported yet.
-- There is no firmware update from within the app; flashing is done as
-  described above.
+- Updating the firmware from the app works on macOS; Windows is not
+  supported yet.
 
 Bug reports and ideas are welcome in the
 [issues](https://github.com/MrNash23/DarkDial/issues).
@@ -244,6 +250,8 @@ screens are rendered headless into `firmware/host/snapshots/`.
 | Install the plug-in for development | `tools/install_plugin.sh`, then reload it in Lightroom's Plug-in Manager |
 | Talk to the plug-in directly | `tools/lr_cli.py status` (quit the app first; it holds the ports) |
 | Build / flash the firmware | `tools/build_firmware.sh [port]` |
+| Put the firmware into the app | `tools/bundle_firmware.sh` (done by the release script) |
+| Flash through the app's own code | `cd app && dart run tool/flash.dart <merged.bin>` |
 | Signed macOS release (DMG) | `tools/package_macos.sh`, with `NOTARY_PROFILE=<name>` also notarised |
 | See the device screens | `firmware/host/build.sh`, images in `firmware/host/snapshots/` |
 | Regenerate tables, icons, fonts | `tools/gen_params.py`, `tools/gen_icons.py`, `tools/gen_fonts.sh` |

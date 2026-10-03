@@ -2,6 +2,7 @@ import 'package:darkdial_core/darkdial_core.dart';
 import 'package:flutter/material.dart';
 
 import '../app_controller.dart';
+import '../firmware/firmware_updater.dart';
 import 'config_window.dart';
 
 /// Settings of the device itself: how its picture is oriented, the language
@@ -65,6 +66,9 @@ class _DeviceWindowState extends State<DeviceWindow> {
                       value: c.config.followLightroom,
                       onChanged: (value) => c.setConfig(c.config.copyWith(followLightroom: value)),
                     ),
+                    const Divider(height: 40),
+                    SectionTitle(s.deviceFirmware),
+                    _FirmwareSection(controller: c),
                     const Divider(height: 40),
                     SectionTitle(s.deviceTransfer),
                     Text(s.sendHint, style: small),
@@ -167,6 +171,106 @@ class _OrientationRow extends StatelessWidget {
           onPressed: c.beginDisplayRotation,
           child: Text(s.rotateDisplay),
         ),
+      ],
+    );
+  }
+}
+
+/// Versions on the device and in the app, and writing the app's firmware to
+/// the device.
+class _FirmwareSection extends StatelessWidget {
+  const _FirmwareSection({required this.controller});
+  final AppController controller;
+
+  Future<void> _confirmAndUpdate(BuildContext context) async {
+    final s = controller.strings;
+    final version = controller.firmware.bundled!.version;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.firmwareConfirmTitle),
+        content: Text(s.firmwareConfirm(version)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(s.cancel)),
+          FilledButton(
+            key: const Key('firmware-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(s.firmwareStart),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await controller.firmware.update();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller;
+    final s = c.strings;
+    final small = Theme.of(context).textTheme.bodySmall;
+    final bundled = c.firmware.bundled;
+    final update = c.firmware.state.value;
+    final onDevice = c.state.device == DeviceLinkState.connected ? c.state.firmwareVersion : null;
+
+    Widget action;
+    if (!FirmwareUpdater.supported) {
+      action = Text(s.firmwareUnsupported, style: small);
+    } else if (update.running) {
+      final progress = update.progress!;
+      action = Column(
+        key: const Key('firmware-progress'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(s.firmwareStage(progress.stage)),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(value: progress.stage == FlashStage.writing ? progress.fraction : null),
+        ],
+      );
+    } else {
+      action = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (update.done) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(s.firmwareDone)),
+          if (update.error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(s.firmwareFailed(update.error!), key: const Key('firmware-error'), style: small),
+            ),
+          OutlinedButton.icon(
+            key: const Key('firmware-update'),
+            onPressed: bundled == null ? null : () => _confirmAndUpdate(context),
+            icon: const Icon(Icons.system_update_alt, size: 18),
+            label: Text(update.error != null
+                ? s.firmwareRetry
+                : (c.firmwareOutdated || onDevice == null ? s.firmwareUpdate : s.firmwareReinstall)),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(width: 140, child: Text(s.firmwareOnDevice)),
+            Text(onDevice ?? s.notConnected, key: const Key('firmware-device-version')),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            SizedBox(width: 140, child: Text(s.firmwareInApp)),
+            Text(bundled?.version ?? s.firmwareNone, key: const Key('firmware-app-version')),
+            if (c.firmwareOutdated)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(Icons.fiber_new_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        action,
       ],
     );
   }

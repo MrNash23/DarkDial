@@ -27,3 +27,7 @@ firmware/host/snapshots/
 # Release artefacts
 dist/
 *.dmg
+
+# Firmware bundled into the app by tools/bundle_firmware.sh
+app/assets/firmware/darkdial-firmware.bin
+app/assets/firmware/firmware.json

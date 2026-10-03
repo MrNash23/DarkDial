@@ -3,6 +3,7 @@ library;
 
 export 'src/config.dart';
 export 'src/device_session.dart';
+export 'src/esp_flasher.dart';
 export 'src/engine.dart';
 export 'src/lightroom_link.dart';
 export 'src/midi_codec.dart';

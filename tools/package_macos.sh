@@ -25,6 +25,9 @@ if [ -z "$IDENTITY" ]; then
   exit 1
 fi
 
+echo "== firmware for the app"
+"$ROOT/tools/bundle_firmware.sh"
+
 echo "== build $VERSION"
 (cd "$APP_DIR" && flutter build macos --release) | tail -1
 

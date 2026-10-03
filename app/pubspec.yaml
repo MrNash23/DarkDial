@@ -1,7 +1,7 @@
 name: darkdial
 description: Menu-bar service of the Darkdial Lightroom controller.
 publish_to: none
-version: 0.6.1+15
+version: 0.7.0+16
 
 environment:
   sdk: ^3.12.2
@@ -18,7 +18,7 @@ dependencies:
   window_manager: ^0.5.2
   file_selector: ^1.1.0
   sqlite3_flutter_libs: ^0.6.0+eol
-
+  ffi: ^2.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -34,3 +34,5 @@ flutter:
     # The Lightroom plugin, installed by the app into Lightroom's Modules folder.
     # assets/plugin is a symlink to ../../plugin/Darkdial.lrplugin.
     - assets/plugin/
+    # Firmware the app can flash onto the device (tools/bundle_firmware.sh).
+    - assets/firmware/

@@ -41,6 +41,38 @@ class Strings {
         'Zum Regler springen, der in Lightroom bewegt wird',
         'Jump to the slider that is moved in Lightroom',
       );
+  String get deviceFirmware => 'Firmware';
+  String get firmwareOnDevice => _t('Auf dem Gerät', 'On the device');
+  String get firmwareInApp => _t('In der App', 'In the app');
+  String get firmwareNone => _t('keine (Entwicklungs-Build)', 'none (development build)');
+  String get firmwareUpdate => _t('Aktualisieren', 'Update');
+  String get firmwareReinstall => _t('Neu aufspielen', 'Install again');
+  String get firmwareConfirmTitle => _t('Firmware aufspielen?', 'Install firmware?');
+  String firmwareConfirm(String version) => _t(
+        'Das Gerät startet in seinen Bootloader, bekommt Firmware $version und startet neu. Das dauert etwa '
+            '30 Sekunden. Bitte das Kabel währenddessen nicht ziehen. Einstellungen und Ausrichtung bleiben '
+            'erhalten.',
+        'The device restarts into its bootloader, gets firmware $version and restarts. This takes about 30 '
+            'seconds. Please do not unplug it meanwhile. Settings and orientation are kept.',
+      );
+  String get firmwareStart => _t('Aufspielen', 'Install');
+  String firmwareStage(FlashStage stage) => switch (stage) {
+        FlashStage.connecting => _t('Bootloader wird gestartet …', 'Starting the bootloader …'),
+        FlashStage.erasing => _t('Speicher wird gelöscht …', 'Erasing …'),
+        FlashStage.writing => _t('Firmware wird geschrieben …', 'Writing firmware …'),
+        FlashStage.verifying => _t('Wird geprüft …', 'Verifying …'),
+        FlashStage.restarting => _t('Gerät startet neu …', 'Restarting the device …'),
+        FlashStage.done => _t('Fertig', 'Done'),
+      };
+  String get firmwareDone => _t('Firmware aufgespielt. Das Gerät verbindet sich gleich wieder.',
+      'Firmware installed. The device reconnects in a moment.');
+  String firmwareFailed(String reason) => _t(
+        'Aufspielen fehlgeschlagen: $reason. Das Gerät lässt sich jederzeit erneut flashen, auch wenn es '
+            'gerade nichts anzeigt.',
+        'Installing failed: $reason. The device can always be flashed again, even if it shows nothing now.',
+      );
+  String get firmwareRetry => _t('Erneut versuchen', 'Try again');
+  String get firmwareUnsupported => _t('Auf diesem System noch nicht möglich.', 'Not possible on this system yet.');
   String get deviceDisplay => _t('Anzeige', 'Display');
   String get deviceBehaviour => _t('Verhalten', 'Behaviour');
   String get deviceTransfer => _t('Übertragung', 'Transfer');

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'firmware/firmware_updater.dart';
 import 'plugin_installer.dart';
 import 'real_midi_transport.dart';
 import 'strings.dart';
@@ -35,12 +36,20 @@ class AppController extends ChangeNotifier {
   static const MethodChannel _loginItem = MethodChannel('darkdial/login_item');
 
   /// The optional arguments replace the real environment in tests.
-  AppController({PluginInstaller? installer, Directory? settingsDirectory, LightroomLink Function()? lightroom})
-      : installer = installer ?? PluginInstaller(),
+  AppController({
+    PluginInstaller? installer,
+    Directory? settingsDirectory,
+    LightroomLink Function()? lightroom,
+    FirmwareUpdater? firmware,
+  })  : installer = installer ?? PluginInstaller(),
+        firmware = firmware ?? FirmwareUpdater(),
         _settingsDirectory = settingsDirectory, // ignore: prefer_initializing_formals
         _lightroom = lightroom ?? (() => LightroomLink(appVersion: appVersionText));
 
   final PluginInstaller installer;
+
+  /// The firmware that came with the app, and writing it to the device.
+  final FirmwareUpdater firmware;
   final Directory? _settingsDirectory;
   final LightroomLink Function() _lightroom;
 
@@ -122,6 +131,9 @@ class AppController extends ChangeNotifier {
       // Keep the built-in position.
     }
 
+    await firmware.init();
+    firmware.state.addListener(notifyListeners);
+
     bundledPluginVersion = await installer.bundledVersion();
     installedPluginVersion = await installer.installedVersion();
     // An installed plugin is kept current; installing it the first time is
@@ -188,6 +200,12 @@ class AppController extends ChangeNotifier {
     // engine always gets the latest one.
     await _engine?.updateConfig(config);
   }
+
+  /// The connected device runs older firmware than the app brings.
+  bool get firmwareOutdated =>
+      state.device == DeviceLinkState.connected &&
+      !useSimulator &&
+      isOlderVersion(state.firmwareVersion, firmware.bundled?.version);
 
   // Turning the picture of a device that does not stand upright.
   void beginDisplayRotation() => _engine?.beginDisplayRotation();

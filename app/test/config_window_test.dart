@@ -1,11 +1,13 @@
 // Drives the real configuration window against the simulated device and a
 // fake Lightroom plugin. Set DARKDIAL_SCREENSHOT=/some/file.png to also get a
 // rendering of the window.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:darkdial/app_controller.dart';
+import 'package:darkdial/firmware/firmware_updater.dart';
 import 'package:darkdial/main.dart';
 import 'package:darkdial/plugin_installer.dart';
 import 'package:darkdial/ui/config_window.dart';
@@ -64,6 +66,7 @@ void main() {
     bool infoWindow = false,
     bool libraryWindow = false,
     bool deviceWindow = false,
+    FirmwareUpdater? firmware,
   }) async {
     tester.view.physicalSize = const Size(1040, 720);
     tester.view.devicePixelRatio = 1;
@@ -86,6 +89,7 @@ void main() {
           toPluginPort: plugin.fromServicePort,
           retryInterval: const Duration(milliseconds: 50),
         ),
+        firmware: firmware,
       );
       await controller.init();
     });
@@ -293,6 +297,64 @@ void main() {
     await screenshot(tester, 'device');
 
     await tester.runAsync(controller.shutdown);
+  });
+
+  testWidgets('firmware: versions, confirmation, progress, failure and retry', (tester) async {
+    final steps = StreamController<FlashProgress>.broadcast();
+    final finish = Completer<void>();
+    var fail = true;
+    final updater = FirmwareUpdater(
+      load: () async => BundledFirmware('9.9.9', Uint8List(16)),
+      flash: (image, onProgress) async {
+        expect(image, hasLength(16));
+        final sub = steps.stream.listen(onProgress);
+        await finish.future;
+        await sub.cancel();
+        if (fail) throw FlashException('the bootloader does not answer');
+      },
+    );
+    await start(tester, deviceWindow: true, firmware: updater, settings: simulatorSettings);
+    await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
+    expect(find.text('9.9.9'), findsOneWidget);
+    expect(controller.firmwareOutdated, isFalse, reason: 'the simulator is never updated');
+
+    await tester.ensureVisible(find.byKey(const Key('firmware-update')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('firmware-update')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('30 Sekunden'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('firmware-confirm')));
+    await tester.pump();
+    expect(find.byKey(const Key('firmware-progress')), findsOneWidget);
+
+    steps.add(const FlashProgress(FlashStage.writing, 0.4));
+    await settle(tester, () => find.text('Firmware wird geschrieben …').evaluate().isNotEmpty, 'writing shown');
+    final bar = tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator));
+    expect(bar.value, closeTo(0.4, 1e-9));
+
+    finish.complete();
+    await settle(tester, () => find.byKey(const Key('firmware-error')).evaluate().isNotEmpty, 'failure shown');
+    expect(find.text('Erneut versuchen'), findsOneWidget);
+    await screenshot(tester, 'firmware');
+
+    // The retry goes through.
+    fail = false;
+    await tester.tap(find.byKey(const Key('firmware-update')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('firmware-confirm')));
+    await settle(tester, () => updater.state.value.done, 'done');
+    expect(find.textContaining('Firmware aufgespielt'), findsOneWidget);
+
+    await steps.close();
+    await tester.runAsync(controller.shutdown);
+  });
+
+  test('version comparison', () {
+    expect(isOlderVersion('0.6.0', '0.6.1'), isTrue);
+    expect(isOlderVersion('0.6.1', '0.6.1'), isFalse);
+    expect(isOlderVersion('0.10.0', '0.9.9'), isFalse);
+    expect(isOlderVersion('0.5.9', '0.6.0'), isTrue);
+    expect(isOlderVersion(null, '0.6.0'), isFalse);
   });
 
   testWidgets('orientation: the knob turns the picture, the app saves or cancels', (tester) async {

@@ -132,7 +132,10 @@ class MainWindow extends StatelessWidget {
                     label: Text(s.sectionLibrary),
                   ),
                   NavigationRailDestination(
-                    icon: const Icon(Icons.screen_rotation_alt_outlined),
+                    icon: Badge(
+                      isLabelVisible: controller.ready && controller.firmwareOutdated,
+                      child: const Icon(Icons.screen_rotation_alt_outlined),
+                    ),
                     label: Text(s.sectionDevice),
                   ),
                   NavigationRailDestination(
