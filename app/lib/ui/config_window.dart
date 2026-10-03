@@ -278,6 +278,7 @@ class _SlotEditor extends StatefulWidget {
 class _SlotEditorState extends State<_SlotEditor> {
   late final TextEditingController _label = TextEditingController(text: widget.slot.label ?? '');
   late final TextEditingController _step = TextEditingController(text: _number(widget.slot.step));
+  late final TextEditingController _fastStep = TextEditingController(text: _number(widget.slot.fastStep));
 
   static String _number(double? value) {
     if (value == null) return '';
@@ -288,6 +289,7 @@ class _SlotEditorState extends State<_SlotEditor> {
   void dispose() {
     _label.dispose();
     _step.dispose();
+    _fastStep.dispose();
     super.dispose();
   }
 
@@ -307,6 +309,7 @@ class _SlotEditorState extends State<_SlotEditor> {
               onPressed: () {
                 _label.clear();
                 _step.clear();
+                _fastStep.clear();
                 c.updateSlot(SlotSettings(paramId: slot.paramId, enabled: slot.enabled));
               },
               child: Text(s.resetSlot),
@@ -366,6 +369,49 @@ class _SlotEditorState extends State<_SlotEditor> {
             SizedBox(width: 48, child: Text('×${slot.sensitivity.toStringAsFixed(2)}')),
           ],
         ),
+        const SizedBox(height: 4),
+        Text(s.fastTurn),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<FastTurn>(
+            key: const Key('fast-turn'),
+            segments: [
+              for (final mode in FastTurn.values) ButtonSegment(value: mode, label: Text(s.fastTurnMode(mode))),
+            ],
+            selected: {slot.fast},
+            showSelectedIcon: false,
+            onSelectionChanged: (value) => c.updateSlot(slot.copyWith(fast: value.first)),
+          ),
+        ),
+        if (slot.fast == FastTurn.step)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: SizedBox(
+              width: 160,
+              child: TextField(
+                key: const Key('fast-step'),
+                controller: _fastStep,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+                decoration: InputDecoration(
+                  labelText: s.fastStep,
+                  hintText: _number((slot.step ?? slot.param.step) * 5),
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (text) {
+                  final value = double.tryParse(text.replaceAll(',', '.'));
+                  c.updateSlot(slot.copyWith(fastStep: () => value != null && value > 0 ? value : null));
+                },
+              ),
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(s.fastTurnHint(slot.fast), style: Theme.of(context).textTheme.bodySmall),
+        ),
+        const SizedBox(height: 8),
         const SizedBox(height: 4),
         Text(s.icon, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 6),

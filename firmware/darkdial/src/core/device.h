@@ -70,11 +70,13 @@ class Host {
   virtual void saveRotation(uint16_t /*degrees*/) {}
 };
 
-/// Turns raw detents into accelerated ones: slow turning gives single steps,
-/// fast turning large ones.
+/// How fast the knob turns: 0 slow, 1 … 3 faster and faster. Older services
+/// get accelerated detents (apply); from protocol 1.5 the service gets the
+/// speed with the raw detents and decides itself (speed).
 class Accelerator {
  public:
   int apply(int detents, uint32_t nowMs);
+  int speed(uint32_t nowMs);
 
  private:
   uint32_t lastMs_ = 0;
@@ -210,6 +212,7 @@ class Device {
   uint8_t notice_ = 0;
   bool serviceConnected_ = false;
   uint32_t lastStatusMs_ = 0;
+  uint8_t serviceMinor_ = 0;
   bool loadedNotice_ = false;
   uint32_t loadedAtMs_ = 0;
 

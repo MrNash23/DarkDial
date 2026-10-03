@@ -150,6 +150,7 @@ bool decodeMessage(const uint8_t *bytes, size_t n, Message &out) {
   switch (bytes[5]) {
     case kTypeHelloRequest:
       if (size < 5) return false;
+      out.serviceMinor = p[1];
       out.type = MessageType::HelloRequest;
       return true;
     case kTypeConfigBegin:
@@ -294,11 +295,13 @@ size_t buildDisplayAngle(uint8_t *out, uint16_t degrees, bool adjusting) {
   return frame(out, kTypeDisplayAngle, p, sizeof(p));
 }
 
-size_t buildRotation(uint8_t *out, int delta) {
+size_t buildRotation(uint8_t *out, int delta, int speed) {
   if (delta > 63) delta = 63;
   if (delta < -63) delta = -63;
+  if (speed < 0) speed = 0;
+  if (speed > 3) speed = 3;
   out[0] = 0xB0;
-  out[1] = kRotationController;
+  out[1] = static_cast<uint8_t>(kRotationController + speed);
   out[2] = static_cast<uint8_t>(64 + delta);
   return 3;
 }

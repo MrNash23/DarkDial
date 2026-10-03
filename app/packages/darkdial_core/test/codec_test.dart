@@ -30,7 +30,11 @@ void main() {
       expect(encodeMessage(const Rotation(-3)), [0xB0, 0x10, 61]);
       expect((decodeMessage([0xB0, 0x10, 61]) as Rotation).delta, -3);
       expect(decodeMessage([0xB0, 0x10, 64]), isNull);
-      expect(decodeMessage([0xB0, 0x11, 70]), isNull);
+      // 1.5: controllers 0x11 … 0x13 carry the speed of a fast turn.
+      final fast = decodeMessage([0xB0, 0x12, 70]) as Rotation;
+      expect([fast.delta, fast.speed], [6, 2]);
+      expect(encodeMessage(const Rotation(-1, speed: 3)), [0xB0, 0x13, 63]);
+      expect(decodeMessage([0xB0, 0x14, 70]), isNull);
     });
 
     test('identity request and reply use the standard form', () {

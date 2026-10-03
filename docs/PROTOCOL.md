@@ -1,6 +1,6 @@
 # Darkdial protocol
 
-Protocol version **1.4** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5; 1.4 lets the picture of the device be turned, section 1.9). Two links, both bidirectional:
+Protocol version **1.5** (1.1 added time tracking, sections 1.7 and 2.4; 1.2 lets the device follow the slider moved in Lightroom; 1.3 added the Library mode, sections 1.8 and 2.5; 1.4 lets the picture of the device be turned, section 1.9; 1.5 moves the acceleration of fast turns to the service, section 1.1). Two links, both bidirectional:
 
 ```
 Device  ⇄  USB-MIDI  ⇄  Service (desktop app)  ⇄  LrSocket / TCP localhost  ⇄  Plugin
@@ -38,6 +38,14 @@ Rotation in edit mode, and in the Library (1.3, there never accelerated), is sen
 `delta` is in detents with the firmware's speed acceleration already applied.
 The service multiplies it by the slot's step size. Rotation in selection mode
 moves the carousel on the device and is not sent.
+
+**Speed (1.5).** A device talking to a service of minor ≥ 5 (as told by
+HelloRequest) sends the raw detents and says how fast the knob turned
+through the controller number: `0x10` slow, `0x11` … `0x13` faster and
+faster (time since the previous detent below 60, 30 and 15 ms). The service
+decides what a fast detent is worth, per slider: automatic (×2, ×4, ×8),
+nothing extra, or a step of its own. To older services the device sends
+`0x10` only, with the detents already multiplied by 2, 4 or 8.
 
 ### 1.2 Device identification (standard MIDI)
 

@@ -271,6 +271,49 @@ void engineTests() {
     await until(() => rig.plugin.values['Contrast'] == 3, 'Contrast 3');
   });
 
+  test('fast turning: automatic, off, or a step of its own per slider', () async {
+    final config = AppConfig.defaults(Language.en);
+    final slots = [
+      for (final s in config.slots)
+        switch (s.param.lr) {
+          'Contrast' => s.copyWith(fast: FastTurn.step, fastStep: () => 10),
+          'Highlights' => s.copyWith(fast: FastTurn.off),
+          _ => s,
+        },
+    ];
+    await rig.start(config: config.copyWith(slots: slots));
+    await rig.ready();
+
+    // Contrast: slow detents are steps of 1, fast ones steps of 10.
+    await rig.edit('Contrast');
+    rig.model.rotate(1);
+    await until(() => rig.plugin.values['Contrast'] == 1, 'slow step');
+    rig.model.rotate(1, speed: 1);
+    await until(() => rig.plugin.values['Contrast'] == 11, 'fast step of 10');
+    rig.model.rotate(-2, speed: 3);
+    await until(() => rig.plugin.values['Contrast'] == -9, 'two fast steps back');
+
+    // Highlights: no acceleration at all.
+    await rig.edit('Highlights');
+    rig.model.rotate(1, speed: 3);
+    rig.model.rotate(1, speed: 2);
+    await until(() => rig.plugin.values['Highlights'] == 2, 'plain steps');
+
+    // Shadows: automatic, ×2 / ×4 / ×8 by speed as the firmware did before.
+    await rig.edit('Shadows');
+    rig.model.rotate(1, speed: 1);
+    await until(() => rig.plugin.values['Shadows'] == 2, '×2');
+    rig.model.rotate(1, speed: 3);
+    await until(() => rig.plugin.values['Shadows'] == 10, '×8');
+
+    // The settings survive a restart.
+    final restored = AppConfig.fromJson(config.copyWith(slots: slots).toJson());
+    final contrast = restored.slots.firstWhere((s) => s.param.lr == 'Contrast');
+    expect(contrast.fast, FastTurn.step);
+    expect(contrast.fastStep, 10);
+    expect(restored.slots.firstWhere((s) => s.param.lr == 'Highlights').fast, FastTurn.off);
+  });
+
   test('outside Develop the device is told about the module switch', () async {
     await rig.start(plugin: FakePlugin(module: 'library'));
     await until(() => rig.engine.state.lightroomConnected, 'lightroom');

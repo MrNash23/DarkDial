@@ -257,6 +257,45 @@ void main() {
     await tester.runAsync(controller.shutdown);
   });
 
+  testWidgets('slider editor: a step of its own for fast turning', (tester) async {
+    await start(tester, settings: {
+      'simulator': true,
+      'config': {
+        'language': 'de',
+        'slots': [
+          {'param': 4, 'enabled': true},
+        ],
+      },
+    });
+    await settle(tester, () => controller.state.device == DeviceLinkState.connected, 'device');
+    await settle(tester, () => controller.state.lightroomConnected, 'lightroom');
+    final model = controller.simulatorModel!;
+
+    await tester.ensureVisible(find.byKey(const Key('fast-turn')));
+    await tester.pump();
+    expect(find.textContaining('×2 bis ×8'), findsOneWidget, reason: 'automatic by default');
+    await tester.tap(find.text('Eigene Schrittweite'));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('fast-step')), '10');
+    await settle(
+      tester,
+      () => File(p.join(temp.path, 'settings.json')).readAsStringSync().contains('"fastStep": 10'),
+      'setting saved',
+    );
+    expect(controller.config.slots.firstWhere((s) => s.paramId == 4).fast, FastTurn.step);
+
+    // Slow detents are steps of 1, a fast one is a step of 10.
+    model.tap();
+    await settle(tester, () => controller.state.editing, 'edit mode');
+    model.rotate(1);
+    await settle(tester, () => plugin.values['Contrast'] == 1, 'slow step');
+    model.rotate(1, speed: 2);
+    await settle(tester, () => plugin.values['Contrast'] == 11, 'fast step');
+    await screenshot(tester, 'fast');
+
+    await tester.runAsync(controller.shutdown);
+  });
+
   testWidgets('device section: language and following Lightroom', (tester) async {
     await start(tester, deviceWindow: true, settings: {
       'simulator': true,

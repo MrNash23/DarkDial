@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 const int protocolMajor = 1;
-const int protocolMinor = 4;
+const int protocolMinor = 5;
 
 const int _sysexStart = 0xF0;
 const int _sysexEnd = 0xF7;
@@ -123,10 +123,14 @@ sealed class DeviceMessage {
 // Device -> service ------------------------------------------------------------
 
 class Rotation extends DeviceMessage {
-  const Rotation(this.delta);
+  const Rotation(this.delta, {this.speed = 0});
 
   /// Detents, sign gives the direction, −63 … +63.
   final int delta;
+
+  /// How fast the knob turned: 0 slow … 3 fastest (1.5; older devices send
+  /// accelerated detents with speed 0).
+  final int speed;
 }
 
 class IdentityReply extends DeviceMessage {
@@ -494,7 +498,8 @@ List<int> _str(String text, int maxBytes) {
 
 /// Encodes [message] as one complete MIDI message.
 Uint8List encodeMessage(DeviceMessage message) => switch (message) {
-      Rotation(:final delta) => Uint8List.fromList([0xB0, rotationController, 64 + delta.clamp(-63, 63)]),
+      Rotation(:final delta, :final speed) =>
+        Uint8List.fromList([0xB0, rotationController + speed.clamp(0, 3), 64 + delta.clamp(-63, 63)]),
       IdentityRequest() => Uint8List.fromList([_sysexStart, 0x7E, 0x7F, 0x06, 0x01, _sysexEnd]),
       IdentityReply(:final model, :final fwMajor, :final fwMinor, :final fwPatch) => Uint8List.fromList([
           _sysexStart, 0x7E, 0x7F, 0x06, 0x02, _manufacturer, _signature, _signature, //
@@ -575,9 +580,9 @@ Uint8List encodeMessage(DeviceMessage message) => switch (message) {
 /// well-formed Darkdial message of a known type; the protocol says to ignore
 /// those.
 DeviceMessage? decodeMessage(List<int> bytes) {
-  if (bytes.length == 3 && bytes[0] == 0xB0 && bytes[1] == rotationController) {
+  if (bytes.length == 3 && bytes[0] == 0xB0 && bytes[1] >= rotationController && bytes[1] <= rotationController + 3) {
     final delta = bytes[2] - 64;
-    return delta == 0 ? null : Rotation(delta);
+    return delta == 0 ? null : Rotation(delta, speed: bytes[1] - rotationController);
   }
   if (bytes.length < 6 || bytes.first != _sysexStart || bytes.last != _sysexEnd) return null;
 

@@ -7,7 +7,7 @@
 namespace dd {
 
 constexpr uint8_t kProtocolMajor = 1;
-constexpr uint8_t kProtocolMinor = 4;
+constexpr uint8_t kProtocolMinor = 5;
 constexpr uint8_t kMaxSlots = 48;
 constexpr uint8_t kMaxLabelBytes = 20;
 constexpr uint8_t kMaxTextBytes = 8;
@@ -124,6 +124,8 @@ struct Message {
   uint8_t libraryFlags = 0;
   uint8_t libraryRating = 0;
   uint8_t libraryColor = 0;
+  // HelloRequest: the service's protocol minor.
+  uint8_t serviceMinor = 0;
   // DisplayRotation: what to do, and the angle in degrees for kRotationSet.
   uint8_t rotationMode = 0;
   uint16_t rotationAngle = 0;
@@ -157,8 +159,10 @@ size_t buildSlotReset(uint8_t *out, uint8_t slot);
 size_t buildLibraryAction(uint8_t *out, uint8_t action);
 /// The angle the picture is turned by, 0 … 359 degrees clockwise.
 size_t buildDisplayAngle(uint8_t *out, uint16_t degrees, bool adjusting);
-/// Relative CC; `delta` is clamped to -63 … 63 and must not be 0.
-size_t buildRotation(uint8_t *out, int delta);
+/// Relative CC; `delta` is clamped to -63 … 63 and must not be 0. `speed`
+/// 0 … 3 (1.5) says how fast the knob turned and selects the controller
+/// 0x10 … 0x13; the service decides what a fast detent is worth.
+size_t buildRotation(uint8_t *out, int delta, int speed = 0);
 
 /// Collects the bytes of USB-MIDI event packets into complete SysEx messages.
 class SysexAssembler {

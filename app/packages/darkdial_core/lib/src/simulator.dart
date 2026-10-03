@@ -129,8 +129,9 @@ class DeviceModel {
     return true;
   }
 
-  /// Turns the knob by [detents].
-  void rotate(int detents) {
+  /// Turns the knob by [detents]; [speed] 0 … 3 says how fast (in edit mode
+  /// the service may make fast detents worth more).
+  void rotate(int detents, {int speed = 0}) {
     if (detents == 0) return;
     if (_wake()) return;
     if (adjustingRotation) {
@@ -154,7 +155,7 @@ class DeviceModel {
       emit(SlotFocus(index));
       onChanged();
     } else {
-      emit(Rotation(detents.clamp(-63, 63)));
+      emit(Rotation(detents.clamp(-63, 63), speed: speed));
     }
   }
 

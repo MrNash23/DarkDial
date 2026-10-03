@@ -7,24 +7,21 @@
 
 namespace dd {
 
-int Accelerator::apply(int detents, uint32_t nowMs) {
+int Accelerator::speed(uint32_t nowMs) {
   const uint32_t gap = nowMs - lastMs_;
   lastMs_ = nowMs;
   if (!primed_) {
     primed_ = true;
-    return detents;
+    return 0;
   }
-  // Time between two detents decides the factor.
-  int factor = 1;
-  if (gap < 15) {
-    factor = 8;
-  } else if (gap < 30) {
-    factor = 4;
-  } else if (gap < 60) {
-    factor = 2;
-  }
-  return detents * factor;
+  // Time between two detents decides.
+  if (gap < 15) return 3;
+  if (gap < 30) return 2;
+  if (gap < 60) return 1;
+  return 0;
 }
+
+int Accelerator::apply(int detents, uint32_t nowMs) { return detents << speed(nowMs); }
 
 void formatElapsed(uint32_t seconds, char *out) {
   if (seconds < 3600) {
@@ -341,7 +338,11 @@ void Device::rotate(int detents, uint32_t nowMs) {
     host_.send(out, buildSlotFocus(out, index_));
     changed();
   } else {
-    host_.send(out, buildRotation(out, accelerator_.apply(detents, nowMs)));
+    if (serviceMinor_ >= 5) {
+      host_.send(out, buildRotation(out, detents, accelerator_.speed(nowMs)));
+    } else {
+      host_.send(out, buildRotation(out, accelerator_.apply(detents, nowMs)));
+    }
   }
 }
 
@@ -421,6 +422,7 @@ void Device::onMessage(const uint8_t *bytes, size_t n, uint32_t nowMs) {
       break;
 
     case MessageType::HelloRequest:
+      serviceMinor_ = message.serviceMinor;
       host_.send(out, buildHello(out, fw_[0], fw_[1], fw_[2], serial_, configCrc()));
       break;
 

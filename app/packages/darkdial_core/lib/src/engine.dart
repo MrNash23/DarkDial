@@ -337,11 +337,12 @@ class Engine {
     if (input && !answerToGoto) _deviceUsedAt = DateTime.now();
     if (message is SlotSelect) _gotoSlot = null;
     switch (message) {
-      case Rotation(:final delta):
+      case Rotation(:final delta, :final speed):
         if (_libraryActive) {
           _pendingPhotos += delta;
         } else if (_editing && _activeSlot < _active.length) {
-          _pendingDetents += delta * _active[_activeSlot].sensitivity;
+          final settings = _active[_activeSlot];
+          _pendingDetents += _accelerated(settings, delta, speed) * settings.sensitivity;
         }
       case SlotSelect(:final slot):
         if (slot >= _active.length) return;
@@ -376,6 +377,29 @@ class Engine {
         _menu?.close();
       default:
         break;
+    }
+  }
+
+  /// Devices from protocol minor 5 send raw detents with their speed; older
+  /// ones accelerate by themselves.
+  bool get _deviceSendsSpeed => (_session?.hello.minor ?? 0) >= 5;
+
+  /// What [delta] detents at [speed] are worth, in detents of the slider's
+  /// normal step.
+  double _accelerated(SlotSettings settings, int delta, int speed) {
+    if (!_deviceSendsSpeed || speed == 0) return delta.toDouble();
+    switch (settings.fast) {
+      case FastTurn.off:
+        return delta.toDouble();
+      case FastTurn.auto:
+        return (delta << speed.clamp(0, 3)).toDouble();
+      case FastTurn.step:
+        final fastStep = settings.fastStep;
+        if (fastStep == null || fastStep <= 0) return delta.toDouble();
+        final param = settings.param;
+        final current = _values[param.lr] ?? param.min;
+        final normal = stepSize(param, _rangeOf(param), current, stepOverride: settings.step);
+        return normal <= 0 ? delta.toDouble() : delta * fastStep / normal;
     }
   }
 

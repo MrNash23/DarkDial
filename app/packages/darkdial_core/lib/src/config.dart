@@ -8,6 +8,20 @@ final Map<String, ParamDef> _paramsByLr = {for (final p in kParams) p.lr: p};
 ParamDef? paramById(int id) => _paramsById[id];
 ParamDef? paramByLr(String name) => _paramsByLr[name];
 
+/// What a fast turn of the knob does to a slider.
+enum FastTurn {
+  /// Faster turning, bigger steps: ×2, ×4, ×8 by speed.
+  auto,
+
+  /// Every detent is one step, however fast.
+  off,
+
+  /// A detent of a fast turn is worth [SlotSettings.fastStep].
+  step;
+
+  static FastTurn parse(Object? value) => values.firstWhere((v) => v.name == value, orElse: () => auto);
+}
+
 /// User settings of one slider.
 class SlotSettings {
   const SlotSettings({
@@ -17,6 +31,8 @@ class SlotSettings {
     this.icon,
     this.step,
     this.sensitivity = 1.0,
+    this.fast = FastTurn.auto,
+    this.fastStep,
   });
 
   final int paramId;
@@ -30,6 +46,10 @@ class SlotSettings {
   /// Multiplier on the detents coming from the device.
   final double sensitivity;
 
+  /// Fast turning: automatic acceleration, none, or a step of its own.
+  final FastTurn fast;
+  final double? fastStep;
+
   ParamDef get param => _paramsById[paramId]!;
 
   SlotSettings copyWith({
@@ -38,6 +58,8 @@ class SlotSettings {
     int? Function()? icon,
     double? Function()? step,
     double? sensitivity,
+    FastTurn? fast,
+    double? Function()? fastStep,
   }) =>
       SlotSettings(
         paramId: paramId,
@@ -46,6 +68,8 @@ class SlotSettings {
         icon: icon != null ? icon() : this.icon,
         step: step != null ? step() : this.step,
         sensitivity: sensitivity ?? this.sensitivity,
+        fast: fast ?? this.fast,
+        fastStep: fastStep != null ? fastStep() : this.fastStep,
       );
 
   Map<String, dynamic> toJson() => {
@@ -55,6 +79,8 @@ class SlotSettings {
         if (icon != null) 'icon': icon,
         if (step != null) 'step': step,
         if (sensitivity != 1.0) 'sensitivity': sensitivity,
+        if (fast != FastTurn.auto) 'fast': fast.name,
+        if (fastStep != null) 'fastStep': fastStep,
       };
 
   static SlotSettings? fromJson(Map<String, dynamic> json) {
@@ -67,6 +93,8 @@ class SlotSettings {
       icon: json['icon'] as int?,
       step: (json['step'] as num?)?.toDouble(),
       sensitivity: (json['sensitivity'] as num?)?.toDouble() ?? 1.0,
+      fast: FastTurn.parse(json['fast']),
+      fastStep: (json['fastStep'] as num?)?.toDouble(),
     );
   }
 }

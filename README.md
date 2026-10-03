@@ -41,7 +41,9 @@ Darkdial is free and open source. It is powered by
 <!-- Screenshot: the device screens for a few sliders (firmware/host/snapshots) -->
 
 You choose which sliders are on the device, in which order, with which short
-name, icon, step size and sensitivity. 46 are available:
+name, icon, step size and sensitivity, and what a fast turn does: bigger
+steps automatically, no acceleration, or a fast step of its own (say 1 when
+turning slowly, 10 when turning fast). 46 are available:
 
 | Group | Sliders |
 | --- | --- |

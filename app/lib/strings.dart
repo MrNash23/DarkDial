@@ -34,6 +34,20 @@ class Strings {
   String get icon => _t('Symbol', 'Icon');
   String get step => _t('Schrittweite', 'Step size');
   String get sensitivity => _t('Empfindlichkeit', 'Sensitivity');
+  String get fastTurn => _t('Schnelles Drehen', 'Fast turning');
+  String fastTurnMode(FastTurn mode) => switch (mode) {
+        FastTurn.auto => _t('Automatisch', 'Automatic'),
+        FastTurn.off => _t('Aus', 'Off'),
+        FastTurn.step => _t('Eigene Schrittweite', 'Own step'),
+      };
+  String fastTurnHint(FastTurn mode) => switch (mode) {
+        FastTurn.auto =>
+          _t('Je schneller gedreht wird, desto größer der Schritt (×2 bis ×8).', 'The faster you turn, the bigger the step (×2 to ×8).'),
+        FastTurn.off => _t('Jede Raste ist ein Schritt, auch beim schnellen Drehen.', 'Every detent is one step, also when turning fast.'),
+        FastTurn.step => _t('Beim langsamen Drehen gilt die normale Schrittweite, beim schnellen diese.',
+            'Slow turning uses the normal step, fast turning this one.'),
+      };
+  String get fastStep => _t('Schrittweite schnell', 'Fast step');
   String get standard => _t('Standard', 'Default');
   String get resetSlot => _t('Zurücksetzen', 'Reset');
   String get languageLabel => _t('Sprache der Kurzwörter', 'Language of short words');

@@ -181,6 +181,21 @@ static void testCarouselAndEdit() {
   CHECK(host.sent.back()[2] == 64 + 8);
   CHECK(device.index() == 1);  // the carousel does not move in edit mode
 
+  // A service of protocol 1.5 gets the raw detents and the speed instead.
+  feed(device, frame(0x41, {1, 5, 0, 8, 0}), 1500);
+  host.sent.clear();
+  device.rotate(1, 2000);
+  device.rotate(1, 2040);
+  device.rotate(-2, 2060);
+  device.rotate(1, 2070);
+  device.rotate(1, 2300);
+  CHECK(host.sent.size() == 5);
+  CHECK(host.sent[0] == Bytes({0xB0, 0x10, 65}));
+  CHECK(host.sent[1] == Bytes({0xB0, 0x11, 65}));
+  CHECK(host.sent[2] == Bytes({0xB0, 0x12, 62}));
+  CHECK(host.sent[3] == Bytes({0xB0, 0x13, 65}));
+  CHECK(host.sent[4] == Bytes({0xB0, 0x10, 65}));
+
   device.click();
   CHECK(device.mode() == dd::Mode::Select && host.sent.back()[5] == 0x03);
 }
