@@ -116,6 +116,8 @@ int main(int argc, char **argv) {
   device.rotate(1, nowMs);
   run(device, 60);
   save("06_slide_in_progress");
+  run(device, 60);
+  save("06b_slide_in_progress");
   run(device, 400);
   save("07_select_sharpen_unipolar");
 

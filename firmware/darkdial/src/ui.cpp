@@ -67,6 +67,16 @@ lv_obj_t *nextIcon = nullptr;
 constexpr int kNeighborOffset = 96;
 constexpr int kNeighborScale = 112;  // 256 = full size; small enough to stay clear of the ring
 constexpr lv_opa_t kNeighborOpa = 90;
+// The carousel animation: four icons move one place along while it runs –
+// the outer neighbour leaves, the centre becomes a neighbour, a neighbour
+// becomes the centre, a new neighbour comes in. The real objects (iconBox and
+// the neighbours) are hidden meanwhile and take over at the end.
+lv_obj_t *carousel[4] = {};
+bool carouselRunning = false;
+int carouselDirection = 0;
+constexpr uint32_t kCarouselMs = 240;
+constexpr int kOuterOffset = 130;  // where a neighbour comes from or goes to
+constexpr int kOuterScale = 64;
 lv_obj_t *stars[5] = {};
 lv_obj_t *colorBar = nullptr;
 lv_obj_t *flagText = nullptr;
@@ -84,7 +94,7 @@ struct Placed {
   int y;        // top edge from the top, or bottom edge from the bottom
   bool bottom;
 };
-constexpr int kMaxPlaced = 16;
+constexpr int kMaxPlaced = 24;
 Placed placed[kMaxPlaced];
 int placedCount = 0;
 float turnCos = 1;
@@ -171,6 +181,56 @@ void startSlide(int direction, bool withRing) {
   animate(prevIcon, setImageOpacity, LV_OPA_TRANSP, kNeighborOpa, kSlideMs + 80);
   animate(nextIcon, setImageOpacity, LV_OPA_TRANSP, kNeighborOpa, kSlideMs + 80);
   if (withRing) animate(ring, setRingOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kSlideMs + 60);
+}
+
+/// One icon of the carousel at `t` (0 … 1) between two places.
+void carouselStep(lv_obj_t *image, float t, int x0, int x1, int s0, int s1, int o0, int o1) {
+  const float x = x0 + (x1 - x0) * t;
+  lv_obj_set_style_translate_x(image, static_cast<int32_t>(lroundf(x * turnCos)), 0);
+  lv_obj_set_style_translate_y(image, static_cast<int32_t>(lroundf(x * turnSin)), 0);
+  lv_image_set_scale(image, static_cast<uint32_t>(lroundf(s0 + (s1 - s0) * t)));
+  lv_obj_set_style_image_opa(image, static_cast<lv_opa_t>(lroundf(o0 + (o1 - o0) * t)), 0);
+}
+
+void setCarousel(void *, int32_t progress) {
+  const float t = progress / 1024.0f;
+  const int d = carouselDirection;  // +1: turned to the next slider, everything moves left
+  carouselStep(carousel[0], t, -d * kNeighborOffset, -d * kOuterOffset, kNeighborScale, kOuterScale, kNeighborOpa, 0);
+  carouselStep(carousel[1], t, 0, -d * kNeighborOffset, 256, kNeighborScale, LV_OPA_COVER, kNeighborOpa);
+  carouselStep(carousel[2], t, d * kNeighborOffset, 0, kNeighborScale, 256, kNeighborOpa, LV_OPA_COVER);
+  carouselStep(carousel[3], t, d * kOuterOffset, d * kNeighborOffset, kOuterScale, kNeighborScale, 0, kNeighborOpa);
+}
+
+void finishCarousel(lv_anim_t *) {
+  carouselRunning = false;
+  for (lv_obj_t *image : carousel) lv_obj_set_hidden(image, true);
+  shownRevision = UINT32_MAX;  // the next update shows the real objects again
+}
+
+/// Starts the carousel from the slot shown to the one now selected.
+/// `icons`: the leaving neighbour, the old centre, the new centre, the coming
+/// neighbour.
+void startCarousel(int direction, const uint8_t icons[4]) {
+  lv_anim_delete(nullptr, setCarousel);
+  carouselDirection = direction;
+  carouselRunning = true;
+  for (int i = 0; i < 4; i++) {
+    const lv_image_dsc_t *source = icons[i] < DD_ICON_TABLE_SIZE ? dd_icons[icons[i]] : nullptr;
+    lv_obj_set_hidden(carousel[i], source == nullptr);
+    if (source) lv_image_set_src(carousel[i], source);
+  }
+  lv_obj_set_hidden(iconBox, true);
+  lv_obj_set_hidden(prevIcon, true);
+  lv_obj_set_hidden(nextIcon, true);
+  setCarousel(nullptr, 0);
+  lv_anim_t a;
+  lv_anim_init(&a);
+  lv_anim_set_exec_cb(&a, setCarousel);
+  lv_anim_set_values(&a, 0, 1024);
+  lv_anim_set_duration(&a, kCarouselMs);
+  lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+  lv_anim_set_completed_cb(&a, finishCarousel);
+  lv_anim_start(&a);
 }
 
 void setIcon(uint8_t iconId) {
@@ -331,8 +391,9 @@ void showSlot(const dd::Device &device) {
   lv_label_set_text(label, slot.label);
   lv_label_set_text(value, current.valid ? current.text : "--");
 
+  lv_obj_set_hidden(iconBox, carouselRunning);
   // Turning through the sliders: the neighbours on either side.
-  if (device.mode() == dd::Mode::Select && device.slotCount() >= 2) {
+  if (device.mode() == dd::Mode::Select && device.slotCount() >= 2 && !carouselRunning) {
     const uint8_t count = device.slotCount();
     const uint8_t next = static_cast<uint8_t>((device.index() + 1) % count);
     const uint8_t prev = static_cast<uint8_t>((device.index() + count - 1) % count);
@@ -455,6 +516,12 @@ void ui_init(void (*onTap)(), void (*onLongTouch)(), uint32_t nowMs) {
   }
   place(prevIcon, -kNeighborOffset, kIconTop);
   place(nextIcon, kNeighborOffset, kIconTop);
+  for (lv_obj_t *&image : carousel) {
+    image = lv_image_create(screen);
+    lv_obj_set_clickable(image, false);
+    lv_obj_set_hidden(image, true);
+    place(image, 0, kIconTop);
+  }
 
   for (int i = 0; i < 5; i++) {
     stars[i] = lv_obj_create(screen);
@@ -554,7 +621,25 @@ void ui_update(const dd::Device &device, uint32_t nowMs) {
   }
   if (index >= 0 && shownIndex >= 0 && index != shownIndex && (index >= 1000) == (shownIndex >= 1000) &&
       device.lastMove() != 0) {
-    startSlide(device.lastMove(), index < 1000);
+    const int count = device.slotCount();
+    if (index < 1000 && device.mode() == dd::Mode::Select && count >= 3 && shownIndex < count) {
+      // Sliders: the carousel moves one place along.
+      const int d = device.lastMove();
+      const uint8_t icons[4] = {
+          device.slot(static_cast<uint8_t>((shownIndex - d + count) % count)).iconId,
+          device.slot(static_cast<uint8_t>(shownIndex)).iconId,
+          device.slot(static_cast<uint8_t>(index)).iconId,
+          device.slot(static_cast<uint8_t>((index + d + count) % count)).iconId,
+      };
+      startCarousel(d, icons);
+      lv_obj_set_hidden(iconBox, true);
+      animate(ring, setRingOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kCarouselMs);
+      // Name and value fade over instead of jumping.
+      animate(label, setOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kCarouselMs);
+      animate(value, setOpacity, LV_OPA_TRANSP, LV_OPA_COVER, kCarouselMs);
+    } else {
+      startSlide(device.lastMove(), index < 1000);
+    }
   }
   shownIndex = index;
 
