@@ -234,7 +234,7 @@ class _FirmwareSection extends StatelessWidget {
           if (update.error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(s.firmwareFailed(update.error!), key: const Key('firmware-error'), style: small),
+              child: Text(s.firmwareFailed(update.failure, update.error!), key: const Key('firmware-error'), style: small),
             ),
           OutlinedButton.icon(
             key: const Key('firmware-update'),

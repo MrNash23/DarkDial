@@ -66,11 +66,24 @@ class Strings {
       };
   String get firmwareDone => _t('Firmware aufgespielt. Das Gerät verbindet sich gleich wieder.',
       'Firmware installed. The device reconnects in a moment.');
-  String firmwareFailed(String reason) => _t(
-        'Aufspielen fehlgeschlagen: $reason. Das Gerät lässt sich jederzeit erneut flashen, auch wenn es '
-            'gerade nichts anzeigt.',
-        'Installing failed: $reason. The device can always be flashed again, even if it shows nothing now.',
-      );
+  String firmwareFailed(FlashFailure? failure, String detail) {
+    final reason = switch (failure) {
+      FlashFailure.notFound => _t('Kein Darkdial an USB gefunden', 'No Darkdial found on USB'),
+      FlashFailure.portBusy => _t('Ein anderes Programm benutzt die USB-Schnittstelle des Geräts ($detail); bitte beenden',
+          'Another program is using the device\'s USB port ($detail); please quit it'),
+      FlashFailure.noBootloader => _t('Der Bootloader des Geräts antwortet nicht', 'The device\'s bootloader does not answer'),
+      FlashFailure.connectionLost => _t(
+          'Die Verbindung brach ab (läuft ein anderes Programm, das die USB-Schnittstelle des Geräts liest?)',
+          'The connection broke off (is another program reading the device\'s USB port?)'),
+      FlashFailure.verifyFailed => _t('Die geschriebene Firmware stimmt nicht', 'The written firmware does not match'),
+      _ => detail,
+    };
+    return _t(
+      'Aufspielen fehlgeschlagen: $reason. Das Gerät lässt sich jederzeit erneut flashen, auch wenn es gerade '
+          'nichts anzeigt.',
+      'Installing failed: $reason. The device can always be flashed again, even if it shows nothing now.',
+    );
+  }
   String get firmwareRetry => _t('Erneut versuchen', 'Try again');
   String get firmwareUnsupported => _t('Auf diesem System noch nicht möglich.', 'Not possible on this system yet.');
   String get deviceDisplay => _t('Anzeige', 'Display');

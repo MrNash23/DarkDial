@@ -29,6 +29,8 @@ final int Function(Pointer<Uint8>, int) _cfsetspeed =
 final int Function(int) _tcdrain = _libc.lookupFunction<Int32 Function(Int32), int Function(int)>('tcdrain');
 final int Function(int, int, Pointer<Int32>) _ioctlInt = _libc.lookupFunction<
     Int32 Function(Int32, UnsignedLong, VarArgs<(Pointer<Int32>,)>), int Function(int, int, Pointer<Int32>)>('ioctl');
+final int Function(int, int) _ioctlPlain =
+    _libc.lookupFunction<Int32 Function(Int32, UnsignedLong), int Function(int, int)>('ioctl');
 final int Function(Pointer<Uint8>, int, int) _poll =
     _libc.lookupFunction<Int32 Function(Pointer<Uint8>, Uint32, Int32), int Function(Pointer<Uint8>, int, int)>('poll');
 
@@ -37,6 +39,7 @@ const int _oRdwr = 0x2;
 const int _oNonblock = 0x4;
 const int _oNoctty = 0x20000;
 const int _tcsanow = 0;
+const int _tiocexcl = 0x2000740D;
 const int _tiocmbis = 0x8004746C;
 const int _tiocmbic = 0x8004746B;
 const int _tiocmDtr = 0x2;
@@ -80,6 +83,9 @@ class PosixSerialPort {
     calloc.free(path);
     if (fd < 0) throw SerialError('cannot open $name');
     final port = PosixSerialPort._(name, fd);
+    // Nobody else may open the port while we hold it: a second reader (a
+    // serial monitor, say) would take the bootloader's answers away.
+    _ioctlPlain(fd, _tiocexcl);
     final attrs = calloc<Uint8>(128); // struct termios is 72 bytes on macOS
     try {
       if (_tcgetattr(fd, attrs) != 0) throw SerialError('not a serial port: $name');

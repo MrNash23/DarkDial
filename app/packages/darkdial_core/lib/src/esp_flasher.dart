@@ -24,9 +24,13 @@ abstract class SerialLink {
   Future<void> setSignals({required bool dtr, required bool rts});
 }
 
+/// Why an update did not finish, for a message in the user's language.
+enum FlashFailure { notFound, portBusy, noBootloader, connectionLost, verifyFailed, other }
+
 class FlashException implements Exception {
-  FlashException(this.message);
+  FlashException(this.message, [this.failure = FlashFailure.other]);
   final String message;
+  final FlashFailure failure;
   @override
   String toString() => 'FlashException: $message';
 }
@@ -166,7 +170,9 @@ class EspFlasher {
     while (true) {
       final left = deadline.difference(DateTime.now());
       final frame = left <= Duration.zero ? null : await _readFrame(left);
-      if (frame == null) throw FlashException('no answer to command 0x${op.toRadixString(16)}');
+      if (frame == null) {
+        throw FlashException('no answer to command 0x${op.toRadixString(16)}', FlashFailure.connectionLost);
+      }
       if (frame.length < 8 || frame[0] != 0x01 || frame[1] != op) continue; // not ours (e.g. a late sync reply)
       final size = frame[2] | (frame[3] << 8);
       final body = frame.sublist(8, (8 + size).clamp(8, frame.length));
@@ -196,7 +202,7 @@ class EspFlasher {
         // Not yet: try again.
       }
     }
-    throw FlashException('the bootloader does not answer');
+    throw FlashException('the bootloader does not answer', FlashFailure.noBootloader);
   }
 
   /// Writes [regions] and checks each with MD5.
@@ -224,8 +230,17 @@ class EspFlasher {
         for (final b in block) {
           checksum ^= b;
         }
-        await command(_flashData, [..._u32(blockSize), ..._u32(seq), ..._u32(0), ..._u32(0), ...block],
-            checksum: checksum);
+        // A lost answer is tried again, as esptool does; the MD5 check at the
+        // end catches anything that still went wrong.
+        for (var attempt = 1;; attempt++) {
+          try {
+            await command(_flashData, [..._u32(blockSize), ..._u32(seq), ..._u32(0), ..._u32(0), ...block],
+                checksum: checksum);
+            break;
+          } on FlashException catch (e) {
+            if (attempt >= 3 || e.failure != FlashFailure.connectionLost) rethrow;
+          }
+        }
         done += end - start;
         onProgress?.call(FlashProgress(FlashStage.writing, done / total));
       }
@@ -240,7 +255,7 @@ class EspFlasher {
           ? String.fromCharCodes(answer.sublist(0, 32)).toLowerCase()
           : [for (final b in answer.take(16)) b.toRadixString(16).padLeft(2, '0')].join();
       if (actual != expected) {
-        throw FlashException('verification failed at 0x${region.offset.toRadixString(16)}');
+        throw FlashException('verification failed at 0x${region.offset.toRadixString(16)}', FlashFailure.verifyFailed);
       }
     }
   }

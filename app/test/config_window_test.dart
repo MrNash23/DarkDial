@@ -310,7 +310,7 @@ void main() {
         final sub = steps.stream.listen(onProgress);
         await finish.future;
         await sub.cancel();
-        if (fail) throw FlashException('the bootloader does not answer');
+        if (fail) throw FlashException('no answer to command 0x3', FlashFailure.connectionLost);
       },
     );
     await start(tester, deviceWindow: true, firmware: updater, settings: simulatorSettings);
@@ -335,6 +335,7 @@ void main() {
     finish.complete();
     await settle(tester, () => find.byKey(const Key('firmware-error')).evaluate().isNotEmpty, 'failure shown');
     expect(find.text('Erneut versuchen'), findsOneWidget);
+    expect(find.textContaining('Die Verbindung brach ab'), findsOneWidget);
     await screenshot(tester, 'firmware');
 
     // The retry goes through.

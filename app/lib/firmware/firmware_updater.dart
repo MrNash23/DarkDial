@@ -22,17 +22,20 @@ class FirmwareUpdateState {
       : running = false,
         progress = null,
         done = false,
-        error = null;
+        error = null,
+        failure = null;
   const FirmwareUpdateState.running(FlashProgress this.progress)
       : running = true,
         done = false,
-        error = null;
+        error = null,
+        failure = null;
   const FirmwareUpdateState.done()
       : running = false,
         progress = null,
         done = true,
-        error = null;
-  const FirmwareUpdateState.failed(String this.error)
+        error = null,
+        failure = null;
+  const FirmwareUpdateState.failed(String this.error, [this.failure = FlashFailure.other])
       : running = false,
         progress = null,
         done = false;
@@ -41,6 +44,7 @@ class FirmwareUpdateState {
   final FlashProgress? progress;
   final bool done;
   final String? error;
+  final FlashFailure? failure;
 }
 
 typedef FlashFunction = Future<void> Function(Uint8List image, void Function(FlashProgress progress) onProgress);
@@ -73,7 +77,9 @@ class FirmwareUpdater {
       await _flash(firmware.image, (p) => state.value = FirmwareUpdateState.running(p));
       state.value = const FirmwareUpdateState.done();
     } on Object catch (e) {
-      state.value = FirmwareUpdateState.failed(e is FlashException ? e.message : '$e');
+      state.value = e is FlashException
+          ? FirmwareUpdateState.failed(e.message, e.failure)
+          : FirmwareUpdateState.failed('$e');
     }
   }
 
@@ -92,10 +98,12 @@ class FirmwareUpdater {
     final messages = ReceivePort();
     final finished = Completer<void>();
     messages.listen((message) {
-      if (message is List) {
+      if (message is List && message.length == 2 && message[0] is int) {
         onProgress(FlashProgress(FlashStage.values[message[0] as int], message[1] as double));
       } else if (message == 'done') {
         finished.complete();
+      } else if (message is List && message.length == 3 && message[0] == 'error') {
+        finished.completeError(FlashException(message[2] as String, FlashFailure.values[message[1] as int]));
       } else {
         finished.completeError(FlashException('$message'));
       }
@@ -114,9 +122,9 @@ class FirmwareUpdater {
       await flashDevice(image, onProgress: (p) => reply.send([p.stage.index, p.fraction]));
       reply.send('done');
     } on FlashException catch (e) {
-      reply.send(e.message);
+      reply.send(['error', e.failure.index, e.message]);
     } on Object catch (e) {
-      reply.send('$e');
+      reply.send(['error', FlashFailure.other.index, '$e']);
     }
   }
 }

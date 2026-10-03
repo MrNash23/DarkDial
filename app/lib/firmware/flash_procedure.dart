@@ -23,7 +23,7 @@ class PosixSerialLink implements SerialLink {
     try {
       return port.read(timeout);
     } on SerialError catch (e) {
-      throw FlashException(e.message);
+      throw FlashException(e.message, FlashFailure.connectionLost);
     }
   }
 
@@ -63,13 +63,34 @@ Future<(PosixSerialPort, EspFlasher)?> _openBootloader(String name, Duration wit
   }
 }
 
+/// Programs other than this one that have [port] open (a serial monitor, an
+/// upload tool). They would take the bootloader's answers away.
+Future<List<String>> _otherUsers(String port) async {
+  try {
+    final result = await Process.run('/usr/sbin/lsof', ['-F', 'pc', port]);
+    final users = <String>[];
+    String? pidLine;
+    for (final line in (result.stdout as String).split('\n')) {
+      if (line.startsWith('p')) pidLine = line.substring(1);
+      if (line.startsWith('c') && pidLine != null && pidLine != '$pid') users.add(line.substring(1));
+    }
+    return users;
+  } on Object {
+    return const []; // no lsof: go ahead
+  }
+}
+
 /// Updates the connected Darkdial with [merged] (an image written at 0; the
 /// NVS partition is kept). Reports progress; throws [FlashException] when it
 /// cannot finish.
 Future<void> flashDevice(Uint8List merged, {void Function(FlashProgress progress)? onProgress}) async {
   onProgress?.call(const FlashProgress(FlashStage.connecting));
   var ports = PosixSerialPort.usbModemPorts();
-  if (ports.isEmpty) throw FlashException('no Darkdial found on USB');
+  if (ports.isEmpty) throw FlashException('no Darkdial found on USB', FlashFailure.notFound);
+  for (final name in ports) {
+    final users = await _otherUsers(name);
+    if (users.isNotEmpty) throw FlashException(users.toSet().join(', '), FlashFailure.portBusy);
+  }
 
   // A device already in its bootloader (e.g. after an interrupted update)
   // answers right away; a running one is sent there first.
@@ -91,7 +112,7 @@ Future<void> flashDevice(Uint8List merged, {void Function(FlashProgress progress
       if (open == null) await Future<void>.delayed(const Duration(milliseconds: 500));
     }
   }
-  if (open == null) throw FlashException('the device did not start its bootloader');
+  if (open == null) throw FlashException('the device did not start its bootloader', FlashFailure.noBootloader);
 
   final (port, flasher) = open;
   try {
